@@ -34,5 +34,6 @@ if "%~1"=="" (
 ) else (
     :: Steam Start Minimized
     start "FH5 DualSense" /MIN uv run main.py
-    %*
+    start "" %*
+    exit /b 0
 )
