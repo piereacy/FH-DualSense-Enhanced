@@ -22,9 +22,18 @@ if errorlevel 1 (
 )
 
 cd /d "%~dp0src"
+set "first_arg=%~1"
 
 if "%~1"=="" (
     uv run main.py
+    if !errorlevel! neq 0 (
+        echo.
+        echo Application exited with error code !errorlevel!.
+        pause
+    )
+    pause
+) else if "!first_arg:~0,2!"=="--" (
+    uv run main.py %*
     if !errorlevel! neq 0 (
         echo.
         echo Application exited with error code !errorlevel!.

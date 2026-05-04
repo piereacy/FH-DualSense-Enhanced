@@ -67,6 +67,8 @@ class TriggerTUI(App):
         self._thread = None
         self._ds = None
         self._listener_cm = None
+        self._listener = None
+        self._started = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -95,25 +97,40 @@ class TriggerTUI(App):
         root.setLevel(logging.INFO)
 
         log_latest_commit_age()
+        log.info("Starting controller and telemetry listener...")
 
-        # Open hardware + listener and start the loop in a background thread.
-        s = self.settings
-        self._ds = dualsense.DualSense(
-            startup_pulse_force=s.startup_pulse_force,
-            enable_startup_pulse=s.enable_startup_pulse,
-        )
-        self._ds.open()
-        self._listener_cm = udplistener.UDPListener(s.udp_host, s.udp_port, s.udp_timeout)
-        listener = self._listener_cm.__enter__()
-        log.info("Listening on %s:%d", s.udp_host, s.udp_port)
-        log.info("In FH5: HUD & Gameplay -> Data Out: ON, IP 127.0.0.1, Port %d", s.udp_port)
-
-        self._listener = listener
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
+        # Let Textual paint the UI before HID startup runs. This avoids a blank
+        # alternate screen if controller/socket startup is slow or fails.
+        self.call_after_refresh(self._start_backend)
 
         # Focus the log pane so PageUp/PageDown/scroll work without a click.
         self.set_focus(self.query_one(RichLog))
+
+    def _start_backend(self):
+        if self._started:
+            return
+        self._started = True
+        # Open hardware + listener and start the loop in a background thread.
+        try:
+            s = self.settings
+            self._ds = dualsense.DualSense(
+                startup_pulse_force=s.startup_pulse_force,
+                enable_startup_pulse=s.enable_startup_pulse,
+            )
+            self._ds.open()
+            self._listener_cm = udplistener.UDPListener(s.udp_host, s.udp_port, s.udp_timeout)
+            self._listener = self._listener_cm.__enter__()
+            log.info("Listening on %s:%d", s.udp_host, s.udp_port)
+            log.info("In FH5: HUD & Gameplay -> Data Out: ON, IP 127.0.0.1, Port %d", s.udp_port)
+
+            self._thread = threading.Thread(target=self._run_loop, daemon=True)
+            self._thread.start()
+        except Exception as exc:
+            log.exception("TUI startup failed")
+            self.exit(
+                return_code=1,
+                message=f"TUI startup failed: {exc}\nTry running with --no-tui to use console logs.",
+            )
 
     def _run_loop(self) -> None:
         try:
