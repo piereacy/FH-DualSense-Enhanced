@@ -59,7 +59,7 @@ class Settings:
     enable_rev_limiter: bool = True
     rev_limit_ratio: float = 0.93             # fire right at the cutoff, not across the whole upper rpm range
     rev_limit_freq: int = 20
-    rev_limit_amp: int = 20                  # mapped to firmware strength 1-8 (>=224 = max)
+    rev_limit_amp: int = 1                  # mapped to firmware strength 1-8 (>=224 = max)
     rev_limit_hold_ms: float = 120.0          # hold buzz this long after each trigger so the rpm bounce doesn't stutter it
 
     # Gear shift: single short vibration burst on up/downshift while moving.
