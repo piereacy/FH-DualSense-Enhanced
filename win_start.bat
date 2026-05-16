@@ -107,6 +107,10 @@ if defined GAME_CMD (
     echo Launching game: !GAME_CMD!
     start "" !GAME_CMD!
 )
+REM Isolate from any system Python (avoids pythonXY.dll mismatches).
+set "PYTHONHOME="
+set "PYTHONPATH="
+set "PYTHONNOUSERSITE=1"
 uv run main.py
 set "EXITCODE=%ERRORLEVEL%"
 echo.
