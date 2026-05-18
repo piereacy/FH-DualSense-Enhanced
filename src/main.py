@@ -8,12 +8,12 @@ from pathlib import Path
 from modules import dualsense, udplistener, setup_logging, loop
 from modules import preferences
 from modules.settings import Settings
-from modules.update_check import log_latest_commit_age
 
 log = logging.getLogger("fhds")
 
 # MARK: Crash log — only written on unhandled exceptions
-CRASH_LOG = Path(__file__).resolve().parent / "crash.log"
+_DATA = Path(__file__).resolve().parent / "data"
+CRASH_LOG = _DATA / "crash.log"
 
 
 def _excepthook(exc_type, exc, tb):
@@ -21,6 +21,7 @@ def _excepthook(exc_type, exc, tb):
         sys.__excepthook__(exc_type, exc, tb)
         return
     try:
+        _DATA.mkdir(parents=True, exist_ok=True)
         with open(CRASH_LOG, "w", encoding="utf-8") as f:
             f.write(f"Crash at {datetime.now():%Y-%m-%d %H:%M:%S}\n\n")
             traceback.print_exception(exc_type, exc, tb, file=f)
@@ -86,7 +87,6 @@ if __name__ == "__main__":
 
     if args.headless:
         setup_logging(args.debug)
-        log_latest_commit_age()
         run(settings)
     else:
         run_tui(settings)

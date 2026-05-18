@@ -1,7 +1,7 @@
 [project]
-name = "src"
-version = "1.3.6"
-description = "Add your description here"
+name = "fhds"
+version = "1.4.0"
+description = "Forza Horizon DualSense adaptive triggers (Steam keeps rumble)."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -9,6 +9,10 @@ dependencies = [
     "psutil>=7.2.2",
     "textual>=8.2.5",
 ]
+
+[tool.zuv]
+entry = "main.py"
+volume = "data"
 
 [tool.ruff]
 line-length = 120

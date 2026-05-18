@@ -2,13 +2,17 @@ name: release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
-    branches:
-      - main
+    branches: [main, dev]
+    tags: ["v*.*.*"]
 
 permissions:
   contents: write
+
+env:
+  # Rolling prerelease tag re-uploaded on every push to `dev`. The tag itself
+  # is just `dev` (not a version number); the bundle inside still carries the
+  # real version from pyproject.toml. `--prerelease` users auto-track it.
+  DEV_TAG: dev
 
 jobs:
   publish:
@@ -18,57 +22,64 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine release tag
-        id: tag
+      - name: Parse trigger
+        id: parse
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            tag="${GITHUB_REF#refs/tags/}"
-            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [[ "$GITHUB_REF" == "refs/heads/dev" ]]; then
+            echo "tag=${DEV_TAG}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           msg=$(git log -1 --pretty=%s)
-          if [[ "$msg" =~ ^release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            tag="${BASH_REMATCH[1]}"
-            prerelease=false
-          elif [[ "$msg" =~ ^prerelease[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            tag="${BASH_REMATCH[1]}"
-            prerelease=true
-          else
-            echo "Commit message does not match 'release vX.Y.Z' or 'prerelease vX.Y.Z'."
-            exit 0
+          if [[ "$msg" =~ ^(release|prerelease)[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            echo "tag=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=$([[ ${BASH_REMATCH[1]} == prerelease ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           fi
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists, skipping."
-            exit 0
+
+      - name: Move tag
+        if: steps.parse.outputs.tag
+        env:
+          TAG: ${{ steps.parse.outputs.tag }}
+          PRERELEASE: ${{ steps.parse.outputs.prerelease }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1 && [[ "$PRERELEASE" != "true" ]]; then
+            echo "Stable tag $TAG exists; skipping." && echo "skip=1" >> "$GITHUB_ENV" && exit 0
           fi
+          gh release delete "$TAG" --yes --cleanup-tag=false 2>/dev/null || true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$tag"
-          git push origin "$tag"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          git tag -f "$TAG"
+          git push origin "$TAG" --force
 
-      - name: Resolve release assets
-        if: steps.tag.outputs.tag != ''
-        id: assets
+      - uses: astral-sh/setup-uv@v5
+        if: steps.parse.outputs.tag && env.skip != '1'
+
+      - name: Build and release
+        if: steps.parse.outputs.tag && env.skip != '1'
         run: |
-          if [[ "${{ steps.tag.outputs.prerelease }}" == "true" ]]; then
-            echo "files=" >> "$GITHUB_OUTPUT"
-          else
-            printf 'files<<EOF\nwin_start.bat\nlinux_start.sh\nEOF\n' >> "$GITHUB_OUTPUT"
-          fi
+          mkdir -p release
+          uvx zuv build src -o release/fhds.zuv.py \
+            --update-repo HamzaYslmn/Forza-Horizon-DualSense-Python
+          cp win_start.bat linux_start.sh packaging/linux/70-dualsense.rules release/
 
-      - name: Create GitHub Release
-        if: steps.tag.outputs.tag != ''
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
+        if: steps.parse.outputs.tag && env.skip != '1'
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
-          prerelease: ${{ steps.tag.outputs.prerelease == 'true' }}
+          tag_name: ${{ steps.parse.outputs.tag }}
+          name: ${{ steps.parse.outputs.tag }}
+          prerelease: ${{ steps.parse.outputs.prerelease == 'true' }}
           generate_release_notes: true
           body: |
             > **Heads up**
-            > - If new features don't work, your launcher version may have changed. Try downloading and running the latest `win_start.bat` / `linux_start.sh` again from the latest stable release.
-            > - Save your `app/src/user_preferences.json` somewhere before updating to avoid losing your profiles and settings.
-          files: ${{ steps.assets.outputs.files }}
+            > - The bundle self-updates each run from this release. Keep `fhds.zuv.py` next to your launcher script.
+            > - Settings live in `data/user_preferences.json` next to the launcher and survive updates.
+            > - Linux: drop `70-dualsense.rules` into `/etc/udev/rules.d/` once (the launcher offers to do this).
+            > - Prerelease channel: run `uv run fhds.zuv.py --prerelease` to track rolling test builds.
+          files: release/*
+

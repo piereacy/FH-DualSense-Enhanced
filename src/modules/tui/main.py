@@ -11,7 +11,6 @@ from textual.widgets import Button, Header, Input, Static, Switch, TabbedContent
 from modules import dualsense, loop, profiles, udplistener
 from modules.dualsense.triggers import off, vibration
 from modules.preferences import _version
-from modules.update_check import log_latest_commit_age
 
 from .controls_tab import ControlsTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
@@ -121,7 +120,6 @@ class TriggerTUI(App):
         self.refresh_status()
         self.refresh_profile()
         self.set_interval(1.0, self.refresh_status)
-        log_latest_commit_age()
         log.info("Starting controller and telemetry listener...")
         self.call_after_refresh(self._start_backend)
 

@@ -20,7 +20,8 @@ from pathlib import Path
 
 log = logging.getLogger("fhds")
 
-PATH = Path(__file__).resolve().parent.parent / "user_preferences.json"
+_DATA = Path(__file__).resolve().parent.parent / "data"
+PATH = _DATA / "user_preferences.json"
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 DEFAULT_PROFILE_NAME = "Default"
 
@@ -74,6 +75,7 @@ def _read() -> dict:
 def _write(raw: dict) -> None:
     raw["version"] = _version()
     try:
+        _DATA.mkdir(parents=True, exist_ok=True)
         PATH.write_text(json.dumps(raw, indent=2), encoding="utf-8")
     except OSError as e:
         log.warning("Could not save preferences: %s", e)
