@@ -55,7 +55,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f "$TAG"
-          git push origin "$TAG" --force
+          git push origin "refs/tags/$TAG" --force
 
       - uses: astral-sh/setup-uv@v5
         if: steps.parse.outputs.tag && env.skip != '1'
