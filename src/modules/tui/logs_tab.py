@@ -3,7 +3,7 @@ import logging
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Label, RichLog, Static
+from textual.widgets import Label, Log, Static
 
 log = logging.getLogger("fhds")
 
@@ -31,7 +31,7 @@ class LogsTab(Vertical):
     LogsTab #log-level { width: 11; color: $accent; text-style: bold; }
     LogsTab #log-pause { width: 9; }
     LogsTab #log-clear { width: 9; }
-    LogsTab RichLog {
+    LogsTab Log {
         padding: 0 1; height: 1fr; width: 1fr;
         border-top: hkey $foreground 20%;
     }
@@ -50,7 +50,7 @@ class LogsTab(Vertical):
             yield Static("pause", id="log-pause", classes="tb-action")
             yield Static("clear", id="log-clear", classes="tb-action")
             yield Static(classes="spacer")
-        yield RichLog(id="logs", highlight=False, markup=False, wrap=True, max_lines=2000)
+        yield Log(id="logs", highlight=False, max_lines=2000, auto_scroll=True)
 
     @property
     def level_name(self) -> str:
@@ -65,13 +65,14 @@ class LogsTab(Vertical):
         return self._paused
 
     def write(self, msg: str) -> None:
-        self.query_one("#logs", RichLog).write(msg, scroll_end=not self._paused)
+        self.query_one("#logs", Log).write_line(msg)
 
     def clear(self) -> None:
-        self.query_one("#logs", RichLog).clear()
+        self.query_one("#logs", Log).clear()
 
     def toggle_pause(self) -> None:
         self._paused = not self._paused
+        self.query_one("#logs", Log).auto_scroll = not self._paused
         self._refresh_buttons()
         self.app.refresh_status()
 
