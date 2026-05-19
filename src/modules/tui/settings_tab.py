@@ -47,6 +47,9 @@ SETTING_SECTIONS = [
 ]
 
 SYSTEM_SECTIONS = [
+    ("Telemetry (applies on next launch)", [
+        ("udp_port", "UDP port", 1, 65535),
+    ]),
     ("Startup pulse", [
         ("startup_pulse_force", "Startup pulse force", 0, 255),
     ]),
