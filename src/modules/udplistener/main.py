@@ -10,6 +10,8 @@ import struct
 
 log = logging.getLogger("fhds.udp")
 
+PACKET_SIZE = 324
+
 
 def parse_packet(p: bytes) -> dict:
     if len(p) < 323:
@@ -112,19 +114,41 @@ def parse_packet(p: bytes) -> dict:
 
 
 class UDPListener:
-    """UDP listener that always returns the most recent packet."""
+    """UDP listener that always returns the most recent packet.
+
+    Uses a single dual-stack IPv6 socket (V6ONLY=0) so packets sent to
+    either IPv4 or IPv6 localhost are received with no user config.
+    Falls back to IPv4 if IPv6 is unavailable.
+    """
 
     def __init__(self, host: str, port: int, timeout: float = 0.5):
         self.host = host
         self.port = port
         self.timeout = timeout
-        self.sock = None
+        self.sock: socket.socket | None = None
+        self._warned_sizes: set[int] = set()
+
+    def _open_dual_stack(self) -> socket.socket | None:
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            s.bind(("::", self.port))
+            log.info("UDP listening on [::]:%d (IPv4+IPv6)", self.port)
+            return s
+        except OSError as e:
+            log.warning("Dual-stack bind failed, falling back to IPv4: %s", e)
+            return None
+
+    def _open_ipv4(self) -> socket.socket:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+        s.bind((self.host, self.port))
+        log.info("UDP listening on %s:%d (IPv4)", self.host, self.port)
+        return s
 
     def __enter__(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # Small recv buffer keeps the OS from queueing many stale packets.
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
-        self.sock.bind((self.host, self.port))
+        self.sock = self._open_dual_stack() or self._open_ipv4()
         self.sock.settimeout(self.timeout)
         return self
 
@@ -136,12 +160,12 @@ class UDPListener:
     def recv_latest(self):
         """Block up to ``timeout`` for at least one packet, then drain the
         socket and return only the most recent one. Returns ``(pkt, addr)``
-        or ``(None, None)`` on timeout."""
+        or ``(None, None)`` on timeout. Non-Forza packets (wrong size) are
+        dropped with a one-time warning per distinct size."""
         try:
             pkt, addr = self.sock.recvfrom(1500)
         except socket.timeout:
             return None, None
-        # Drain whatever else is already queued — we only care about the newest.
         self.sock.setblocking(False)
         try:
             while True:
@@ -150,4 +174,12 @@ class UDPListener:
             pass
         finally:
             self.sock.setblocking(True)
+            self.sock.settimeout(self.timeout)
+        if len(pkt) != PACKET_SIZE:
+            if len(pkt) not in self._warned_sizes:
+                self._warned_sizes.add(len(pkt))
+                log.warning(
+                    "Unexpected %d-byte packet from %s:%d (expected %d - may be from another app, or a new FH format)",
+                    len(pkt), addr[0], addr[1], PACKET_SIZE,
+                )
         return pkt, addr
