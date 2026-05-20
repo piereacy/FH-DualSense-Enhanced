@@ -81,3 +81,4 @@ jobs:
             > - Linux: launcher offers to install `70-dualsense.rules` to `/etc/udev/rules.d/` once.
             > - Prerelease channel: run `uv run fhds.zuv.py --prerelease` to track rolling test builds.
           files: release/*
+
