@@ -252,6 +252,8 @@ Built by **[HamzaYslmn](https://github.com/HamzaYslmn)**.
 
 - **[dotcom](https://github.com/a0938670973-dotcom)** — thank you for your Cake!
 
+- **[wallbangz](https://github.com/wallbangz)** — thank you for your Cake!
+
 - **[BambinoPinguino](https://github.com/BambinoPinguino)** — thank you for your Tea!
 
 - **[Ereldun](https://steamcommunity.com/)** — thank you for your Coffee!
