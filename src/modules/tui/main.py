@@ -170,14 +170,22 @@ class TriggerTUI(App):
     def _run_loop(self):
         try:
             loop.run(self._ds, self._listener, self.settings, stop_event=self._stop)
+        except Exception:
+            # An unexpected error here would otherwise kill the backend thread
+            log.exception("Telemetry loop crashed")
         finally:
             if not self._stop.is_set():
                 self.call_from_thread(self.exit)
 
+    @staticmethod
+    def _open_url(url: str) -> None:
+        # webbrowser.open() can block while a browser cold-starts
+        threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
+
     def on_click(self, event) -> None:
         widget = getattr(event, "widget", None)
         if widget is not None and widget.id == "version":
-            webbrowser.open(self.CHANGELOG_URL)
+            self._open_url(self.CHANGELOG_URL)
 
     # --- topbar / logs bridge -----------------------------------------------
 
@@ -233,18 +241,12 @@ class TriggerTUI(App):
     # --- bottombar / bindings -----------------------------------------------
 
     def action_sponsor(self):
-        try:
-            webbrowser.open(self.SPONSOR_URL)
-            log.info("Opened sponsor page: %s", self.SPONSOR_URL)
-        except Exception as exc:
-            log.warning("Could not open sponsor page: %s", exc)
+        self._open_url(self.SPONSOR_URL)
+        log.info("Opened sponsor page: %s", self.SPONSOR_URL)
 
     def action_changelog(self):
-        try:
-            webbrowser.open(self.CHANGELOG_URL)
-            log.info("Opened changelog: %s", self.CHANGELOG_URL)
-        except Exception as exc:
-            log.warning("Could not open changelog: %s", exc)
+        self._open_url(self.CHANGELOG_URL)
+        log.info("Opened changelog: %s", self.CHANGELOG_URL)
 
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id

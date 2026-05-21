@@ -6,6 +6,7 @@ only affects the next launch. The mechanism is a sentinel file
 (.zuv-update-disabled) the loader checks in its cache_root; when present, the
 update check is skipped. ZUV exports cache_root via the ZUV_CACHE_ROOT env var.
 """
+import asyncio
 import logging
 import os
 import threading
@@ -63,7 +64,8 @@ class SystemTab(SettingsTab):
     def compose(self) -> ComposeResult:
         yield Label(t("Controller"), classes="section")
         yield Label(t("Lock to controller"))
-        self._devices = _enumerate_dualsenses()
+        # Skip blocking HID enumeration here; on_show() scans off-thread.
+        self._devices = []
         yield RadioSet(*self._build_controller_buttons(), id="controller-radio")
         with Horizontal(id="controller-buttons"):
             yield Button(t("Rescan"), id="controller-rescan")
@@ -148,8 +150,9 @@ class SystemTab(SettingsTab):
         return button.id[len("ctrl-"):]
 
     async def _rerender_controller(self) -> None:
+        # Enumerate off-thread; blocking HID I/O would freeze the event loop.
+        self._devices = await asyncio.to_thread(_enumerate_dualsenses)
         # await remove_children() before mount() to avoid a DuplicateIds collision.
-        self._devices = _enumerate_dualsenses()
         radio = self.query_one("#controller-radio", RadioSet)
         await radio.remove_children()
         for b in self._build_controller_buttons():
