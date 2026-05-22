@@ -58,7 +58,7 @@ class Settings:
     enable_rev_limiter: bool = True
     rev_limit_ratio: float = 0.93             # fraction of max_rpm to fire at
     rev_limit_freq: int = 30                  # distinct from gravel/dirt drift (15/45 Hz)
-    rev_limit_amp: int = 20                   # stronger than any drift surface so the warning stands out
+    rev_limit_amp: int = 12                   # stronger than any drift surface so the warning stands out
     rev_limit_hold_ms: float = 120.0          # min on-time per trigger
 
     # MARK: R2 wheelspin buzz
