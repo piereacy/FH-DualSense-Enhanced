@@ -1,5 +1,4 @@
-from . import triggers
+from . import adaptive_trigger
 from .main import DualSense
-from .triggers import Controller, TriggerAnimations
 
-__all__ = ["DualSense", "triggers", "Controller", "TriggerAnimations"]
+__all__ = ["DualSense", "adaptive_trigger"]

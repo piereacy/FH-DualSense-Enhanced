@@ -2,7 +2,7 @@
 import logging
 import time
 
-from modules import dualsense, udplistener
+from modules import dualsense, forzahorizon
 from modules.exit_detection import ProcessWatcher
 
 log = logging.getLogger("fhds")
@@ -13,8 +13,8 @@ def _max_abs(t, prefix):
 
 
 def run(ds, listener, s, stop_event=None):
-    OFF = dualsense.triggers.off()
-    controller = dualsense.Controller(s)
+    OFF = dualsense.adaptive_trigger.off()
+    controller = forzahorizon.Controller(s)
     prev = None
     last_pkt = time.monotonic()
     last_log = 0.0
@@ -58,7 +58,7 @@ def run(ds, listener, s, stop_event=None):
             log.info("First packet from %s:%d (%d bytes)", addr[0], addr[1], len(pkt))
 
         try:
-            t = udplistener.parse_packet(pkt)
+            t = forzahorizon.parse_packet(pkt)
         except ValueError as e:
             log.warning("Bad packet from %s:%d (%d bytes): %s", addr[0], addr[1], len(pkt), e)
             continue

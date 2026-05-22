@@ -1,33 +1,14 @@
-"""DualSense adaptive trigger effects.
+"""Forza Horizon-aware adaptive trigger logic.
 
-  TriggerAnimations — every effect (ABS, gear shift, rev limiter, resistance...).
+  TriggerAnimations - every effect (ABS, gear shift, rev limiter, resistance...).
                       Owns timing state for effects that span frames.
-  Trigger           — one trigger's priority chain (config + wall hysteresis).
-  Controller        — builds L2 / R2 and produces a frame for each per tick.
+  Controller        - builds L2 / R2 and produces a frame for each per tick.
 """
-
 import time
 
-# --- Raw mode/effect bytes ---
-
-M_OFF            = 0x05  # reset to neutral
-M_VIBRATE        = 0x06  # Simple_Vibration (single zone buzz)
-M_RIGID          = 0x01  # Static_Resistance
-M_RIGID_ZONES    = 0x21  # Feedback: per-zone resistance (10 slots)
-M_VIBRATE_ZONES  = 0x26  # Vibration: per-zone amplitude + frequency
-
-# Hidden firmware effects - unique behavior, may be removed someday
-M_BOW            = 0x22  # resist start..end then snap back
-M_GALLOP         = 0x23  # rhythmic two-foot pulse
-M_MACHINE        = 0x27  # oscillate between two amplitudes
-M_WEAPON_SIMPLE  = 0x02  # Simple_Weapon
-M_WEAPON         = 0x25  # resist start..end with snap release
-
-# Limited leftovers - stricter param ranges, no clear use case
-M_RIGID_LIMITED  = 0x11
-M_WEAPON_LIMITED = 0x12
-
-RAW_MAX = 255
+from modules.dualsense.adaptive_trigger import (
+    RAW_MAX, off, rigid, vibrate, vibrate_zones, rigid_zones,
+)
 
 # Below this car speed (km/h) we trust raw wheel rotation instead of slip_ratio
 # (slip_ratio degenerates near zero speed). Above it, slip_ratio is canonical.
@@ -36,91 +17,9 @@ LOW_SPEED_KMH = 5.0
 # ~30 rad/s = ~3 wheel revs/sec, clearly spun-up regardless of tire size.
 BURNOUT_ROT_THRESHOLD = 30.0
 
-
-def _clamp(v, hi=RAW_MAX):
-    return max(0, min(hi, round(v)))
-
-
-def _pack_zones(strengths):
-    """Build the 6-byte (active-mask, 3-bit-per-zone strengths) payload shared
-    by rigid_zones and vibrate_zones. Strengths are 0..8; 0 = inactive."""
-    active = packed = 0
-    for i, s in enumerate(strengths[:10]):
-        if s > 0:
-            active |= 1 << i
-            packed |= (s - 1) << (3 * i)
-    return (
-        active & 0xFF, (active >> 8) & 0xFF,
-        packed & 0xFF, (packed >> 8) & 0xFF,
-        (packed >> 16) & 0xFF, (packed >> 24) & 0xFF,
-    )
-
-
-# --- Effect primitives (raw HID frames) -----------------------------------
-
-def off():
-    return (M_OFF, ())
-
-def rigid(force):
-    return (M_RIGID, (0, _clamp(force)))
-
-def vibrate(freq, amp):
-    return (M_VIBRATE, (_clamp(freq), _clamp(amp)))
-
-def vibrate_zones(amp, freq, wall_zones):
-    """Per-zone vibrate: lower zones buzz at `amp` (1-8), top `wall_zones` stay maxed."""
-    a = max(1, min(8, int(amp)))
-    w = max(1, min(9, int(wall_zones)))
-    strengths = [a] * (10 - w) + [8] * w
-    return (M_VIBRATE_ZONES, _pack_zones(strengths) + (0, 0, _clamp(freq), 0))
-
-def rigid_zones(zones):
-    """Per-zone resistance: 10 per-zone strengths (0-8). Zero = inactive."""
-    strengths = [max(0, min(8, int(s))) for s in zones[:10]]
-    return (M_RIGID_ZONES, _pack_zones(strengths) + (0, 0, 0, 0))
-
-def weapon(start, end, strength):
-    """Weapon: resist between start..end zones, snap on release. start 2-7, end start+1..8, strength 1-8."""
-    s = max(2, min(7, int(start)))
-    e = max(s + 1, min(8, int(end)))
-    f = max(1, min(8, int(strength)))
-    zones = (1 << s) | (1 << e)
-    return (M_WEAPON, (zones & 0xFF, (zones >> 8) & 0xFF, f - 1))
-
-def bow(start, end, strength, snap_force):
-    """Bow: resist start..end then snap. start 0-8, end start+1..8, both forces 1-8."""
-    s = max(0, min(8, int(start)))
-    e = max(s + 1, min(8, int(end)))
-    f = max(1, min(8, int(strength)))
-    sf = max(1, min(8, int(snap_force)))
-    zones = (1 << s) | (1 << e)
-    pair = ((f - 1) & 0x07) | (((sf - 1) & 0x07) << 3)
-    return (M_BOW, (zones & 0xFF, (zones >> 8) & 0xFF, pair & 0xFF, (pair >> 8) & 0xFF))
-
-def gallop(start, end, first_foot, second_foot, freq):
-    """Galloping: two-foot pulse. start 0-8, end start+1..9, firstFoot 0-6, secondFoot ff+1..7, freq Hz."""
-    s = max(0, min(8, int(start)))
-    e = max(s + 1, min(9, int(end)))
-    ff = max(0, min(6, int(first_foot)))
-    sf = max(ff + 1, min(7, int(second_foot)))
-    zones = (1 << s) | (1 << e)
-    pair = (sf & 0x07) | ((ff & 0x07) << 3)
-    return (M_GALLOP, (zones & 0xFF, (zones >> 8) & 0xFF, pair & 0xFF, _clamp(freq)))
-
-def machine(start, end, amp_a, amp_b, freq, period):
-    """Machine: oscillate between two amplitudes. start 0-8, end start+1..9, amps 0-7, freq Hz, period (0.1s units)."""
-    s = max(0, min(8, int(start)))
-    e = max(s + 1, min(9, int(end)))
-    a = max(0, min(7, int(amp_a)))
-    b = max(0, min(7, int(amp_b)))
-    zones = (1 << s) | (1 << e)
-    pair = (a & 0x07) | ((b & 0x07) << 3)
-    return (M_MACHINE, (zones & 0xFF, (zones >> 8) & 0xFF, pair & 0xFF, _clamp(freq), _clamp(period)))
-
-
-# --- Helpers --------------------------------------------------------------
 # Forza drive_train enum -> wheels that receive engine torque.
 DRIVEN_WHEELS = {0: ("fl", "fr"), 1: ("rl", "rr"), 2: ("fl", "fr", "rl", "rr")}
+
 
 def _amp_to_strength(amp_byte):
     return max(1, min(8, (max(0, int(amp_byte)) // 32) + 1))
@@ -140,7 +39,7 @@ def _wall_state(value, engaged, engage_at, release_at):
     return value >= release_at if engaged else value >= engage_at
 
 def build_wall(zones):
-    """Static firmware wall — top `zones` (1-9) maxed. Built once at startup."""
+    """Static firmware wall - top `zones` (1-9) maxed. Built once at startup."""
     n = max(1, min(9, int(zones)))
     return rigid_zones([0] * (10 - n) + [8] * n)
 
@@ -175,7 +74,6 @@ class TriggerAnimations:
         if self._prev_gear is not None and gear != self._prev_gear:
             self._shift_until = now + s.gear_shift_duration_ms / 1000.0
         self._prev_gear = gear
-        
 
     def shift_burst(self, s, now, pedal, wall_engage_at):
         if now >= self._shift_until:
@@ -206,7 +104,7 @@ class TriggerAnimations:
     def idle_buzz(self, t, s, now):
         # Engine-idle sensation - empty stub
         return None
-    
+
     def wheelspin_buzz(self, t, s, now):
         # R2 buzz when tires lose grip (wheelspin or drift).
         # At speed: tire_combined_slip catches both longitudinal + lateral slip.
@@ -356,71 +254,3 @@ class Controller:
 
         # 6. Throttle resistance - default rigid ramp
         return self.anim.throttle_ramp(t, s)
-
-
-# --- Standalone preview ---------------------------------------------------
-# Run: `python -m modules.dualsense.triggers` from src/, or `python triggers.py`.
-# Pick an effect by number; it plays on BOTH triggers for ~3s then resets.
-
-EFFECT_MENU = [
-    ("off                          - neutral",                                       lambda: off()),
-    ("rigid(180)                   - uniform resistance whole travel",               lambda: rigid(180)),
-    ("vibrate(20, 180)           - uniform buzz 20 Hz whole travel",               lambda: vibrate(20, 180)),
-    ("vibrate_zones(6,20,3)       - light buzz lower zones + harder buzz top 3",   lambda: vibrate_zones(6, 20, 3)),
-    ("rigid_zones middle zones        - resist zones 5-7 only (feel a bump mid-pull)", lambda: rigid_zones([0,0,0,0,0,8,8,8,0,0])),
-    ("weapon(4, 7, 8)              - strong resist 4..7 then SUDDENLY free",         lambda: weapon(4, 7, 8)),
-    ("bow(1, 5, 3, 8) SLOW pull    - light pull, then trigger PUSHES BACK hard",     lambda: bow(1, 5, 3, 8)),
-    ("bow(2, 7, 2, 8) FULL pull    - very light pull, max snap-back over wide zone", lambda: bow(2, 7, 2, 8)),
-    ("gallop(2, 8, 1, 4, 2)        - slow horse gallop (2 Hz)",                      lambda: gallop(2, 8, 1, 4, 2)),
-    ("gallop(2, 8, 1, 4, 5)        - faster gallop (5 Hz)",                          lambda: gallop(2, 8, 1, 4, 5)),
-    ("machine(1, 8, 2, 7, 8, 5)    - oscillate weak<->strong every 0.5s",            lambda: machine(1, 8, 2, 7, 8, 5)),
-    ("machine(2, 8, 0, 7, 4, 8)    - oscillate OFF<->strong every 0.8s",             lambda: machine(2, 8, 0, 7, 4, 8)),
-]
-
-def _preview():
-    try:
-        from .main import DualSense
-    except ImportError:
-        import os, sys
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        from modules.dualsense.main import DualSense
-    ds = DualSense(enable_startup_pulse=False)
-    ds.open()
-    print("Waiting for DualSense...")
-    for _ in range(50):
-        if ds.connected:
-            break
-        time.sleep(0.1)
-    if not ds.connected:
-        print("No controller found. Plug in a DualSense and retry.")
-        ds.close()
-        return
-    print("Connected. Effects:")
-    for i, (label, _) in enumerate(EFFECT_MENU):
-        print(f"  {i}: {label}")
-    print("  q: quit")
-    try:
-        while True:
-            choice = input("\nPick effect # (or q): ").strip().lower()
-            if choice in ("q", "quit", "exit"):
-                break
-            if not choice.isdigit() or not (0 <= int(choice) < len(EFFECT_MENU)):
-                print("Invalid.")
-                continue
-            label, factory = EFFECT_MENU[int(choice)]
-            print(f"Playing: {label}  (3s, squeeze either trigger)")
-            frame = factory()
-            ds.set(frame, frame)
-            time.sleep(3.0)
-            ds.set(off(), off())
-    except KeyboardInterrupt:
-        pass
-    finally:
-        ds.set(off(), off())
-        time.sleep(0.1)
-        ds.close()
-        print("Done.")
-
-
-if __name__ == "__main__":
-    _preview()

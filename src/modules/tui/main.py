@@ -9,8 +9,8 @@ from textual.containers import Horizontal
 from textual.widgets import Button, Header, Input, Static, Switch, TabbedContent, TabPane
 
 from lang import set_language, t
-from modules import dualsense, loop, preferences, profiles, udplistener
-from modules.dualsense.triggers import off, vibrate
+from modules import dualsense, loop, preferences, profiles, forzahorizon
+from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.preferences import _version
 
 from .controls_tab import ControlsTab
@@ -170,7 +170,7 @@ class TriggerTUI(App):
                 controller_lock_serial=s.controller_lock_serial,
             )
             self._ds.open()
-            self._listener_cm = udplistener.UDPListener(s.udp_host, s.udp_port, s.udp_timeout)
+            self._listener_cm = forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout)
             self._listener = self._listener_cm.__enter__()
             log.info("Listening on %s:%d", s.udp_host, s.udp_port)
             log.info("In game: HUD & Gameplay -> Data Out: ON, IP %s, Port %d", s.udp_host, s.udp_port)

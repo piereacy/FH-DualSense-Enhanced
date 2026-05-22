@@ -89,17 +89,17 @@ Başlatıcı (launcher) uygulamanın indirilmesini, ortamın hazırlanmasını v
 
 > **Linux ekstraları:** `libhidapi` paketini kurun (`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`) ve `app/packaging/linux/70-dualsense.rules` dosyasındaki udev kuralını ekleyin. Ardından kontrolcüyü bir kez çıkarıp geri takın.
 
-### 🎮 DS4Windows ile Oynama (Xbox Uygulaması / Windows Mağazası kullanıcıları)
+### 🎮 SISR ile Oynama (Xbox Uygulaması / Windows Mağazası kullanıcıları)
 
-Oyunu Xbox Uygulaması veya Microsoft Store üzerinden oynuyorsanız, oyunun kontrolcünüzü Xbox kumandası olarak tanıması için **DS4Windows** kullanmanız gerekir.
+Oyunu Xbox Uygulaması veya Microsoft Store üzerinden oynuyorsanız, oyunun kontrolcünüzü Xbox kumandası olarak tanıması için bir araca ihtiyacınız olacak. Seçeneklerden biri **[SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR)** — Steam Input'u sistem seviyesine yönlendirip gerçek bir Xbox kontrolcüsü taklit eder, böylece Windows Mağazası uygulamaları ve hile korumalı (anti-cheat) oyunlarda bile çalışır.
 
-DS4Windows **HidHide** kullandığı için, DualSense kontrolcüsünü bu uygulamadan gizleyebilir ve bağlantıyı engelleyebilir. Bunu önlemek için **programları tam olarak şu sırayla başlatmalısınız**:
+SISR kontrolcüyü **Steam Input** üzerinden yönlendirdiği için, Steam fiziksel DualSense'i özel olarak ele geçirip bu uygulamanın bağlanmasını engelleyebilir. Bunu önlemek için **programları tam olarak şu sırayla başlatmalısınız**:
 
 1. **İlk olarak BU UYGULAMAYI başlatın** (`win_start.bat`) ve tetiklerdeki kısa titreşim sinyalini bekleyin.
-2. **İkinci olarak DS4Windows'u başlatın.**
+2. **İkinci olarak SISR'ı (ve Steam'i) başlatın.**
 3. **Son olarak Forza Horizon'ı başlatın.**
 
-*(Not: Oyun esnasında kontrolcünüzün bağlantısı kesilirse, DS4Windows'u kapatmalı, bu uygulamayı yeniden başlatmalı ve ardından DS4Windows'u tekrar açmalısınız. **Kontrolcü bağlantısı koptuğunda uygulamanın otomatik olarak yeniden bağlanmasını istiyorsanız, DS4Windows'taki "Hide DS4 Controller" ayarını KAPALI tutmalısınız.**)*
+*(Not: Oyun esnasında kontrolcünüzün bağlantısı kesilirse, SISR'ı kapatın, bu uygulamayı yeniden başlatın ve ardından SISR'ı tekrar açın. SISR kurulumu ve taklit seçenekleri için [SISR README](https://github.com/Alia5/SISR) sayfasına bakın.)*
 
 <details>
 <summary>Manuel kurulum (geliştiriciler için)</summary>
@@ -238,10 +238,11 @@ src/
 └── modules/
     ├── settings.py                  # 👈 düzenleyeceğiniz dosya
     ├── dualsense/
-    │   ├── main.py                  # HID katmanı
-    │   └── triggers.py              # Efekt mantığı
-    └── udplistener/
-        └── main.py                  # UDP ayrıştırıcı
+    │   ├── main.py                              # HID katmanı
+    │   └── adaptive_trigger.py                 # genel efekt ilkelleri
+    └── forzahorizon/
+        ├── udp_listener.py                     # UDP ayrıştırıcı
+        └── effects.py                          # Forza'ya özel Controller + animasyonlar
 ```
 
 ---

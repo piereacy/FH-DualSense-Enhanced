@@ -91,17 +91,17 @@ The launcher handles downloading the app, preparing the environment, and running
 
 > **Linux extras:** install `libhidapi` (`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`) and the udev rule from `app/packaging/linux/70-dualsense.rules`. Then unplug/replug the controller once.
 
-### 🎮 Playing with DS4Windows (Xbox App / Windows Store users)
+### 🎮 Playing with SISR (Xbox App / Windows Store users)
 
-If you are playing the game via the Xbox App or Microsoft Store, you will need **DS4Windows** for the game to recognize your controller as an Xbox controller. 
+If you are playing the game via the Xbox App or Microsoft Store, you will need a tool that makes the game recognize your controller as an Xbox controller. One option is **[SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR)** — it redirects Steam Input to the system level and emulates a real Xbox controller, so it works even with Windows Store apps and anti-cheat-protected games.
 
-Because DS4Windows uses **HidHide**, it can hide the DualSense controller from this app and prevent a successful connection. To avoid this, **you must start the programs in this exact order**:
+Because SISR routes the controller through **Steam Input**, Steam can grab the physical DualSense exclusively and prevent this app from connecting. To avoid this, **you must start the programs in this exact order**:
 
 1. **First, launch THIS APP** (`win_start.bat`) and wait for the short pulse on the triggers.
-2. **Second, launch DS4Windows.**
+2. **Second, launch SISR** (and Steam).
 3. **Finally, launch Forza Horizon.**
 
-*(Note: If your controller disconnects while playing, you will have to close DS4Windows, restart this app, and then open DS4Windows again. **If you want the app to reconnect automatically upon controller disconnection, you must keep the "Hide DS4 Controller" setting OFF in DS4Windows.**)*
+*(Note: If your controller disconnects while playing, close SISR, restart this app, then open SISR again. For SISR setup and emulation options, see the [SISR README](https://github.com/Alia5/SISR).)*
 
 <details>
 <summary>Manual install (for developers)</summary>
@@ -240,10 +240,11 @@ src/
 └── modules/
     ├── settings.py                  # 👈 the file you edit
     ├── dualsense/
-    │   ├── main.py                  # HID layer
-    │   └── triggers.py              # Effect logic
-    └── udplistener/
-        └── main.py                  # UDP parser
+    │   ├── main.py                              # HID layer
+    │   └── adaptive_trigger.py                 # generic effect primitives
+    └── forzahorizon/
+        ├── udp_listener.py                     # UDP parser
+        └── effects.py                          # Forza-aware Controller + animations
 ```
 
 ---

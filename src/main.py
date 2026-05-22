@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv("dev.env")
 
 
-from modules import dualsense, udplistener, setup_logging, loop
+from modules import dualsense, forzahorizon, setup_logging, loop
 from modules import preferences
 from modules.settings import Settings
 
@@ -44,7 +44,7 @@ def run(s: Settings) -> None:
     )
     ds.open()
     try:
-        with udplistener.UDPListener(s.udp_host, s.udp_port, s.udp_timeout) as listener:
+        with forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout) as listener:
             log.info("Listening on %s:%d | Ctrl+C to quit", s.udp_host, s.udp_port)
             log.info("  In game: HUD & Gameplay -> Data Out: ON, IP 127.0.0.1, Port %d", s.udp_port)
             loop.run(ds, listener, s)

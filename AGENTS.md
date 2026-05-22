@@ -32,10 +32,12 @@ src/
     preferences.py           # JSON persistence (globals + active profile)
     profiles.py              # named profile CRUD
     loop.py                  # per-packet driver
-    udplistener/main.py      # UDP socket + 324-byte FH packet parser
+    forzahorizon/
+      udp_listener.py        # UDP socket + 324-byte FH packet parser
+      effects.py             # Forza-aware Controller + TriggerAnimations
     dualsense/
       main.py                # HID writer (USB+BT), persistent mode
-      triggers.py            # effect primitives + TriggerAnimation
+      adaptive_trigger.py  # generic effect primitives
       hidhide.py             # filesystem-only HidHide detection
     tui/                     # Textual app (controls/profiles/settings/system/lang/logs)
     emulation/               # optional fake telemetry for offline dev
@@ -130,9 +132,9 @@ HidHide cloaking the device mid-session doesn't tear our handle down.
 | Want to... | Open this |
 |---|---|
 | Change a tunable / disable an effect | `src/modules/settings.py` |
-| Change how an effect feels | `src/modules/dualsense/triggers.py` |
+| Change how an effect feels | `src/modules/dualsense/adaptive_trigger.py` (primitive) or `src/modules/forzahorizon/effects.py` (game logic) |
 | Touch raw HID bytes | `src/modules/dualsense/main.py` |
-| Add a telemetry field | `src/modules/udplistener/main.py` |
+| Add a telemetry field | `src/modules/forzahorizon/udp_listener.py` |
 | Change CLI / startup wiring | `src/main.py` |
 | Change persistence layout | `src/modules/preferences.py` |
 | Edit the TUI | `src/modules/tui/` |

@@ -89,17 +89,17 @@
 
 > **Linux 额外说明:** 安装 `libhidapi` 依赖（`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`）并从 `app/packaging/linux/70-dualsense.rules` 添加 udev 规则。然后将手柄断开并重新连接一次。
 
-### 🎮 使用 DS4Windows 玩游戏（Xbox App / 微软商店版用户）
+### 🎮 使用 SISR 玩游戏（Xbox App / 微软商店版用户）
 
-如果您是在微软商店（Microsoft Store）或 Xbox App 上运行游戏，您将需要 **DS4Windows** 才能让游戏识别您的手柄为 Xbox 360 手柄。
+如果您是在微软商店（Microsoft Store）或 Xbox App 上运行游戏，您将需要一个工具来让游戏把您的手柄识别为 Xbox 手柄。其中一个选择是 **[SISR（Steam Input System Redirector）](https://github.com/Alia5/SISR)** —— 它将 Steam Input 重定向到系统层级并模拟一个真实的 Xbox 手柄，因此即使在微软商店应用和带反作弊保护的游戏中也能正常工作。
 
-因为 DS4Windows 使用了 **HidHide**，它可能会把 DualSense 手柄隐藏起来以防本程序读取，导致连接失败。为了避免这个问题，**您必须按照以下严格的顺序启动程序**：
+因为 SISR 通过 **Steam Input** 转发手柄，Steam 可能会独占物理 DualSense 手柄，导致本程序无法连接。为了避免这个问题，**您必须按照以下严格的顺序启动程序**：
 
 1. **首先启动本程序** (`win_start.bat`)，等待扳机发生一次简短的脉冲震动。
-2. **第二步，启动 DS4Windows。**
+2. **第二步，启动 SISR（以及 Steam）。**
 3. **最后，启动极限竞速：地平线游戏。**
 
-*(注：如果在玩游戏时手柄断开连接，你需要先关闭 DS4Windows，重启本程序，然后再打开 DS4Windows。**如果你想在手柄断开连接时自动恢复连接，你必须在 DS4Windows 中关闭“Hide DS4 Controller（隐藏 DS4 控制器）”设置。**)*
+*(注：如果在玩游戏时手柄断开连接，请先关闭 SISR，重启本程序，然后再打开 SISR。有关 SISR 的安装与模拟选项，请参阅 [SISR README](https://github.com/Alia5/SISR)。)*
 
 <details>
 <summary>手动安装（适合开发者）</summary>
@@ -238,10 +238,11 @@ src/
 └── modules/
     ├── settings.py                  # 👈 你需要调校参数的文件
     ├── dualsense/
-    │   ├── main.py                  # HID 设备交互层
-    │   └── triggers.py              # 自适应扳机震动逻辑
-    └── udplistener/
-        └── main.py                  # UDP 遥测数据解析
+    │   ├── main.py                              # HID 设备交互层
+    │   └── adaptive_trigger.py                 # 通用扳机效果原语
+    └── forzahorizon/
+        ├── udp_listener.py                     # UDP 遥测数据解析
+        └── effects.py                          # Forza 专属 Controller 与动画
 ```
 
 ---

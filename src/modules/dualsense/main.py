@@ -13,7 +13,7 @@ else:
     import hid
 
 from . import hidhide
-from .triggers import M_RIGID, off
+from .adaptive_trigger import M_RIGID, off
 
 log = logging.getLogger("fhds.dualsense")
 
@@ -335,7 +335,7 @@ class DualSense:
             if not self._open_hinted:
                 _log_open_failure(e)
                 log.warning("open_path failed on %r - another process likely holds the "
-                            "device exclusive (Steam Input, DS4Windows, reWASD).",
+                            "device exclusive (Steam Input, SISR, reWASD).",
                             info.get("path"))
                 self._open_hinted = True
             return False
