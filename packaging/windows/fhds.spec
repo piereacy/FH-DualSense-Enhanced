@@ -45,7 +45,7 @@ VSVersionInfo(
         StringStruct('FileDescription', 'Forza Horizon DualSense adaptive triggers'),
         StringStruct('FileVersion', '{VERSION}'),
         StringStruct('InternalName', 'FH-DualSense'),
-        StringStruct('LegalCopyright', 'MIT License'),
+        StringStruct('LegalCopyright', '(C) 2025 Hamza Yesilmen (HamzaYslmn). Attribution & Sponsor License.'),
         StringStruct('OriginalFilename', 'FH-DualSense.exe'),
         StringStruct('ProductName', 'FH DualSense'),
         StringStruct('ProductVersion', '{VERSION}'),
