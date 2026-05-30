@@ -1,6 +1,6 @@
 [project]
 name = "fhds"
-version = "1.5.2"
+version = "1.5.3"
 description = "Forza Horizon DualSense adaptive triggers (Steam keeps rumble)."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,6 +12,7 @@ dependencies = [
     "psutil>=7.2.2",
     "pystray>=0.19.5",
     "textual>=8.2.5",
+    "PyGObject>=3.42.0; sys_platform == 'linux'",
 ]
 
 [tool.pyrefly]

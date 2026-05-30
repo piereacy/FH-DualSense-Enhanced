@@ -93,6 +93,11 @@ The launcher handles downloading the app, preparing the environment, and running
 > A standalone **Windows `.exe`** is also attached to each release as an experimental option. The **recommended** way to run the app is still **`win_start.bat`** — it self-updates and works the same across every Windows version.
 
 > **Linux extras:** install `libhidapi` (`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`) and the udev rule from `app/packaging/linux/70-dualsense.rules`. Then unplug/replug the controller once.
+>
+> **Wayland tray:** the minimize-to-tray icon needs the appindicator backend (X11 doesn't). Install these so the launcher can build PyGObject into its venv:
+> - Debian/Ubuntu: `sudo apt install build-essential pkg-config python3-dev libcairo2-dev libgirepository-2.0-dev libayatana-appindicator3-1 gir1.2-ayatanaappindicator3-0.1`
+> - Arch: `sudo pacman -S base-devel cairo gobject-introspection libayatana-appindicator`
+> - Fedora: `sudo dnf install gcc pkg-config python3-devel cairo-devel gobject-introspection-devel libayatana-appindicator-gtk3`
 
 ### 🎮 Playing with SISR (Xbox App / Windows Store users)
 
