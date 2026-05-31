@@ -254,6 +254,8 @@ src/
 
 我们已经集成了对 DSX (DualSenseX) 的支持。由于 DSX 的限制，您可能无法获得完美的 1:1 体验，但我已尽了最大努力。目前已完全支持较低保真度的自适应扳机效果。
 
+![DSX Configuration](docs/img/dsxconfig.png)
+
 ---
 
 ## 🙏 赞助与致谢

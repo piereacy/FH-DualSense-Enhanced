@@ -261,6 +261,8 @@ src/
 
 I have integrated DSX (DualSenseX) support. Due to DSX limitations, you might not get the exact 1:1 experience, but I have done my best. A lower-fidelity version of the adaptive trigger effects is fully supported.
 
+![DSX Configuration](docs/img/dsxconfig.png)
+
 ---
 
 ## 🙏 Credits

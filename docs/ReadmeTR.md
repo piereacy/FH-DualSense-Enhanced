@@ -254,6 +254,8 @@ src/
 
 DSX (DualSenseX) desteğini entegre ettik. DSX limitasyonları sebebiyle 1:1 aynı deneyimi yakalayamayabilirsiniz, ama elimden geleni yaptım. Şu anda uyarlanabilir tetik efektlerinin daha düşük hassasiyete sahip bir sürümü tam olarak desteklenmektedir.
 
+![DSX Configuration](docs/img/dsxconfig.png)
+
 ---
 
 ## 🙏 Teşekkürler
