@@ -40,7 +40,8 @@ def run(s: Settings) -> None:
     ds = make_backend(s, s.enable_startup_pulse)
     ds.open()
     try:
-        with forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout) as listener:
+        with forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout,
+                                      s.udp_forward_to, s.udp_forward) as listener:
             log.info("Listening on %s:%d | Ctrl+C to quit", s.udp_host, s.udp_port)
             log.info("  In game: HUD & Gameplay -> Data Out: ON, IP 127.0.0.1, Port %d", s.udp_port)
             if s.use_dsx:

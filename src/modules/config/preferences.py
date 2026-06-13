@@ -31,6 +31,8 @@ DEFAULT_PROFILE_NAME = "Default"
 # Everything else lives in the active profile and is wiped from Default each launch.
 GLOBAL_FIELDS = frozenset({
     "udp_port",
+    "udp_forward",
+    "udp_forward_to",
     "enable_reconnect",
     "reconnect_interval_s",
     "enable_startup_pulse",

@@ -11,6 +11,8 @@ class Settings:
     udp_host: str = "127.0.0.1"               # bind address for Forza Data Out
     udp_port: int = 5300                      # match Forza HUD setting
     udp_timeout: float = 0.5                  # socket recv timeout (s)
+    udp_forward: bool = False                 # mirror raw packets to udp_forward_to (off by default)
+    udp_forward_to: str = "127.0.0.1:5301"    # host:port targets (comma-separated) when udp_forward is on
 
     # MARK: Pedal shared
     pedal_value_max: int = 255                # raw pedal byte range. DO NOT CHANGE

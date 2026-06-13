@@ -73,6 +73,12 @@ STRINGS = {
     "Click again to confirm reset": "もう一度クリックしてリセットを確定",
     "In Forza HUD: host 127.0.0.1 (try ::1 if it fails).":
         "Forza HUD で host を 127.0.0.1 に設定（うまくいかなければ ::1 を試す）。",
+    "Forward telemetry": "テレメトリを転送",
+    "Mirror every received packet to another app (e.g. SimHub) without taking the port from it.":
+        "受信した各パケットを別のアプリ（例: SimHub）にミラーします。ポートを奪いません。",
+    "Forward to": "転送先",
+    "host:port targets, comma-separated. Default 127.0.0.1:5301.":
+        "host:port 形式の宛先（カンマ区切り）。既定値 127.0.0.1:5301。",
     "UDP port {port} is in use. Close the other listener or change the port in the System tab.":
         "UDP ポート {port} は使用中です。他のリスナーを閉じるか、システムタブでポートを変更してください。",
 

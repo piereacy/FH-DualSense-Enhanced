@@ -73,6 +73,10 @@ SYSTEM_SECTIONS = [
     ("Forza telemetry (applies on next launch)", [
         ("udp_port", "UDP port", 1, 65535,
          "In Forza HUD: host 127.0.0.1 (try ::1 if it fails)."),
+        ("udp_forward", "Forward telemetry", None, None,
+         "Mirror every received packet to another app (e.g. SimHub) without taking the port from it."),
+        ("udp_forward_to", "Forward to", None, None,
+         "host:port targets, comma-separated. Default 127.0.0.1:5301."),
     ]),
     ("Startup pulse", [
         ("startup_pulse_force", "Startup buzz strength", 0, 255, ""),

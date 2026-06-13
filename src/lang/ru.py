@@ -73,6 +73,12 @@ STRINGS = {
     "Click again to confirm reset": "Нажмите ещё раз для подтверждения сброса",
     "In Forza HUD: host 127.0.0.1 (try ::1 if it fails).":
         "В Forza HUD: host 127.0.0.1 (если не работает, попробуйте ::1).",
+    "Forward telemetry": "Пересылка телеметрии",
+    "Mirror every received packet to another app (e.g. SimHub) without taking the port from it.":
+        "Зеркалирует каждый полученный пакет в другое приложение (например, SimHub), не занимая порт.",
+    "Forward to": "Пересылать на",
+    "host:port targets, comma-separated. Default 127.0.0.1:5301.":
+        "Цели host:port через запятую. По умолчанию 127.0.0.1:5301.",
     "UDP port {port} is in use. Close the other listener or change the port in the System tab.": (
         "UDP-порт {port} уже занят. Закройте программу, которая его использует, "
         "или измените порт на вкладке «Система»."

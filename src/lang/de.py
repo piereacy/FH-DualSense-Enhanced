@@ -73,6 +73,12 @@ STRINGS = {
     "Click again to confirm reset": "Zum Bestätigen erneut klicken",
     "In Forza HUD: host 127.0.0.1 (try ::1 if it fails).":
         "Im Forza-HUD: Host 127.0.0.1 (bei Problemen ::1 versuchen).",
+    "Forward telemetry": "Telemetrie weiterleiten",
+    "Mirror every received packet to another app (e.g. SimHub) without taking the port from it.":
+        "Spiegelt jedes empfangene Paket an eine andere App (z. B. SimHub), ohne ihr den Port wegzunehmen.",
+    "Forward to": "Weiterleiten an",
+    "host:port targets, comma-separated. Default 127.0.0.1:5301.":
+        "host:port-Ziele, durch Komma getrennt. Standard 127.0.0.1:5301.",
     "UDP port {port} is in use. Close the other listener or change the port in the System tab.":
         "UDP-Port {port} ist belegt. Schließen Sie den anderen Listener oder ändern Sie den Port im System-Tab.",
 

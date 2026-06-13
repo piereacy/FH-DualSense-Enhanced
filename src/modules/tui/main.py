@@ -165,7 +165,8 @@ class TriggerTUI(App):
             preferences.load(s)
             self._ds = make_backend(s, s.enable_startup_pulse)
             self._ds.open()
-            self._listener_cm = forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout)
+            self._listener_cm = forzahorizon.UDPListener(
+                s.udp_host, s.udp_port, s.udp_timeout, s.udp_forward_to, s.udp_forward)
             self._listener = self._listener_cm.__enter__()
             log.info("Listening on %s:%d", s.udp_host, s.udp_port)
             log.info("In game: HUD & Gameplay -> Data Out: ON, IP %s, Port %d", s.udp_host, s.udp_port)

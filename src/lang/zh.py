@@ -73,6 +73,12 @@ STRINGS = {
     "Click again to confirm reset": "再次点击以确认重置",
     "In Forza HUD: host 127.0.0.1 (try ::1 if it fails).":
         "在 Forza HUD 中: host 设为 127.0.0.1（若无效请尝试 ::1）。",
+    "Forward telemetry": "转发遥测数据",
+    "Mirror every received packet to another app (e.g. SimHub) without taking the port from it.":
+        "将收到的每个数据包镜像到另一个应用（如 SimHub），且不占用端口。",
+    "Forward to": "转发到",
+    "host:port targets, comma-separated. Default 127.0.0.1:5301.":
+        "host:port 目标，以逗号分隔。默认 127.0.0.1:5301。",
     "UDP port {port} is in use. Close the other listener or change the port in the System tab.":
         "UDP 端口 {port} 已被占用。请关闭其他监听程序，或在系统选项卡中更改端口。",
 

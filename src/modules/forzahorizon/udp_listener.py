@@ -8,6 +8,8 @@ import logging
 import socket
 import struct
 
+from .udp_forward import UDPForwarder
+
 log = logging.getLogger("fhds.udp")
 
 PACKET_SIZE = 324
@@ -124,12 +126,14 @@ class UDPListener:
     Falls back to IPv4 if IPv6 is unavailable.
     """
 
-    def __init__(self, host: str, port: int, timeout: float = 0.5):
+    def __init__(self, host: str, port: int, timeout: float = 0.5,
+                 forward_to: str = "", forward_enabled: bool = True):
         self.host = host
         self.port = port
         self.timeout = timeout
         self.sock: socket.socket | None = None
         self._warned_sizes: set[int] = set()
+        self._fwd = UDPForwarder(forward_to, forward_enabled)
 
     def _open_dual_stack(self) -> socket.socket | None:
         try:
@@ -165,12 +169,14 @@ class UDPListener:
                 f"UDP port {self.port} could not be bound (in use, blocked, or invalid host {self.host!r})"
             )
         self.sock.settimeout(self.timeout)
+        self._fwd.open()
         return self
 
     def __exit__(self, *args):
         if self.sock:
             self.sock.close()
             self.sock = None
+        self._fwd.close()
 
     def recv_latest(self):
         """Block up to ``timeout`` for at least one packet, then drain the
@@ -185,10 +191,15 @@ class UDPListener:
             # MARK: NIC change, sleep/wake, route flap - log once and skip frame
             log.warning("UDP recvfrom error: %s", e)
             return None, None
+        forwarding = self._fwd.active
+        if forwarding:
+            self._fwd.send(pkt)
         self.sock.setblocking(False)
         try:
             while True:
                 pkt, addr = self.sock.recvfrom(1500)
+                if forwarding:
+                    self._fwd.send(pkt)
         except (BlockingIOError, OSError):
             pass
         finally:

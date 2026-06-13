@@ -73,6 +73,12 @@ STRINGS = {
     "Click again to confirm reset": "Sıfırlamayı onaylamak için tekrar tıklayın",
     "In Forza HUD: host 127.0.0.1 (try ::1 if it fails).":
         "Forza HUD'da host 127.0.0.1 olmalı (çalışmazsa ::1 deneyin).",
+    "Forward telemetry": "Telemetriyi ilet",
+    "Mirror every received packet to another app (e.g. SimHub) without taking the port from it.":
+        "Alınan her paketi, bağlantı noktasını almadan başka bir uygulamaya (ör. SimHub) yansıtır.",
+    "Forward to": "Şuraya ilet",
+    "host:port targets, comma-separated. Default 127.0.0.1:5301.":
+        "host:port hedefleri, virgülle ayrılır. Varsayılan 127.0.0.1:5301.",
     "UDP port {port} is in use. Close the other listener or change the port in the System tab.":
         "UDP portu {port} kullanımda. Diğer dinleyiciyi kapatın ya da Sistem sekmesinden portu değiştirin.",
 
