@@ -1,6 +1,9 @@
 import runpy
+import hashlib
 import tomllib
 from pathlib import Path
+
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -123,3 +126,82 @@ def test_root_readme_is_chinese_with_an_english_switch_and_release_guidance():
     assert "manual" in english.lower() and ZUV_NAME in english
     assert "社区" in chinese
     assert "community" in english.lower()
+
+
+def test_readmes_are_original_enhanced_project_documentation():
+    chinese = _source("README.md")
+    english = _source("README_EN.md")
+    combined = chinese + "\n" + english
+
+    for text in (
+        "Steam Input",
+        "Data Out",
+        "5300",
+        "win_start.bat",
+        ZUV_NAME,
+        "USB",
+        "Bluetooth",
+        "HorizonHaptics",
+    ):
+        assert text.lower() in combined.lower()
+
+    for forbidden in (
+        "steamcommunity.com/id/teccno",
+        "tradeoffer",
+        "youtube.com/watch",
+        "github.com/sponsors",
+        "Jared (jmac122)",
+        "2323",
+        "docs/ReadmeTR.md",
+        "docs/ReadmeJA.md",
+    ):
+        assert forbidden not in combined
+    assert "sponsor" not in combined.lower()
+
+    assert 'href="README_EN.md"' in chinese
+    assert 'href="README.md"' in english
+    assert "防火墙" in chinese
+    assert "firewall" in english.lower()
+
+
+def test_release_identity_is_the_enhanced_post_release():
+    project = tomllib.loads(_source("src/pyproject.toml"))
+    workflow = _source(".github/workflows/release.yml")
+
+    assert project["project"]["version"] == "1.6.2.post1"
+    assert "FH-DualSense-Enhanced 1.6.2 Enhanced R1" in workflow
+    assert "v1.6.2.post1" in workflow
+
+
+def test_selected_icon_is_used_by_all_application_surfaces():
+    icon = ROOT / "src/data/icon.ico"
+    png = ROOT / "src/data/icon.png"
+
+    assert hashlib.sha256(icon.read_bytes()).hexdigest().upper() == (
+        "FF195DE9560D31D3A5646206D73B55844F69FF3BDB99618CAA2414ACF423852B"
+    )
+    with Image.open(icon) as image:
+        assert sorted(image.info["sizes"]) == [
+            (16, 16),
+            (24, 24),
+            (32, 32),
+            (48, 48),
+            (64, 64),
+            (128, 128),
+            (256, 256),
+        ]
+    with Image.open(png).convert("RGB") as image:
+        white_pixels = sum(
+            red > 240 and green > 240 and blue > 240
+            for red, green, blue in image.crop(
+                (0, 700, 250, 1024)
+            ).get_flattened_data()
+        )
+        assert white_pixels > 5000
+
+    assert 'ICON = SRC / "data" / "icon.ico"' in _source(
+        "packaging/windows/fhds.spec"
+    )
+    assert "paths.ICON_ICO" in _source("src/modules/gui/main.py")
+    assert "paths.ICON_PNG" in _source("src/modules/gui/main.py")
+    assert "paths.ICON_PNG" in _source("src/modules/gui/tray.py")

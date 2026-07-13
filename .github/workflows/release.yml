@@ -1,8 +1,8 @@
 name: release
 
 # Triggers:
-#   - tag vX.Y.Z                              -> stable vX.Y.Z
-#   - commit msg contains "release vX.Y.Z"    -> stable vX.Y.Z
+#   - tag vX.Y.Z or vX.Y.Z.postN              -> stable release
+#   - commit msg contains "release vX.Y.Z[.postN]" -> stable release
 #   - commit msg contains "prerelease"        -> prerelease at (latest stable + patch)
 #   - manual workflow_dispatch                -> prerelease at (latest stable + patch)
 
@@ -39,16 +39,28 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             # tag push -> stable
             tag="${GITHUB_REF#refs/tags/}"; prerelease=false; title="$tag"
-          elif [[ "$msg" =~ release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            # explicit "release vX.Y.Z" commit -> stable
+          elif [[ "$msg" =~ release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?) ]]; then
+            # explicit stable release commit
             tag="${BASH_REMATCH[1]}"; prerelease=false; title="$tag"
           elif [[ "$msg" == *prerelease* || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # prerelease -> next patch above the latest published stable release
             base=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name 2>/dev/null || true)
             base="${base:-v0.0.0}"
-            IFS='.' read -r maj min pat <<< "${base#v}"
+            if [[ "$base" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+              maj="${BASH_REMATCH[1]}"
+              min="${BASH_REMATCH[2]}"
+              pat="${BASH_REMATCH[3]}"
+            else
+              maj=0; min=0; pat=0
+            fi
             tag="v${maj}.${min}.$((pat + 1))"
             prerelease=true; title="🧪 ${tag} - Prerelease"
+          fi
+
+          if [[ "$tag" == "v1.6.2.post1" ]]; then
+            title="FH-DualSense-Enhanced 1.6.2 Enhanced R1"
+          elif [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)\.post([0-9]+)$ ]]; then
+            title="FH-DualSense-Enhanced ${BASH_REMATCH[1]} Enhanced R${BASH_REMATCH[2]}"
           fi
 
           echo "tag=$tag"               >> "$GITHUB_OUTPUT"
@@ -187,15 +199,27 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: true
           body: |
-            ## ✅ Recommended: launcher scripts
+            ## FH-DualSense-Enhanced
+
+            This release adds telemetry-driven DualSense body haptics to the adaptive-trigger experience. Engine, road material, suspension, impacts, puddles, tire slip, wheelspin, and ABS are mixed from live Forza Horizon Data Out telemetry instead of a fixed vibration pattern.
+
+            USB and Bluetooth provide broadly similar practical feedback. USB uses the controller audio endpoint for haptics, while Bluetooth uses compatible low and high frequency rumble. Adaptive triggers remain available on both connections.
+
+            ## Recommended: launcher scripts
 
             Download **`win_start.bat`** on Windows or **`linux_start.sh`** on Linux and run it. The launcher downloads the ZUV application bundle, and the Windows launcher installs `uv` when needed. `uv` then provisions the managed Python runtime. The published ZUV checks this fork's releases for updates.
 
             If the automatic download is unreliable, use the manual ZUV fallback: download **`FH-DualSense-Enhanced.zuv.py`** from this Release, place it beside the launcher, and run the launcher again.
 
-            ## 🧪 Experimental: standalone binaries
+            ## Standalone binaries
 
-            `FH-DualSense-Enhanced-vX.Y.Z.exe` (Windows) and `FH-DualSense-Enhanced-vX.Y.Z` (Linux) are one-file GUI builds. They do not self-update. The Linux binary is built on Ubuntu, so very old or different distributions may need the ZUV launcher instead.
+            `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}` for Windows contains Python and all application dependencies. It can be downloaded and run by itself without BAT, ZUV, uv, or a system Python installation. It does not self-update.
+
+            `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}` is the standalone Linux build. It is built on Ubuntu, so older or substantially different distributions may need the ZUV launcher instead.
+
+            ## Required setup
+
+            Enable Steam Input and DualSense vibration, then enable Forza Horizon Data Out at `127.0.0.1:5300`. Start FH-DualSense-Enhanced before launching the game. If no UDP packets arrive, allow the application and UDP 5300 through the firewall. Disable the firewall only for a short diagnostic comparison and turn it back on immediately.
 
             ---
             > **Heads up**

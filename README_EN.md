@@ -1,324 +1,174 @@
 <p align="right">
-  <strong>English</strong> •
-  <a href="docs/ReadmeTR.md">Türkçe</a> •
-  <a href="docs/ReadmeJA.md">日本語</a> •
-  <a href="README.md">简体中文</a>
+  <a href="README.md">简体中文</a> | <strong>English</strong>
 </p>
 
 <div align="center">
-  <h1>🏎️ FH-DualSense-Enhanced</h1>
-  <p><strong>Enhanced trigger and body-haptic feedback for Forza Horizon on PC.</strong></p>
-  <p><em>Feel the brakes. Feel the engine. No setup juggling.</em></p>
+  <img src="src/data/icon.png" alt="FH-DualSense-Enhanced" width="180">
+  <h1>FH-DualSense-Enhanced</h1>
+  <p><strong>DualSense adaptive triggers and telemetry-driven body haptics for Forza Horizon on PC.</strong></p>
 </div>
 
-> My Steam profile: <https://steamcommunity.com/id/teccno/>
->
-> For CS:GO item Sponsorship :D : <https://steamcommunity.com/tradeoffer/new/?partner=291638630&token=Xyg4vITU>
+FH-DualSense-Enhanced is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
 
-<div align="center">
-  <a href="https://www.youtube.com/watch?v=-3Cp0PfL52Y">
-    <img src="docs/img/tuiyoutube.png" alt="Forza Horizon DualSense Adaptive Trigger Mod" style="width:100%;">
-  </a>
-</div>
+This is not an official upstream release and does not represent the upstream author's views.
 
-> 💛 Huge thanks to **[Jared (jmac122)](https://github.com/jmac122)** for sponsoring this project by gifting me Forza Horizon 6.
+## Highlights
 
----
+- Progressive brake-trigger resistance with ABS pulses.
+- Progressive throttle-trigger resistance with shift, redline, and wheelspin feedback.
+- Body haptics for engine, road material, suspension, impacts, puddles, tire slip, burnouts, and ABS.
+- No meaningless continuous vibration when the vehicle is truly stationary at idle.
+- Revving and burnouts while stationary still produce appropriate feedback.
+- Road material contributes only while the car moves or the tires create physical excitation.
+- USB and Bluetooth support.
+- Profiles, tray behavior, exit-with-game behavior, and ZUV updates.
 
-## 📜 Contents
-1. [What it does](#-what-it-does)
-2. [Install](#-install)
-3. [In-game setup](#-in-game-setup)
-4. [Enable Steam Haptics](#-enable-steam-haptics)
-5. [Run it](#-run-it)
-6. [Auto-launch with Steam](#-auto-launch-with-steam)
-7. [Tuning the feel](#-tuning-the-feel)
-8. [Troubleshooting](#-troubleshooting)
-9. [Credits](#-credits)
+The default tuning is informed by community feedback and refined through hands-on driving tests. It is a practical starting point, not a universal setting for every car or player.
 
+## USB and Bluetooth
 
+The practical experience is broadly similar over USB and Bluetooth. Both retain adaptive triggers and body feedback.
 
----
+| Connection | Output path |
+| --- | --- |
+| USB | Uses the DualSense four-channel audio endpoint for left and right haptics, plus HID trigger control |
+| Bluetooth | Uses compatible low and high frequency rumble, sent together with trigger state |
 
-## 💡 What it does
+Small differences can depend on the PC, controller firmware, and Bluetooth adapter. Trigger feedback continues to work if the USB audio endpoint is unavailable.
 
-Forza Horizon sends car telemetry over UDP, but Steam Input doesn't use the DualSense's **adaptive triggers**. This tiny app fills the gap:
+## Quick installation
 
-- **Left trigger (brake)** - pushes back harder the more you press. Buzzes like ABS when tires slip. Extra resistance when handbraking.
-- **Right trigger (throttle)** - soft progressive resistance. Thumps on gear shifts. Buzzes at the rev limiter.
-- **Body haptics:** optional engine, road, collision, suspension, puddle, tire-slip, and ABS feedback in the controller grips.
+### Recommended Windows method
 
-### How it talks to your controller without fighting Steam
+1. Open the [latest Release](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest).
+2. Download only `win_start.bat`.
+3. Run it. The launcher downloads `FH-DualSense-Enhanced.zuv.py` and prepares uv plus an isolated Python environment.
 
-```
-┌──────────────────┐    UDP 5300     ┌──────────────────┐    HID write    ┌─────────────┐
-│  Forza Horizon   │ ──────────────► │  This app        │ ──────────────► │  DualSense  │
-│  (Data Out)      │  telemetry      │  (trigger bits   │  triggers only  │  controller │
-└──────────────────┘  324 bytes      │   only)          │                 └─────────────┘
-                                     └──────────────────┘                        ▲
-                                                                                 │
-                                     ┌──────────────────┐    HID write           │
-                                     │  Steam Input     │ ──────────────────────►│
-                                     │  (rumble bits)   │  rumble + buttons      │
-                                     └──────────────────┘
-```
+For the manual network fallback, also download `FH-DualSense-Enhanced.zuv.py`, place it beside `win_start.bat`, and run the launcher again. The adjacent bundle is used first.
 
-Body haptics is enabled by default and output is selected automatically. You
-can disable it in Settings if you want adaptive-trigger feedback only:
+### Standalone EXE
 
-- **USB:** four-channel 48 kHz audio drives the left and right haptic actuators. The HID rumble bytes remain untouched.
-- **Bluetooth:** the same telemetry effects are reduced to compatible low/high rumble and sent atomically with the trigger report.
-- **DSX mode:** adaptive triggers continue to work, but this body-haptics backend remains disabled.
+Downloading only `FH-DualSense-Enhanced-vX.Y.Z.exe` also works. The EXE includes Python and all application dependencies, so BAT, ZUV, uv, and a system Python installation are not required.
 
-The HID device remains non-blocking, and duplicate HID states are suppressed.
+The standalone EXE does not update itself. Settings are stored in a `data` folder beside the EXE.
 
----
+### Linux
 
-## 🛠️ Install
+Download and run `linux_start.sh`. Linux requires hidapi and suitable udev permissions; the launcher provides setup guidance.
 
-**You need:** Windows 10/11 or Linux, and a DualSense controller (USB or Bluetooth).
+## Required game setup
 
-1. Go to this fork's [latest release](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest).
-2. On Windows, download only **`win_start.bat`**. On Linux, download only **`linux_start.sh`**.
-3. Run the launcher. It downloads the ZUV application bundle and prepares the managed Python environment.
-4. If Windows cannot install **`uv`** automatically, open PowerShell and run:
-   ```powershell
-   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-   ```
-   - `win_start.bat` tries the automatic `uv` installation first. Windows may block it with an Execution Policy error.
-   - **If you get the Execution Policy error:** Hold **Shift + Right-Click** in the folder, click **"Open PowerShell window here"**, paste `Set-ExecutionPolicy RemoteSigned -scope CurrentUser` and hit Enter, then type `Y` and Enter.
+### 1. Enable Steam Input
 
-For the manual ZUV fallback on an unreliable network, download **`FH-DualSense-Enhanced.zuv.py`** from the same Release, place it beside the launcher, and run the launcher again. It reuses that file instead of downloading it again. Published ZUV builds can check this fork for updates when update checks are enabled in the System page.
+Right-click the game in Steam, open **Properties -> Controller**, and enable Steam Input for the game. Enable Steam's DualSense vibration support as well.
 
-> [!NOTE]
-> A standalone **`FH-DualSense-Enhanced-vX.Y.Z.exe`** is also attached to each release. It needs no Python environment but does not self-update.
+Steam Input supplies button mapping and native game rumble. This app adds adaptive triggers and telemetry-driven body haptics.
 
-> **Linux extras:** install `libhidapi` (`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`) and the udev rule from `app/packaging/linux/70-dualsense.rules`. Then unplug/replug the controller once.
->
-> **Wayland tray:** the minimize-to-tray icon needs the appindicator backend (X11 doesn't). Install these so the launcher can build PyGObject into its venv:
-> - Debian/Ubuntu: `sudo apt install build-essential pkg-config python3-dev libcairo2-dev libgirepository-2.0-dev libayatana-appindicator3-1 gir1.2-ayatanaappindicator3-0.1`
-> - Arch: `sudo pacman -S base-devel cairo gobject-introspection libayatana-appindicator`
-> - Fedora: `sudo dnf install gcc pkg-config python3-devel cairo-devel gobject-introspection-devel libayatana-appindicator-gtk3`
+### 2. Enable Forza Data Out
 
-### 🎮 Playing with SISR (Xbox App / Windows Store users)
+Open **Settings -> HUD and Gameplay** in Forza Horizon and scroll to the Data Out section:
 
-If you are playing the game via the Xbox App or Microsoft Store, you will need a tool that makes the game recognize your controller as an Xbox controller. One option is **[SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR)** - it redirects Steam Input to the system level and emulates a real Xbox controller, so it works even with Windows Store apps and anti-cheat-protected games.
+| Setting | Value |
+| --- | --- |
+| Data Out | ON |
+| Data Out IP Address | `127.0.0.1` |
+| Data Out IP Port | `5300` |
 
-Because SISR routes the controller through **Steam Input**, Steam can grab the physical DualSense exclusively and prevent this app from connecting. To avoid this, **you must start the programs in this exact order**:
+If `127.0.0.1` receives no packets, try the IPv6 loopback address `::1` and use the same listen address in the app.
 
-1. **First, launch THIS APP** (`win_start.bat`) and wait for the short pulse on the triggers.
-2. **Second, launch SISR** (and Steam).
-3. **Finally, launch Forza Horizon.**
+### 3. Startup order
 
-*(Note: If your controller disconnects while playing, close SISR, restart this app, then open SISR again. For SISR setup and emulation options, see the [SISR README](https://github.com/Alia5/SISR).)*
+1. Connect the DualSense controller.
+2. Start FH-DualSense-Enhanced.
+3. Confirm that the controller is detected and UDP listening has started.
+4. Launch the game.
 
-<details>
-<summary>Manual install (for developers)</summary>
+When using SISR or another tool that can claim the controller, start FH-DualSense-Enhanced first, then the other tool and the game.
 
-```bash
-# Clone this fork with GitHub's Code button, then enter its src directory.
-cd FH-DualSense-Enhanced/src
+### 4. In-game vibration
+
+Body haptics are synthesized from telemetry and do not depend on the in-game vibration toggle. It can normally remain enabled. If native rumble feels duplicated, compare the result with in-game vibration disabled.
+
+## How body haptics work
+
+The app does not play a fixed waveform or vibrate without context. Every layer comes from live telemetry:
+
+- The engine layer follows RPM, load, and throttle.
+- The road layer follows speed, wheel rotation, and road material.
+- The slip layer distinguishes normal driving, loss of grip, and stationary burnouts.
+- ABS activates only when braking and tire conditions qualify.
+- Impact, suspension, and puddle layers activate only for matching events.
+
+Open **Settings -> Body haptics** to adjust master, engine, road, impact, and slip strength. Body haptics can also be disabled while adaptive triggers remain active.
+
+## Background behavior
+
+Two independent settings control background behavior:
+
+- Exit the application when the game closes.
+- Move the window to the system tray when minimized.
+
+Neither behavior is mandatory.
+
+## Firewall and networking
+
+The app listens on a local UDP port and does not upload telemetry to the internet.
+
+If the log keeps showing `No UDP packets yet`:
+
+1. Confirm that Data Out, the IP address, and the port are correct.
+2. Allow the EXE through Windows Firewall, or allow the `python.exe` used by BAT mode and UDP 5300.
+3. Check whether another app instance is already running.
+4. Disable the firewall only as a temporary diagnostic comparison, then turn it back on immediately. Do not leave the firewall disabled.
+
+## Troubleshooting
+
+| Symptom | Resolution |
+| --- | --- |
+| `No UDP packets yet` | Check Data Out, listen address, UDP 5300, and firewall rules; try `::1` if needed |
+| `WinError 10048` | UDP 5300 is already in use; close the duplicate app instance or other listener |
+| DualSense not found | Check the connection, Steam ownership, and the HidHide allowlist; BAT mode normally needs `python.exe` allowed |
+| USB body haptics cannot start | Confirm that Windows exposes the DualSense four-channel audio endpoint, close apps using it, and reconnect USB |
+| `PaErrorCode -9999` or WDM-KS error | Let the app try its compatibility fallback; if it still fails, check Windows Audio and the controller audio device; triggers remain available |
+| Bluetooth feels slightly different | This is normal because Bluetooth uses compatible rumble, while the feedback logic remains the same |
+| Triggers or body haptics are too strong | Lower the relevant strength in Settings or create a vehicle-specific profile |
+
+## Development and builds
+
+```powershell
+git clone https://github.com/piereacy/FH-DualSense-Enhanced.git
+cd FH-DualSense-Enhanced\src
 uv sync
 uv run main.py
 ```
 
-Need `uv`? `pip install uv` or [astral.sh/uv](https://astral.sh/uv/).
-</details>
+Run tests:
 
----
-
-## 🎯 In-game setup
-
-In Forza Horizon, open **Settings → HUD and Gameplay** and scroll to the bottom:
-
-| Setting | Value |
-|---------|-------|
-| Data Out | **ON** |
-| Data Out IP Address | **127.0.0.1** |
-| Data Out IP Port | **5300** |
-
-> [!NOTE]
-> In some versions of Forza, entering `127.0.0.1` as the IP address may not work. If the application doesn't receive telemetry, try entering `::1` (IPv6 loopback) instead.
-
-<p align="center">
-  <img src="docs/img/en.png" alt="English Settings" width="48%" style="border-radius: 8px;">
-  &nbsp;
-  <img src="docs/img/tr.png" alt="Turkish Settings" width="48%" style="border-radius: 8px;">
-</p>
-
----
-
-## 🔊 Enable Steam Haptics
-
-**Steam** can vibrate the left and right rumble motors on your DualSense controller. To enable them:
-
-### In Steam:
-1. Right-click **Forza Horizon** in your library → **Properties**.
-2. Go to **Controller → Additional Settings**.
-3. Make sure **DualSense vibration** is turned **ON**.
-
-### In-game (Forza Horizon):
-1. Open **Settings → Advanced Controls**.
-2. Find the **Vibration** option and enable it.
-
-### DualSense software:
-For best results, install the official **PlayStation® Accessories** software:
-- Download: [PlayStation® Accessories](https://fwupdater.dl.playstation.net/fwupdater/PlayStationAccessoriesInstaller.exe)
-
-This ensures your DualSense firmware is up to date for windows.
-
-> ℹ️ **About Adaptive Triggers:** Steam doesn't support DualSense adaptive triggers for this game. That's what **this app** does: it adds realistic trigger feedback (brake resistance, engine feedback, ABS pulses, gear thumps, rev limiter buzz) on top of the rumble that Steam provides.
-
----
-
-## ▶️ Run it
-
-Double-click **`win_start.bat`** (Windows) or **`linux_start.sh`** (Linux).
-
-You'll feel a short pulse on both triggers. That means it's working. Now launch Forza Horizon and drive.
-
-> Start the launcher **before** Forza Horizon. If you use HidHide, allowlist `python.exe`.
-
----
-
-## 🎮 Auto-launch with Steam
-
-Want the triggers to turn on automatically when you press **Play**? Tell Steam to run the launcher first.
-> ⚠️ **Warning:** Sometimes auto-launching this way can cause issues with the application. For the most stable experience, it is recommended to launch the app manually by double-clicking the script.
-
-1. In Steam, right-click **Forza Horizon** → **Properties**.
-2. Open the **General** tab and find **Launch Options**.
-3. Choose one of the following commands based on your preference (change the path to where your `win_start.bat` actually is):
-
-   * **Option A: Keeping Steam Overlay & Playtime Tracking (Recommended)**
-     This wraps the script in `cmd.exe /c` so Steam can properly monitor the process, keeping your **Steam Overlay (Shift+Tab)** and **Playtime Tracking** fully functional while automatically closing the console window afterwards:
-     ```text
-     "C:\Windows\System32\cmd.exe" /c ""C:\Your\Path\To\Forza-Horizon-DualSense-Python\win_start.bat" %command%"
-     ```
-
-   * **Option B: Simpler Method**
-     A direct way to launch, though the Steam Overlay and playtime tracking may stop working:
-     ```text
-     "C:\Your\Path\To\Forza-Horizon-DualSense-Python\win_start.bat" %command%
-     ```
-
-That's it. Press **Play** - the launcher runs, then the game opens.
-
-![Steam launch options](docs/img/steaming.png)
-
-<details>
-<summary>Advanced: run the Python script directly (no BAT file)</summary>
-
-If you cloned the repo and use `uv`, paste this into **Launch Options** instead:
-
-```text
-cmd /c "start /MIN /D C:\Your\Path\To\Forza-Horizon-DualSense-Python\src uv run main.py" && %command%
-```
-</details>
-
----
-
-## 🎚️ Tuning the feel
-
-Every effect (brake force, ABS buzz, gear thump, rev limiter, etc.) can be tweaked or turned off from the **Settings page in the app** - no file editing needed. Changes apply on next launch.
-
-The default tuning is informed by community feedback and refined through hands-on testing. It is a practical baseline, not a universal setting for every controller, car, or player.
-
-### Body haptics
-
-Body haptics is enabled by default. Open **Settings -> Body haptics** to tune
-its intensity, or disable **Enable body haptics** for trigger-only feedback.
-
-Body haptics are synthesized from telemetry and do not require Forza's in-game
-**Vibration** option. Leave that option on if you want native/Steam rumble;
-disable it only if that output competes with or feels doubled alongside the
-synthesized body haptics.
-
-Physical excitation determines when these effects are active:
-
-- A true stationary idle is silent.
-- Stationary revving remains active, as do drivetrain-aware burnouts when the driven wheels spin.
-- Road-material texture is applied only when rolling or wheelspin provides excitation; the selected material does not create vibration by itself.
-
-| Connection | Output |
-|------------|--------|
-| USB | Directional high-fidelity audio haptics through the four-channel DualSense endpoint |
-| Bluetooth | Lower-fidelity compatible rumble using the same telemetry effects |
-| DSX | Body haptics unavailable in the first release; adaptive triggers are unchanged |
-
-Master, engine, road, impact/suspension, and slip/ABS intensities can be tuned
-per profile.
-
-> ⚠️ The rev limiter fires based on `rpm / max_rpm`, not a fixed RPM. Different cars hit redline at different ratios, so it may need per-car tweaking.
-
----
-
-## 🩺 Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `DualSense gamepad interface not found` | Controller not connected, or HidHide is hiding it. Allowlist `python.exe`. |
-| `No UDP packets yet` | Forza's Data Out is off, IP/port is wrong, Windows Firewall is blocking, or try changing the IP from `127.0.0.1` to `::1`. |
-| Windows Defender / SmartScreen blocks `win_start.bat` | 1. On the blue "Windows protected your PC" screen, click **"More info"**.<br>2. Click the **"Run anyway"** button that appears at the bottom. (The script only downloads required dependencies.) |
-| Triggers feel weak | Raise `brake_max_force` / `throttle_max_force`, or lower the matching `curve`. |
-| Triggers feel like a brick wall | Lower `brake_max_force` / `throttle_max_force`, or raise the matching `curve`. |
-| Triggers feel stiff at a light press | Lower the baseline force, or raise the `curve`. |
-| No vibration on gear shift | Car must be moving faster than 3 km/h and changing between valid gears. |
-| Body haptics enabled but no USB grip feedback | Confirm Windows exposes a four-channel DualSense speaker endpoint and reconnect the controller by USB. Trigger effects continue even if audio startup fails. |
-| Bluetooth body haptics feel simpler than USB | Expected: Bluetooth uses compatible low/high rumble and cannot reproduce four independent audio layers. |
-| Console window is blank after the startup pulse | Run from a terminal with `cd src && uv run main.py --headless` to skip the TUI. |
-
----
-
-## 📁 Project layout
-
-```
-src/
-├── main.py                          # Entry point
-└── modules/
-    ├── settings.py                  # 👈 the file you edit
-    ├── dualsense/
-    │   ├── main.py                              # HID layer
-    │   └── adaptive_trigger.py                 # generic effect primitives
-    └── forzahorizon/
-        ├── udp_listener.py                     # UDP parser
-        └── effects.py                          # Forza-aware Controller + animations
+```powershell
+uv run --project src pytest -q
 ```
 
----
+Build ZUV:
 
-## 🎮 DSX Support
+```powershell
+set UPDATE_REPO=piereacy/FH-DualSense-Enhanced
+packaging\zuv\build_zuv.bat
+```
 
-I have integrated DSX (DualSenseX) support. Due to DSX limitations, you might not get the exact 1:1 experience, but I have done my best. A lower-fidelity version of the adaptive trigger effects is fully supported.
+Build the Windows EXE:
 
-![DSX Configuration](docs/img/dsxconfig.png)
+```powershell
+packaging\windows\build_exe.bat
+```
 
----
+## Origin and license
 
-## 🙏 Credits
+FH-DualSense-Enhanced is a modified version of the following project:
 
-Built by **[HamzaYslmn](https://github.com/HamzaYslmn)**.
+Originally created by Hamza Yeşilmen (HamzaYslmn).
 
-Body-haptics effect and USB-routing work was informed by
-**[HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics)**. See
-[`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) for its MIT notice.
+Source: <https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python>
 
-### 💛 Sponsors
+The body-haptics and USB-channel work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics). Its MIT notice is included in [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
 
-- **[Jared (jmac122)](https://github.com/jmac122)** - gifted me Forza Horizon 6 so this project could keep moving forward. Thank you, Jared!
-- **[BeaudinSan](https://github.com/BeaudinSan)** - thank you for your incredibly generous support! It truly means a lot to me.
-- **[McLarenF1God](https://github.com/McLarenF1God)** - thank you for Forza Horizon 6 DLC's
-- **[Griever](https://steamcommunity.com/id/Griever666/)** - thank you for DSX + DLC's
-- **[PlusMinusZer0](https://github.com/PlusMinusZer0)** - thank you for your Pudding!
-- **[dotcom](https://github.com/a0938670973-dotcom)** - thank you for your Cake!
-- **[wallbangz](https://github.com/wallbangz)** - thank you for your Cake!
-- **[BambinoPinguino](https://github.com/BambinoPinguino)** - thank you for your Tea!
-- **[Ereldun](https://steamcommunity.com/)** - thank you for your Coffee!
-- **[Clevens克林](https://steamcommunity.com/)** - thank you for your Candy!
-- **[海 拔 88](https://steamcommunity.com/)** - thank you for your Candy!
-- **[SeriousHamster](https://steamcommunity.com/)** - thank you for your Candy!
-
-A heartfelt thank you as well to the anonymous sponsors who quietly supported this project, and to everyone whose appreciation, kind words, and social media shares helped keep me motivated throughout the journey.
-
----
-*Built for an immersive racing experience*
+This project uses a custom source-available license for personal, non-commercial use. Read [LICENSE](LICENSE) before copying, modifying, or redistributing it.
