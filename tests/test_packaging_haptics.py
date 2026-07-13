@@ -38,7 +38,7 @@ def test_pyinstaller_specs_collect_sounddevice_runtime():
 
 def test_horizonhaptics_notice_and_user_docs_are_present():
     notice = (ROOT / "docs/THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
-    readme = (ROOT / "README_EN.md").read_text(encoding="utf-8")
+    readme = (ROOT / "docs/ReadmeEN.md").read_text(encoding="utf-8")
     readme_zh = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "79fbe2fd7a56e21bd101867dbf14718f2e91ffab" in notice

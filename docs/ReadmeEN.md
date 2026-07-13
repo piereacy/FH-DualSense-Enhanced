@@ -1,14 +1,16 @@
 <p align="right">
-  <a href="README.md">简体中文</a> | <strong>English</strong>
+  <a href="../README.md">简体中文</a> •
+  <strong>English</strong> •
+  <a href="ReadmeJA.md">日本語</a>
 </p>
 
 <div align="center">
-  <img src="src/data/icon.png" alt="FH-DualSense-Enhanced" width="180">
+  <img src="../src/data/icon.png" alt="FH-DualSense-Enhanced" width="180">
   <h1>FH-DualSense-Enhanced</h1>
   <p><strong>DualSense adaptive triggers and telemetry-driven body haptics for Forza Horizon on PC.</strong></p>
 </div>
 
-FH-DualSense-Enhanced is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
+FH-DualSense-Enhanced `1.6.2.post1` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
 
 This is not an official upstream release and does not represent the upstream author's views.
 
@@ -88,6 +90,12 @@ When using SISR or another tool that can claim the controller, start FH-DualSens
 ### 4. In-game vibration
 
 Body haptics are synthesized from telemetry and do not depend on the in-game vibration toggle. It can normally remain enabled. If native rumble feels duplicated, compare the result with in-game vibration disabled.
+
+## DualSense button icons
+
+If you want PlayStation / DualSense button prompts in the Forza Horizon 6 interface, use [PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2) from Nexus Mods. It replaces the default Xbox prompts with DualSense icons.
+
+A game update may restore the replaced interface files. Recopy and replace the mod files after each game update.
 
 ## How body haptics work
 
@@ -169,6 +177,6 @@ Originally created by Hamza Yeşilmen (HamzaYslmn).
 
 Source: <https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python>
 
-The body-haptics and USB-channel work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics). Its MIT notice is included in [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+The body-haptics and USB-channel work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics). Its MIT notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-This project uses a custom source-available license for personal, non-commercial use. Read [LICENSE](LICENSE) before copying, modifying, or redistributing it.
+This project uses a custom source-available license for personal, non-commercial use. Read [LICENSE](../LICENSE) before copying, modifying, or redistributing it.

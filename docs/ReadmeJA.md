@@ -1,282 +1,182 @@
 <p align="right">
-  <a href="../README.md">English</a> •
-  <a href="ReadmeTR.md">Türkçe</a> •
-  <strong>日本語</strong> •
-  <a href="ReadmeZH.md">简体中文</a>
+  <a href="../README.md">简体中文</a> •
+  <a href="ReadmeEN.md">English</a> •
+  <strong>日本語</strong>
 </p>
 
 <div align="center">
-  <h1>🏎️ FH-DualSense-Enhanced</h1>
-  <p><strong>PC版 Forza Horizon 用のリアルなトリガーフィードバック。</strong></p>
-  <p><em>ブレーキを感じろ。エンジンを感じろ。面倒な設定は不要。</em></p>
+  <img src="../src/data/icon.png" alt="FH-DualSense-Enhanced" width="180">
+  <h1>FH-DualSense-Enhanced</h1>
+  <p><strong>PC 版 Forza Horizon に DualSense のアダプティブトリガーとテレメトリ駆動の握把触覚を追加します。</strong></p>
 </div>
 
-> Steam プロフィール: <https://steamcommunity.com/id/teccno/>
-> 
-> CS:GO アイテム支援用トレードリンク :D : <https://steamcommunity.com/tradeoffer/new/?partner=291638630&token=Xyg4vITU>
+FH-DualSense-Enhanced `1.6.2.post1` は、`Forza-Horizon-DualSense-Python 1.6.2` を基にした拡張版です。ゲームが UDP で送信する車両テレメトリを読み取り、ブレーキ、アクセル、エンジン、路面、タイヤ、衝突の状態を DualSense のフィードバックに変換します。
 
-<div align="center">
-  <a href="https://www.youtube.com/watch?v=-3Cp0PfL52Y">
-    <img src="img/tuiyoutube.png" alt="Forza Horizon DualSense Adaptive Trigger Mod" style="width:100%;">
-  </a>
-</div>
+このプロジェクトは上流プロジェクトの公式リリースではなく、上流作者の見解を示すものでもありません。
 
-> 💛 Forza Horizon 6 をプレゼントして本プロジェクトの継続を支援してくださった **[Jared (jmac122)](https://github.com/jmac122)** 氏に心から感謝いたします。
+## 主な機能
 
----
+- ブレーキ量に応じて左トリガーの抵抗が増加し、ABS 作動時にはパルスを発生させます。
+- アクセル量に応じて右トリガーの抵抗が変化し、シフト、レッドライン、ホイールスピンを伝えます。
+- エンジン、路面材質、サスペンション、衝突、水たまり、タイヤスリップ、バーンアウト、ABS に対応した握把触覚を備えています。
+- 車両が完全に停止してアイドリングしているときは、意味のない連続振動を発生させません。
+- 停車中の空ぶかしやバーンアウトでは、車両状態に合ったフィードバックが発生します。
+- 路面材質の効果は、車両の移動またはタイヤの空転による実際の励振がある場合だけ加わります。
+- USB と Bluetooth の両方に対応します。
+- プロファイル、システムトレイ、ゲーム終了時の自動終了、ZUV 更新に対応します。
 
-## 📜 目次
-1. [機能概要](#-機能概要)
-2. [インストール方法](#-インストール方法)
-3. [ゲーム内設定](#-ゲーム内設定)
-4. [Steam ハプティクスの有効化](#-steam-ハプティクスの有効化)
-5. [実行方法](#-実行方法)
-6. [Steam との連携自動起動](#-steam-との連携自動起動)
-7. [フィードバックの微調整](#-フィードバックの微調整)
-8. [トラブルシューティング](#-トラブルシューティング)
-9. [支援者・クレジット](#-支援者クレジット)
+既定の調整値はコミュニティのフィードバックを参考にし、実際の走行テストで調整されています。多くの環境で使いやすい出発点ですが、すべての車両やプレイヤーに最適とは限りません。
 
----
+## USB と Bluetooth
 
-## 💡 機能概要
+USB と Bluetooth の実用上の体験差は大きくありません。どちらでもアダプティブトリガーと握把触覚を利用できます。
 
-Forza Horizon は車体のテレメトリデータを UDP 経由で送信しますが、Steam コントローラー入力（Steam Input）は DualSense の**アダプティブトリガー**をサポートしていません。この小さなアプリはその不足を補います。
+| 接続方式 | 出力方式 |
+| --- | --- |
+| USB | DualSense の 4 チャンネル音声エンドポイントで左右の触覚を出力し、HID でトリガーを制御します |
+| Bluetooth | 互換性のある低周波と高周波の振動を、トリガー状態と同じ HID レポートで送信します |
 
-- **左トリガー（ブレーキ）** - 踏み込むほどに反発（剛性）が強くなります。タイヤがスリップすると ABS のように細かく振動します。ハンドブレーキを引くとさらに反発が追加されます。
-- **右トリガー（アクセル）** - 滑らかで漸進的な抵抗。シフトチェンジの瞬間にショック（衝撃）が走ります。レブリミットに達すると振動します。
+PC、コントローラーのファームウェア、Bluetooth アダプターによって細かな差が生じる場合があります。USB の音声エンドポイントを利用できない場合でも、トリガーフィードバックは引き続き動作します。
 
-### Steam と競合せずにコントローラーを操作する仕組み
+## クイックインストール
 
-```
-┌──────────────────┐   UDP 5300 経由   ┌──────────────────┐   HID 直接書き込み   ┌─────────────┐
-│  Forza Horizon   │ ────────────────► │  本アプリ        │ ──────────────────► │  DualSense  │
-│  (Data Out)      │ テレメトリデータ  │  (トリガー用     │  (トリガーのみ操作) │ コントローラ │
-└──────────────────┘    324 バイト     │  ビットのみ操作) │                     └─────────────┘
-                                       └──────────────────┘                           ▲
-                                                                                      │
-                                       ┌──────────────────┐   HID 直接書き込み        │
-                                       │  Steam Input     │ ─────────────────────────►│
-                                       │ (通常の振動ビット)│ (通常の振動＋ボタン入力) │
-                                       └──────────────────┘
-```
+### Windows の推奨方法
 
-本アプリと Steam は両方とも同じコントローラーに対して書き込みを行いますが、書き込む **バイト領域が異なります**。
+1. [最新 Release](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest) を開きます。
+2. `win_start.bat` だけをダウンロードします。
+3. ダブルクリックして実行します。ランチャーが `FH-DualSense-Enhanced.zuv.py` をダウンロードし、uv と分離された Python 環境を自動的に準備します。
 
-- Steam は **通常の振動モーター** とボタン割り当てを制御します。
-- 本アプリは **アダプティブトリガー** のビットのみを制御します（`valid_flag0` 内の `0x04` および `0x08` ビット）。
-- HID デバイスは **非ブロッキングモード（non-blocking mode）** で開かれるため、コントローラーの応答を待たずに即座に書き込みが完了します。キューが溜まることも、Steam の動作をブロックすることもありません。
+ネットワークが不安定な場合は、`FH-DualSense-Enhanced.zuv.py` も手動でダウンロードし、`win_start.bat` と同じフォルダーに置いてからランチャーを再実行してください。隣にあるバンドルが優先して使用されます。
 
-これにより、両者を干渉させることなく同時に動作させることができます。
+### 単体 EXE
 
----
+`FH-DualSense-Enhanced-vX.Y.Z.exe` だけをダウンロードしても使用できます。EXE には Python とすべてのアプリケーション依存関係が含まれているため、BAT、ZUV、uv、システムにインストールされた Python は不要です。
 
-## 🛠️ インストール方法
+単体 EXE は自動更新されません。設定は EXE と同じ場所にある `data` フォルダーへ保存されます。
 
-**必要な環境:** Windows 10/11 または Linux、および DualSense コントローラー（USB または Bluetooth 接続）。
+### Linux
 
-1. この fork の[最新リリース](../../releases/latest)を開きます。
-2. **`FH-DualSense-Enhanced.zuv.py`** と、Windows 用 **`win_start.bat`** または Linux 用 **`linux_start.sh`** をダウンロードします。
-3. ZUV バンドルとランチャーを同じフォルダーに置きます。
-4. **重要:** 最初にあらかじめ **`uv`** を手動でインストールしておくことを強く推奨します。PowerShell を開いて以下のコマンドを実行してください。
-   ```powershell
-   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-   ```
-   - この手順をスキップした場合、`win_start.bat` は自動で `uv` をインストールしようとしますが、Windows の PowerShell の実行ポリシー（Execution Policy）によりインストールがブロックされる場合があります。
-   - **実行ポリシーエラーが発生した場合:** フォルダー内で **Shift キーを押しながら右クリック**し、**「PowerShell ウィンドウをここに開く」**をクリックして、`Set-ExecutionPolicy RemoteSigned -scope CurrentUser` と入力して Enter キーを押し、`Y` を入力してもう一度 Enter キーを押してください。
-5. `win_start.bat` (または `linux_start.sh`) をダブルクリックして実行します。
+`linux_start.sh` をダウンロードして実行します。Linux では hidapi と適切な udev 権限が必要です。ランチャーにセットアップ案内が表示されます。
 
-ランチャーが管理対象の Python 環境を準備し、同じフォルダーの ZUV バンドルを実行します。公開版 ZUV は、システム画面で更新確認を有効にすると、この fork の更新を確認できます。
+## 必須のゲーム設定
 
-> [!NOTE]
-> 各リリースには単体で動作する **`FH-DualSense-Enhanced-vX.Y.Z.exe`** も含まれます。Python 環境は不要ですが、自動更新は行いません。
+### 1. Steam Input を有効にする
 
-> **Linux での補足:** `libhidapi` をインストールし（`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`）、`app/packaging/linux/70-dualsense.rules` の udev ルールを追加してください。その後、コントローラーを一度抜いて挿し直してください。
+Steam ライブラリでゲームを右クリックし、**プロパティ -> コントローラー** を開いて、そのゲームの Steam Input を有効にします。Steam の DualSense 振動サポートも有効にしてください。
 
-### 🎮 SISR を使用してプレイする場合（Xbox アプリ / Windows ストア版のユーザー）
+Steam Input はボタン割り当てとゲーム本来の振動を担当します。本アプリはアダプティブトリガーとテレメトリ駆動の握把触覚を追加します。
 
-Xbox アプリや Microsoft Store を通じてプレイしている場合、ゲームにコントローラーを Xbox コントローラーとして認識させるツールが必要になります。選択肢の一つが **[SISR（Steam Input System Redirector）](https://github.com/Alia5/SISR)** です。SISR は Steam Input をシステムレベルにリダイレクトし、本物の Xbox コントローラーをエミュレートするため、Windows ストアアプリやアンチチート保護のあるゲームでも動作します。
+### 2. Forza Data Out を有効にする
 
-SISR はコントローラーを **Steam Input** 経由で転送するため、Steam が物理 DualSense を排他的に掴んでしまい、本アプリが接続できなくなる場合があります。これを避けるために、**必ず以下の順序でプログラムを起動してください**。
+Forza Horizon の **設定 -> HUD とゲームプレイ** を開き、Data Out の項目までスクロールします。
 
-1. **まず本アプリを起動します** (`win_start.bat`)。トリガーが短くポンと振動するまで待ちます。
-2. **次に SISR（および Steam）を起動します。**
-3. **最後に Forza Horizon を起動します。**
+| 設定 | 値 |
+| --- | --- |
+| Data Out | ON |
+| Data Out IP Address | `127.0.0.1` |
+| Data Out IP Port | `5300` |
 
-*(注意: プレイ中にコントローラーの接続が切れた場合は、SISR を一旦閉じ、本アプリを再起動してから、再度 SISR を開いてください。SISR のセットアップやエミュレーション設定については、[SISR README](https://github.com/Alia5/SISR) を参照してください。)*
+`127.0.0.1` でパケットを受信できない場合は、IPv6 ループバックアドレス `::1` を試し、アプリ側でも同じ待受アドレスを使用してください。
 
-<details>
-<summary>手動インストール（開発者向け）</summary>
+### 3. 起動順序
 
-```bash
-# GitHub の Code ボタンからこの fork を clone し、src に移動します。
-cd FH-DualSense-Enhanced/src
+1. DualSense コントローラーを接続します。
+2. FH-DualSense-Enhanced を起動します。
+3. コントローラーが認識され、UDP の待受が開始されたことを確認します。
+4. ゲームを起動します。
+
+SISR などコントローラーを占有する可能性があるツールを使用する場合は、最初に FH-DualSense-Enhanced を起動し、その後でツールとゲームを起動してください。
+
+### 4. ゲーム内の振動設定
+
+握把触覚はテレメトリから独立して合成されるため、ゲーム内の振動設定には依存しません。通常は有効のままで問題ありません。ゲーム本来の振動と合成された触覚が重複して感じられる場合だけ、ゲーム内振動を無効にして比較してください。
+
+## DualSense ボタンアイコン
+
+Forza Horizon 6 の画面に PlayStation / DualSense のボタン表示を使用したい場合は、Nexus Mods の [PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2) を利用できます。標準の Xbox ボタン表示を DualSense アイコンへ置き換える Mod です。
+
+ゲームのアップデートによって、置き換えた画面ファイルが元に戻る場合があります。ゲーム更新後は、その都度 Mod ファイルをもう一度コピーして置き換えてください。
+
+## 握把触覚の仕組み
+
+アプリは固定波形を再生したり、状況を無視して振動し続けたりしません。すべてのレイヤーはリアルタイムのテレメトリから生成されます。
+
+- エンジンレイヤーは RPM、負荷、アクセルに追従します。
+- 路面レイヤーは速度、車輪回転、路面材質に追従します。
+- スリップレイヤーは通常走行、グリップ喪失、停車中のバーンアウトを区別します。
+- ABS はブレーキとタイヤの条件を満たしたときだけ作動します。
+- 衝突、サスペンション、水たまりの各レイヤーは対応するイベントが発生したときだけ作動します。
+
+**設定 -> 握把触覚** から、全体、エンジン、路面、衝突、スリップの強度を調整できます。握把触覚だけを無効にして、アダプティブトリガーを有効のまま残すこともできます。
+
+## バックグラウンド動作
+
+次の 2 項目は個別に設定できます。
+
+- ゲーム終了時にアプリも終了する。
+- ウィンドウを最小化したときにシステムトレイへ移動する。
+
+どちらも必須ではありません。
+
+## ファイアウォールとネットワーク
+
+アプリはローカル UDP ポートを待ち受けるだけで、テレメトリをインターネットへアップロードしません。
+
+ログに `No UDP packets yet` が表示され続ける場合:
+
+1. Data Out、IP アドレス、ポートが正しいことを確認します。
+2. Windows ファイアウォールで EXE を許可します。BAT モードでは、使用される `python.exe` と UDP 5300 も許可します。
+3. 別のアプリインスタンスがすでに起動していないか確認します。
+4. ファイアウォールを無効にするのは一時的な診断比較だけにし、確認後はすぐに有効へ戻してください。無効のまま使用しないでください。
+
+## トラブルシューティング
+
+| 症状 | 対処方法 |
+| --- | --- |
+| `No UDP packets yet` | Data Out、待受アドレス、UDP 5300、ファイアウォール規則を確認し、必要なら `::1` を試します |
+| `WinError 10048` | UDP 5300 がすでに使用されています。重複したアプリインスタンスまたは別の待受プログラムを終了します |
+| DualSense が見つからない | 接続、Steam による占有、HidHide の許可リストを確認します。BAT モードでは通常 `python.exe` の許可が必要です |
+| USB 握把触覚を開始できない | Windows に DualSense の 4 チャンネル音声エンドポイントが表示されていることを確認し、それを使用中のアプリを閉じて USB を接続し直します |
+| `PaErrorCode -9999` または WDM-KS エラー | アプリの互換バックエンドへの自動切り替えを待ちます。失敗が続く場合は Windows Audio とコントローラー音声デバイスを確認してください。トリガー機能は引き続き利用できます |
+| Bluetooth の感触が少し異なる | Bluetooth は互換振動を使用するため正常です。フィードバックロジック自体は USB と同じです |
+| トリガーまたは握把触覚が強すぎる | 設定で該当する強度を下げるか、車両専用のプロファイルを作成します |
+
+## 開発とビルド
+
+```powershell
+git clone https://github.com/piereacy/FH-DualSense-Enhanced.git
+cd FH-DualSense-Enhanced\src
 uv sync
 uv run main.py
 ```
 
-`uv` の導入: `pip install uv` または [astral.sh/uv](https://astral.sh/uv/)。
-</details>
+テストを実行:
 
----
-
-## 🎯 ゲーム内設定
-
-Forza Horizon を起動し、**「設定」→「HUDとゲームプレイ」**を開き、一番下までスクロールします。
-
-| 設定項目 | 設定値 |
-|---------|-------|
-| テレメトリの出力（Data Out） | **オン（ON）** |
-| テレメトリ出力のIPアドレス | **127.0.0.1** |
-| テレメトリ出力のポート | **5300** |
-
-> [!NOTE]
-> 一部の Forza バージョンでは、IPアドレスに `127.0.0.1` を設定しても通信が通らない場合があります。その場合は、IPアドレスに `::1`（IPv6 ループバックアドレス）を設定してみてください。
-
-<p align="center">
-  <img src="img/en.png" alt="英語設定画面" width="48%" style="border-radius: 8px;">
-  &nbsp;
-  <img src="img/tr.png" alt="トルコ語設定画面" width="48%" style="border-radius: 8px;">
-</p>
-
----
-
-## 🔊 Steam ハプティクスの有効化
-
-**Steam** は、DualSense コントローラーの左右の通常振動モーターを動かすことができます。これを有効にする手順は以下の通りです。
-
-### Steam での設定:
-1. ライブラリ内の **Forza Horizon** を右クリック → **「プロパティ」**。
-2. **「コントローラー」→「一般設定（追加の設定）」**を開きます。
-3. **「DualSense の振動」**が**「オン」**になっていることを確認します。
-
-### ゲーム内設定 (Forza Horizon):
-1. **「設定」→「詳細コントロール」**を開きます。
-2. **「振動」**の項目を見つけて「有効」にします。
-
-### コントローラーのファームウェア確認:
-最高の体験を得るために、公式の **PlayStation® Accessories** ソフトウェアを導入することをお勧めします。
-- ダウンロード先: [PlayStation® Accessories](https://fwupdater.dl.playstation.net/fwupdater/PlayStationAccessoriesInstaller.exe)
-
-これにより、Windows 上で DualSense のファームウェアが最新状態に保たれます。
-
-> ℹ️ **アダプティブトリガーについて:** 本来、Steam はこのゲームで DualSense のアダプティブトリガーをサポートしていません。**本アプリ**の役目は、Steam が提供する振動の上に、リアルなトリガーフィードバック（ブレーキの踏み応え、エンジンの鼓動、ABS の脈動、シフトチェンジ時の衝撃、レブリミッターの振動）を重ねて再現することです。
-
----
-
-## ▶️ 実行方法
-
-**`win_start.bat`** (Windows) または **`linux_start.sh`** (Linux) をダブルクリックします。
-
-トリガーが短く振動すれば動作確認完了です。Forza Horizon を起動してドライブを楽しんでください。
-
-> 必ず Forza Horizon を起動する**前に**本アプリを実行してください。HidHide を使用している場合は、`python.exe` を許可リスト（Allowlist）に追加してください。
-
----
-
-## 🎮 Steam との連携自動起動
-
-ゲーム起動時に自動的にトリガー機能を有効にしたい場合、Steam でゲームを起動する前にランチャーを実行するように設定できます。
-> ⚠️ **警告:** この自動起動設定を使用すると、環境によってはアプリの動作が不安定になることがあります。より安定した動作を望む場合は、ファイルをダブルクリックして手動で実行することを推奨します。
-
-1. Steam で **Forza Horizon** を右クリック → **「プロパティ」**。
-2. **「一般」**タブを開き、**「起動オプション」**の項目を見つけます。
-3. プレイスタイルに合わせて、以下のコマンドのいずれかを入力してください（`win_start.bat` のパスはご自身の環境の実際のパスに書き換えてください）。
-
-   * **パターンA: Steam オーバーレイやプレイ時間の記録を維持する（推奨）**
-     コマンドを `cmd.exe /c` でラッピングすることで Steam にプロセスを正しく監視させます。これにより、**Steam オーバーレイ (Shift+Tab)** や **プレイ時間の記録** が正常に機能したまま、起動後にコンソールウィンドウが自動で閉じます。
-     ```text
-     "C:\Windows\System32\cmd.exe" /c ""C:\Your\Path\To\Forza-Horizon-DualSense-Python\win_start.bat" %command%"
-     ```
-
-   * **パターンB: よりシンプルな方法**
-     直接起動しますが、Steam オーバーレイやプレイ時間の記録機能が正常に動かなくなる場合があります。
-     ```text
-     "C:\Your\Path\To\Forza-Horizon-DualSense-Python\win_start.bat" %command%
-     ```
-
-これで設定は完了です。**「プレイ」**ボタンを押すと、ランチャーが起動した後にゲームが始まります。
-
-![Steam 起動オプション画面](img/steaming.png)
-
-<details>
-<summary>上級者向け - バッチファイルを使わず Python スクリプトを直接呼び出す場合</summary>
-
-リポジトリをクローンして `uv` を使用している場合は、**「起動オプション」**に以下を入力してください。
-
-```text
-cmd /c "start /MIN /D C:\Your\Path\To\Forza-Horizon-DualSense-Python\src uv run main.py" && %command%
-```
-</details>
-
----
-
-## 🎚️ フィードバックの微調整
-
-各効果（ブレーキ強度、ABS 振動、シフトショック、レブリミッターなど）は、ファイルを直接編集することなく、**アプリ内の設定（Settings）画面**から調整・無効化が可能です。変更は次回起動時に適用されます。
-
-> ⚠️ レブリミッターの振動は固定のエンジン回転数（RPM）ではなく、`rpm / max_rpm` の比率に基づいて作動します。車種によってレッドラインの比率が異なるため、車に合わせた微調整が必要になる場合があります。
-
----
-
-## 🩺 トラブルシューティング
-
-| 症状 | 対処法 |
-|-----|--------|
-| `DualSense gamepad interface not found` | コントローラーが接続されていないか、HidHide がコントローラーを隠しています。`python.exe` を許可リストに追加してください。 |
-| `No UDP packets yet` | Forza の Data Out 設定がオフになっているか、IP/ポートの設定が間違っているか、Windows ファイアウォールが通信をブロックしています。または、IPアドレスを `127.0.0.1` から `::1` に変更してみてください。 |
-| Windows Defender や SmartScreen が `win_start.bat` をブロックする | 1. 青い警告画面で **「詳細情報」** をクリックします。<br>2. 下部に表示される **「実行」** ボタンを押します（スクリプトは必要な依存関係をダウンロードするだけです）。 |
-| トリガーの反発が弱すぎる | `brake_max_force` / `throttle_max_force` を上げるか、対応する `curve` 値を下げてください。 |
-| トリガーがまるで壁のように硬すぎる | `brake_max_force` / `throttle_max_force` を下げるか、対応する `curve` 値を上げてください。 |
-| トリガーを少し引いただけなのに反発が強すぎる | 基準フォース（baseline force）を下げるか、`curve` 値を上げてください。 |
-| シフトチェンジ時にショック（振動）がない | 車が 3 km/h 以上で走行しており、有効なギア間で変速している必要があります。 |
-| 起動時の振動パルスの後、コンソール画面が真っ白になる | テキストUI（TUI）を無効にするため、ターミナルから `cd src && uv run main.py --headless` で実行してください。 |
-
----
-
-## 📁 プロジェクト構成
-
-```
-src/
-├── main.py                          # エントリーポイント
-└── modules/
-    ├── settings.py                  # 👈 調整用設定ファイル
-    ├── dualsense/
-    │   ├── main.py                              # HID レイヤー
-    │   └── adaptive_trigger.py                 # 汎用エフェクトプリミティブ
-    └── forzahorizon/
-        ├── udp_listener.py                     # UDP テレメトリ解析
-        └── effects.py                          # Forza 専用 Controller + アニメーション
+```powershell
+uv run --project src pytest -q
 ```
 
----
+ZUV をビルド:
 
-## 🎮 DSXサポート
+```powershell
+set UPDATE_REPO=piereacy/FH-DualSense-Enhanced
+packaging\zuv\build_zuv.bat
+```
 
-DSX（DualSenseX）サポートを統合しました。DSXの制限により、1:1の完全な体験を得ることはできないかもしれませんが、最善を尽くしました。現在、少し忠実度を下げたバージョンのアダプティブトリガーエフェクトが完全にサポートされています。
+Windows EXE をビルド:
 
-![DSX Configuration](docs/img/dsxconfig.png)
+```powershell
+packaging\windows\build_exe.bat
+```
 
----
+## プロジェクトの由来とライセンス
 
-## 🙏 支援者・クレジット
+FH-DualSense-Enhanced は次のプロジェクトを変更したものです。
 
-開発者: **[HamzaYslmn](https://github.com/HamzaYslmn)**
+Originally created by Hamza Yeşilmen (HamzaYslmn).
 
-### 💛 スポンサー・支援者の皆様
+Source: <https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python>
 
-- **[Jared (jmac122)](https://github.com/jmac122)** - 本プロジェクトの継続と発展のため、Forza Horizon 6 をプレゼントしてくださいました。ありがとう、Jared!
-- **[BeaudinSan](https://github.com/BeaudinSan)** - 非常に寛大なご支援に心から感謝いたします。励みになります！
-- **[McLarenF1God](https://github.com/McLarenF1God)** - Forza Horizon 6 の DLC をプレゼントしていただきました！
-- **[Griever](https://steamcommunity.com/id/Griever666/)** - DSXとDLCをありがとうございます！
-- **[PlusMinusZer0](https://github.com/PlusMinusZer0)** - プリンの差し入れありがとうございます！
-- **[dotcom](https://github.com/a0938670973-dotcom)** - ケーキの差し入れありがとうございます！
-- **[wallbangz](https://github.com/wallbangz)** - ケーキの差し入れありがとうございます！
-- **[BambinoPinguino](https://github.com/BambinoPinguino)** - お茶の差し入れありがとうございます！
-- **[Ereldun](https://steamcommunity.com/)** - コーヒーの差し入れありがとうございます！
-- **[Clevens克林](https://steamcommunity.com/)** - キャンディの差し入れありがとうございます！
-- **[海 拔 88](https://steamcommunity.com/)** - キャンディの差し入れありがとうございます！
+握把触覚と USB チャンネルの実装では [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics) を参照しています。MIT ライセンス表記は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に収録されています。
 
-また、人知れず本プロジェクトを支援してくださった匿名のスポンサーの皆様、そして温かいお言葉やSNSでのシェア等で私を勇気づけてくださったすべての皆様に、心より感謝申し上げます。
-
----
-*より没入感のあるレース体験のために開発されました*
+本プロジェクトは、個人かつ非商用利用に限定した独自のソース公開ライセンスを採用しています。コピー、変更、再配布を行う前に [LICENSE](../LICENSE) を全文確認してください。

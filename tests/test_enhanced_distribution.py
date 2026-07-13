@@ -112,26 +112,40 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     assert 'name="FH-DualSense-Enhanced"' in linux_spec
 
 
-def test_root_readme_is_chinese_with_an_english_switch_and_release_guidance():
-    english_path = ROOT / "README_EN.md"
+def test_readmes_use_the_upstream_style_three_language_navigation():
+    english_path = ROOT / "docs/ReadmeEN.md"
+    japanese_path = ROOT / "docs/ReadmeJA.md"
 
     assert english_path.exists(), "English README is missing"
+    assert japanese_path.exists(), "Japanese README is missing"
+    assert not (ROOT / "README_EN.md").exists(), "obsolete root English README remains"
     chinese = _source("README.md")
-    english = _source("README_EN.md")
-    assert "简体中文" in chinese
-    assert "README_EN.md" in chinese
-    assert "English" in english
-    assert "README.md" in english
+    english = _source("docs/ReadmeEN.md")
+    japanese = _source("docs/ReadmeJA.md")
+
+    assert '<strong>简体中文</strong>' in chinese
+    assert 'href="docs/ReadmeEN.md">English</a>' in chinese
+    assert 'href="docs/ReadmeJA.md">日本語</a>' in chinese
+    assert 'href="../README.md">简体中文</a>' in english
+    assert '<strong>English</strong>' in english
+    assert 'href="ReadmeJA.md">日本語</a>' in english
+    assert 'href="../README.md">简体中文</a>' in japanese
+    assert 'href="ReadmeEN.md">English</a>' in japanese
+    assert '<strong>日本語</strong>' in japanese
+
     assert "只需下载" in chinese and "win_start.bat" in chinese
     assert "manual" in english.lower() and ZUV_NAME in english
+    assert "手動" in japanese and ZUV_NAME in japanese
     assert "社区" in chinese
     assert "community" in english.lower()
+    assert "コミュニティ" in japanese
 
 
 def test_readmes_are_original_enhanced_project_documentation():
     chinese = _source("README.md")
-    english = _source("README_EN.md")
-    combined = chinese + "\n" + english
+    english = _source("docs/ReadmeEN.md")
+    japanese = _source("docs/ReadmeJA.md")
+    combined = chinese + "\n" + english + "\n" + japanese
 
     for text in (
         "Steam Input",
@@ -153,15 +167,15 @@ def test_readmes_are_original_enhanced_project_documentation():
         "Jared (jmac122)",
         "2323",
         "docs/ReadmeTR.md",
-        "docs/ReadmeJA.md",
     ):
         assert forbidden not in combined
     assert "sponsor" not in combined.lower()
 
-    assert 'href="README_EN.md"' in chinese
-    assert 'href="README.md"' in english
     assert "防火墙" in chinese
     assert "firewall" in english.lower()
+    assert "ファイアウォール" in japanese
+    assert "握把触覚" in japanese
+    assert "1.6.2.post1" in japanese
 
 
 def test_release_identity_is_the_enhanced_post_release():
