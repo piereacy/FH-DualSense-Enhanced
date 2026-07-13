@@ -5,15 +5,15 @@ Short tour. The full module-by-module reference is in the code; this is just a m
 ## What it is
 
 Small Python service. Reads Forza Horizon's UDP telemetry (5300) and drives
-**DualSense adaptive triggers** over raw HID, while leaving rumble bytes alone
-so Steam Input still handles rumble.
+**DualSense adaptive triggers** over raw HID. Optional body haptics use the USB
+four-channel audio endpoint or Bluetooth compatible rumble.
 
 ## Stack
 
 - Python `>=3.13`, `uv` for deps.
-- Deps: `hidapi`, `textual`, `psutil`.
+- Deps: `hidapi`, `textual`, `psutil`, `numpy`, `sounddevice`.
 - Distributed as a single self-contained file (`fhds.zuv.py`) via [`zuv`](https://github.com/HamzaYslmn/zuv).
-- Windows + Linux. No tests.
+- Windows + Linux. Regression tests use `pytest`.
 
 ## Layout
 
@@ -51,11 +51,14 @@ app/fhds.zuv.py              # the actual bundle users run
 
 ```
 FH UDP 5300 -> parse_packet -> TriggerAnimation.update -> (left, right)
-                                                              |
-                              DualSense.set (state-change only)
-                                                              v
-                                                  HID write (trigger bytes only,
-                                                   rumble bytes untouched)
+              |                       |
+              |                       -> HapticMixer -> USB four-channel audio
+              |                                        or BT compatible rumble
+              v
+       DualSense.set (state-change only)
+              |
+              v
+       HID write (triggers plus optional BT rumble)
 ```
 
 Trigger command = `(mode, p1, p2)`:
@@ -111,9 +114,12 @@ Port `5300`.
 - **KISS.** Don't abstract for one caller.
 - All tunables go in `settings.py`, never inside module logic.
 - **Globals stay global.** Add to `preferences.GLOBAL_FIELDS`; never copy into per-profile dicts.
-- **Don't touch rumble bits.** HID writer only flips trigger bits in `valid_flag0`.
+- **Rumble is opt-in.** Leave rumble flags and motor bytes untouched when body
+  haptics is disabled. Bluetooth body haptics writes them atomically with the
+  trigger state when enabled.
 - **Always drain UDP** via `recv_latest()`; never react to stale packets.
-- **State-change writes only.** The loop diffs `(left, right)` against `prev` and only calls `ds.set(...)` on change.
+- **State-change HID writes only.** The loop diffs `(left, right, rumble)` against
+  `prev`; USB audio targets still update for every telemetry frame.
 - No em dash (`-`) anywhere - in code, docs, or chat. Plain hyphens only.
 - UTF-8 source files.
 

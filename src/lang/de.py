@@ -4,6 +4,21 @@
 NAME = "Deutsch"
 
 STRINGS = {
+    # --- body haptics ---
+    "Body haptics": "Körperhaptik",
+    "Enable body haptics": "Körperhaptik aktivieren",
+    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+     "Disable in-game vibration only if you feel competing or doubled output."):
+        "Verwendet automatisch hochauflösendes USB-Audio oder kompatibles Bluetooth-Rumble. "
+        "Deaktiviere die Vibration im Spiel nur, wenn sich die Ausgaben gegenseitig stören "
+        "oder doppelt anfühlen.",
+    "Master intensity": "Gesamtintensität",
+    "Engine intensity": "Motorintensität",
+    "Road texture intensity": "Straßentexturintensität",
+    "Impact and suspension intensity": "Aufprall- und Federungsintensität",
+    "Slip and ABS intensity": "Schlupf- und ABS-Intensität",
+    "Slip threshold": "Schlupfschwelle",
+
     # --- chrome / tabs ---
     "Controls": "Steuerung",
     "Profiles": "Profile",

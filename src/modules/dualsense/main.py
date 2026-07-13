@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import logging
+import math
 import struct
 import sys
 import threading
 import time
 import zlib
+from typing import TYPE_CHECKING
 
 # PyPI's hidapi Linux wheel uses libusb, which can't claim the gamepad interface
 # (hid-playstation kernel driver owns it). Use a direct /dev/hidraw shim instead.
@@ -15,18 +19,24 @@ else:
 from . import hidhide
 from .adaptive_trigger import M_RIGID, off
 
+if TYPE_CHECKING:
+    from ..haptics.frame import CompatibleRumble
+
 log = logging.getLogger("fhds.dualsense")
 
 VENDOR_ID = 0x054C
 PRODUCT_IDS = (0x0CE6, 0x0DF2)  # DualSense, DualSense Edge
 
 # valid_flag0: 0x01 (R motor), 0x02 (L motor), 0x04 (R trigger), 0x08 (L trigger).
+RUMBLE_FLAGS = 0x01 | 0x02
 TRIG_FLAGS = 0x04 | 0x08
 
 # MARK: Layout maps — byte offsets per transport
 # vf1 = valid_flag1, psav = power_save_control
-USB = {"rid": 0x02, "flags": 1, "vf1": 2, "psav": 10, "r": 11, "l": 22, "size": 64, "bt": False}
-BT  = {"rid": 0x31, "flags": 2, "vf1": 3, "psav": 11, "r": 12, "l": 23, "size": 78, "bt": True}
+USB = {"rid": 0x02, "flags": 1, "vf1": 2, "motor_r": 3, "motor_l": 4,
+       "psav": 10, "r": 11, "l": 22, "size": 64, "bt": False}
+BT  = {"rid": 0x31, "flags": 2, "vf1": 3, "motor_r": 4, "motor_l": 5,
+       "psav": 11, "r": 12, "l": 23, "size": 78, "bt": True}
 
 # Precomputed CRC of the BT report-header byte 0xA2. zlib.crc32(data, value)
 # resumes from `value`, so this lets us CRC straight off the buffer without
@@ -39,6 +49,16 @@ _BT_CRC_SEED = zlib.crc32(b"\xA2")
 # the UI thread don't both try to claim the same exclusive HID handle.
 _mac_cache: dict[bytes, str] = {}
 _mac_cache_lock = threading.Lock()
+
+
+def _force_byte(value: float) -> int:
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0
+    if not math.isfinite(value):
+        return 0
+    return round(max(0.0, min(1.0, value)) * 255.0)
 
 
 
@@ -169,10 +189,11 @@ def identify_pulse(info: dict, force: int = 180, duration_s: float = 0.2) -> boo
 
 
 class DualSense:
-    """Triggers-only DualSense writer. Steam keeps rumble bits untouched.
+    """DualSense trigger writer with optional compatible rumble.
 
     Resilient: starts without a controller and retries every
     ``reconnect_interval_s`` seconds. Drops writes silently while disconnected.
+    Existing trigger-only callers leave all rumble bytes unclaimed.
     """
 
     def __init__(
@@ -189,6 +210,8 @@ class DualSense:
         self.lay = USB
         self._lock = threading.Lock()
         self._left = self._right = off()
+        self._rumble: CompatibleRumble | None = None
+        self._pending_rumble_release = None
         self._dirty = False
         self._running = False
         self._thread = None
@@ -218,6 +241,12 @@ class DualSense:
         return self.dev is not None
 
     @property
+    def transport(self) -> str | None:
+        if not self.connected:
+            return None
+        return "bluetooth" if self.lay["bt"] else "usb"
+
+    @property
     def persistent(self) -> bool:
         return (self._ever_connected
                 and (hidhide.is_detected() or not self._enable_reconnect))
@@ -245,10 +274,44 @@ class DualSense:
             self._thread.join(timeout=2.0)
         self._disconnect()
 
-    def set(self, left, right):
+    def set(self, left, right, rumble: CompatibleRumble | None = None):
         with self._lock:
-            self._left, self._right, self._dirty = left, right, True
+            if rumble is None and self._dirty and self._is_rumble_release(self._rumble):
+                self._pending_rumble_release = (
+                    self._left,
+                    self._right,
+                    self._rumble,
+                )
+            elif rumble is not None:
+                self._pending_rumble_release = None
+            self._left = left
+            self._right = right
+            self._rumble = rumble
+            self._dirty = True
         self._wake.set()
+
+    @staticmethod
+    def _is_rumble_release(rumble: CompatibleRumble | None) -> bool:
+        return (
+            rumble is not None
+            and _force_byte(rumble.low_frequency) == 0
+            and _force_byte(rumble.high_frequency) == 0
+        )
+
+    def _take_pending_output(self):
+        with self._lock:
+            if self._pending_rumble_release is not None:
+                frame = self._pending_rumble_release
+                self._pending_rumble_release = None
+                # The latest trigger-only frame remains dirty and must follow
+                # this explicit motor release without waiting for a watchdog tick.
+                self._wake.set()
+                return frame
+            if not self._dirty:
+                return None
+            frame = self._left, self._right, self._rumble
+            self._dirty = False
+            return frame
 
     def set_reconnect_enabled(self, enabled: bool) -> None:
         """Live-toggle from the Settings tab. Wakes the I/O thread so the
@@ -357,6 +420,11 @@ class DualSense:
             self._safe_write(self._build(pulse, pulse))
             time.sleep(0.2)
             self._safe_write(self._build(off(), off()))
+        # The previously sent frame may not change while the device is absent.
+        # Requeue it explicitly so a reconnect restores triggers and rumble.
+        with self._lock:
+            self._dirty = True
+        self._wake.set()
         # MARK: Power saver — one-shot at connect
         # self._safe_write(self._build_power_saver()) # Commented out due to report discussions/27
         return True
@@ -368,7 +436,17 @@ class DualSense:
             return
         was_connected = self.dev is not None
         if was_connected:
-            self._safe_write(self._build(off(), off()))
+            with self._lock:
+                rumble = self._rumble
+                pending_release = self._pending_rumble_release
+                self._pending_rumble_release = None
+            if rumble is not None:
+                zero_rumble = type(rumble)()
+            elif pending_release is not None:
+                zero_rumble = type(pending_release[2])()
+            else:
+                zero_rumble = None
+            self._safe_write(self._build(off(), off(), zero_rumble))
             try:
                 self.dev.close()
             except Exception:
@@ -428,12 +506,11 @@ class DualSense:
                 continue
 
             # --- Write the latest queued frame, if any ---
-            with self._lock:
-                dirty, left, right = self._dirty, self._left, self._right
-                self._dirty = False
-            if dirty:
+            pending = self._take_pending_output()
+            if pending is not None:
+                left, right, rumble = pending
                 try:
-                    n = self.dev.write(self._build(left, right))
+                    n = self.dev.write(self._build(left, right, rumble))
                 except Exception as e:
                     if not persistent:
                         self._disconnect(f"write failed: {e}")
@@ -460,10 +537,15 @@ class DualSense:
             crc = zlib.crc32(memoryview(buf)[:74], _BT_CRC_SEED)
             struct.pack_into("<I", buf, 74, crc)
 
-    def _build(self, left, right):
+    def _build(self, left, right, rumble: CompatibleRumble | None = None):
         L = self.lay
         buf = self._new_report()
-        buf[L["flags"]] = TRIG_FLAGS
+        flags = TRIG_FLAGS
+        if rumble is not None:
+            flags |= RUMBLE_FLAGS
+            buf[L["motor_r"]] = _force_byte(rumble.high_frequency)
+            buf[L["motor_l"]] = _force_byte(rumble.low_frequency)
+        buf[L["flags"]] = flags
         for pos, (mode, params) in ((L["r"], right), (L["l"], left)):
             buf[pos] = mode
             # params elements are already clamped to 0-255 by triggers.py;

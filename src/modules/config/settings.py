@@ -88,6 +88,20 @@ class Settings:
     gear_shift_amp: int = 255
     gear_shift_duration_ms: float = 100.0     # burst length
 
+    # MARK: Body haptics
+    # USB uses four-channel audio haptics. Bluetooth automatically falls back
+    # to compatible rumble through the existing HID output report.
+    enable_body_haptics: bool = False
+    body_haptics_intensity: float = 1.0
+    engine_haptics_intensity: float = 1.0
+    road_haptics_intensity: float = 1.0
+    impact_haptics_intensity: float = 1.0
+    slip_haptics_intensity: float = 1.0
+    slip_haptics_threshold: float = 0.8
+    collision_haptics_jerk_threshold: float = 3.0
+    collision_haptics_duration_ms: float = 150.0
+    suspension_haptics_delta_threshold: float = 0.015
+
     # MARK: System - startup pulse
     enable_startup_pulse: bool = True
     startup_pulse_force: int = 150            # one-shot force test on connect

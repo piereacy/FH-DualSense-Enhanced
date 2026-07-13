@@ -4,6 +4,21 @@
 NAME = "日本語"
 
 STRINGS = {
+    # --- body haptics ---
+    "Body haptics": "ボディハプティクス",
+    "Enable body haptics": "ボディハプティクスを有効化",
+    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+     "Disable in-game vibration only if you feel competing or doubled output."):
+        "USB接続では高精細オーディオ、Bluetooth接続では互換振動を自動的に使用します。"
+        "出力が競合している、または二重になっていると感じる場合にのみ、"
+        "ゲーム内振動を無効にしてください。",
+    "Master intensity": "全体の強度",
+    "Engine intensity": "エンジンの強度",
+    "Road texture intensity": "路面テクスチャの強度",
+    "Impact and suspension intensity": "衝撃とサスペンションの強度",
+    "Slip and ABS intensity": "スリップとABSの強度",
+    "Slip threshold": "スリップしきい値",
+
     # --- chrome / tabs ---
     "Controls": "操作",
     "Profiles": "プロファイル",

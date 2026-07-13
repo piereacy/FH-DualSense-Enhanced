@@ -59,6 +59,17 @@ SETTING_SECTIONS = [
         ("gear_shift_amp", "Thump strength", 0, 255, ""),
         ("gear_shift_duration_ms", "Thump length (ms)", 0.0, 2000.0, ""),
     ]),
+    ("Body haptics", [
+        ("enable_body_haptics", "Enable body haptics", None, None,
+         "Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+         "Disable in-game vibration only if you feel competing or doubled output."),
+        ("body_haptics_intensity", "Master intensity", 0.0, 2.0, ""),
+        ("engine_haptics_intensity", "Engine intensity", 0.0, 2.0, ""),
+        ("road_haptics_intensity", "Road texture intensity", 0.0, 2.0, ""),
+        ("impact_haptics_intensity", "Impact and suspension intensity", 0.0, 2.0, ""),
+        ("slip_haptics_intensity", "Slip and ABS intensity", 0.0, 2.0, ""),
+        ("slip_haptics_threshold", "Slip threshold", 0.0, 5.0, ""),
+    ]),
 ]
 
 SYSTEM_SECTIONS = [

@@ -4,6 +4,21 @@
 NAME = "Türkçe"
 
 STRINGS = {
+    # --- body haptics ---
+    "Body haptics": "Gövde dokunsal geri bildirimi",
+    "Enable body haptics": "Gövde dokunsal geri bildirimini etkinleştir",
+    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+     "Disable in-game vibration only if you feel competing or doubled output."):
+        "USB bağlantısında yüksek kaliteli ses tabanlı dokunsal geri bildirimi, Bluetooth'ta uyumlu "
+        "titreşimi otomatik olarak kullanır. Oyun içi titreşimi yalnızca çıkışların çakıştığını veya "
+        "iki kez uygulandığını hissederseniz kapatın.",
+    "Master intensity": "Genel yoğunluk",
+    "Engine intensity": "Motor yoğunluğu",
+    "Road texture intensity": "Yol dokusu yoğunluğu",
+    "Impact and suspension intensity": "Darbe ve süspansiyon yoğunluğu",
+    "Slip and ABS intensity": "Kayma ve ABS yoğunluğu",
+    "Slip threshold": "Kayma eşiği",
+
     # --- chrome / tabs ---
     "Controls": "Kontroller",
     "Profiles": "Profiller",

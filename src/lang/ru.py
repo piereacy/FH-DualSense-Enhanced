@@ -4,6 +4,21 @@
 NAME = "Русский"
 
 STRINGS = {
+    # --- body haptics ---
+    "Body haptics": "Тактильная отдача корпуса",
+    "Enable body haptics": "Включить тактильную отдачу корпуса",
+    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+     "Disable in-game vibration only if you feel competing or doubled output."):
+        "Автоматически использует высококачественную аудиотактильную отдачу через USB или "
+        "совместимую вибрацию через Bluetooth. Отключайте вибрацию в игре, только если чувствуете, "
+        "что сигналы конфликтуют или дублируются.",
+    "Master intensity": "Общая интенсивность",
+    "Engine intensity": "Интенсивность двигателя",
+    "Road texture intensity": "Интенсивность дорожной текстуры",
+    "Impact and suspension intensity": "Интенсивность ударов и подвески",
+    "Slip and ABS intensity": "Интенсивность скольжения и ABS",
+    "Slip threshold": "Порог скольжения",
+
     # --- верхняя панель / вкладки ---
     "Controls": "Управление",
     "Profiles": "Профили",

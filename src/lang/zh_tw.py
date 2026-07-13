@@ -4,6 +4,20 @@
 NAME = "繁體中文（台灣）"
 
 STRINGS = {
+    # --- body haptics ---
+    "Body haptics": "握把觸覺",
+    "Enable body haptics": "啟用握把觸覺",
+    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+     "Disable in-game vibration only if you feel competing or doubled output."):
+        "USB 連線會自動使用高傳真音訊觸覺，藍牙連線則自動使用相容震動。"
+        "只有在感覺輸出互相干擾或出現雙重震動時，才關閉遊戲內震動。",
+    "Master intensity": "總體強度",
+    "Engine intensity": "引擎強度",
+    "Road texture intensity": "路面紋理強度",
+    "Impact and suspension intensity": "碰撞與懸吊強度",
+    "Slip and ABS intensity": "打滑與 ABS 強度",
+    "Slip threshold": "打滑閾值",
+
     # --- chrome / tabs ---
     "Controls": "控制",
     "Profiles": "設定檔",

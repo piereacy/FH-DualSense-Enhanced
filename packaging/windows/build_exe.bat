@@ -42,7 +42,7 @@ if exist "%DIST%" (
     )
 )
 
-uvx --from "pyinstaller>=6.11.1" --with customtkinter --with textual --with hidapi --with psutil --with dotenv --with pystray --with pillow pyinstaller "%~dp0fhds.spec" --distpath "%DIST%" --workpath "%WORK%" --noconfirm --clean
+uvx --from "pyinstaller>=6.11.1" --with customtkinter --with textual --with hidapi --with psutil --with dotenv --with pystray --with pillow --with numpy --with sounddevice pyinstaller "%~dp0fhds.spec" --distpath "%DIST%" --workpath "%WORK%" --noconfirm --clean
 if errorlevel 1 (
     echo.
     echo Build FAILED.
@@ -54,6 +54,7 @@ REM MARK: rename output to include version
 if exist "%DIST%\FH-DualSense.exe" (
     move /y "%DIST%\FH-DualSense.exe" "%DIST%\FH-DualSense-v%VER%.exe" >nul
 )
+copy /y "docs\THIRD_PARTY_NOTICES.md" "%DIST%\THIRD_PARTY_NOTICES.md" >nul
 
 echo.
 echo Build OK. Executable: %DIST%\FH-DualSense-v%VER%.exe

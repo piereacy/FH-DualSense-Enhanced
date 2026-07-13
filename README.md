@@ -46,6 +46,7 @@ Forza Horizon sends car telemetry over UDP, but Steam Input doesn't use the Dual
 
 - **Left trigger (brake)** — pushes back harder the more you press. Buzzes like ABS when tires slip. Extra resistance when handbraking.
 - **Right trigger (throttle)** — soft progressive resistance. Thumps on gear shifts. Buzzes at the rev limiter.
+- **Body haptics:** optional engine, road, collision, suspension, puddle, tire-slip, and ABS feedback in the controller grips.
 
 ### How it talks to your controller without fighting Steam
 
@@ -62,13 +63,14 @@ Forza Horizon sends car telemetry over UDP, but Steam Input doesn't use the Dual
                                      └──────────────────┘
 ```
 
-Both the app and Steam write to the same controller — but they touch **different bytes**:
+Body haptics is disabled by default, preserving the original trigger-only HID
+reports. When it is enabled, output is selected automatically:
 
-- Steam owns the **rumble motors** and button mapping.
-- This app only flips the **adaptive trigger** bits (`valid_flag0` bits `0x04` and `0x08`).
-- The HID device is opened in **non-blocking mode**, so writes fire immediately instead of waiting on the controller. Nothing gets queued, nothing blocks Steam.
+- **USB:** four-channel 48 kHz audio drives the left and right haptic actuators. The HID rumble bytes remain untouched.
+- **Bluetooth:** the same telemetry effects are reduced to compatible low/high rumble and sent atomically with the trigger report.
+- **DSX mode:** adaptive triggers continue to work, but this body-haptics backend remains disabled.
 
-That's why you can run both at the same time and neither one breaks the other.
+The HID device remains non-blocking, and duplicate HID states are suppressed.
 
 ---
 
@@ -221,6 +223,31 @@ cmd /c "start /MIN /D C:\Your\Path\To\Forza-Horizon-DualSense-Python\src uv run 
 
 Every effect (brake force, ABS buzz, gear thump, rev limiter, etc.) can be tweaked or turned off from the **Settings page in the app** — no file editing needed. Changes apply on next launch.
 
+### Body haptics
+
+Open **Settings -> Body haptics** and enable **Enable body haptics**. The feature
+is off by default so existing profiles keep their original behavior.
+
+Body haptics are synthesized from telemetry and do not require Forza's in-game
+**Vibration** option. Leave that option on if you want native/Steam rumble;
+disable it only if that output competes with or feels doubled alongside the
+synthesized body haptics.
+
+Physical excitation determines when these effects are active:
+
+- A true stationary idle is silent.
+- Stationary revving remains active, as do drivetrain-aware burnouts when the driven wheels spin.
+- Road-material texture is applied only when rolling or wheelspin provides excitation; the selected material does not create vibration by itself.
+
+| Connection | Output |
+|------------|--------|
+| USB | Directional high-fidelity audio haptics through the four-channel DualSense endpoint |
+| Bluetooth | Lower-fidelity compatible rumble using the same telemetry effects |
+| DSX | Body haptics unavailable in the first release; adaptive triggers are unchanged |
+
+Master, engine, road, impact/suspension, and slip/ABS intensities can be tuned
+per profile.
+
 > ⚠️ The rev limiter fires based on `rpm / max_rpm`, not a fixed RPM. Different cars hit redline at different ratios, so it may need per-car tweaking.
 
 ---
@@ -236,6 +263,8 @@ Every effect (brake force, ABS buzz, gear thump, rev limiter, etc.) can be tweak
 | Triggers feel like a brick wall | Lower `brake_max_force` / `throttle_max_force`, or raise the matching `curve`. |
 | Triggers feel stiff at a light press | Lower the baseline force, or raise the `curve`. |
 | No vibration on gear shift | Car must be moving faster than 3 km/h and changing between valid gears. |
+| Body haptics enabled but no USB grip feedback | Confirm Windows exposes a four-channel DualSense speaker endpoint and reconnect the controller by USB. Trigger effects continue even if audio startup fails. |
+| Bluetooth body haptics feel simpler than USB | Expected: Bluetooth uses compatible low/high rumble and cannot reproduce four independent audio layers. |
 | Console window is blank after the startup pulse | Run from a terminal with `cd src && uv run main.py --headless` to skip the TUI. |
 
 ---
@@ -268,6 +297,10 @@ I have integrated DSX (DualSenseX) support. Due to DSX limitations, you might no
 ## 🙏 Credits
 
 Built by **[HamzaYslmn](https://github.com/HamzaYslmn)**.
+
+Body-haptics effect and USB-routing work was informed by
+**[HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics)**. See
+[`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) for its MIT notice.
 
 ### 💛 Sponsors
 

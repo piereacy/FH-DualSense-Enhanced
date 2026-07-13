@@ -32,6 +32,9 @@ The development DualSense has been probed in both transports with hidapi 0.15.0:
   report ID `0x31`.
 - USB enumerates as bus type 1 on the gamepad interface.
 - USB exposes a Windows WASAPI output endpoint with four channels at 48 kHz.
+- Forza's four `WheelInPuddleDepth` fields are 32-bit floats in the official
+  Data Out layout; the existing integer decoding must be corrected for usable
+  water-depth effects.
 - The observed WASAPI endpoint reports a low output latency of about 3 ms.
 - Bluetooth does not expose the four-channel audio endpoint on this Windows
   system.
@@ -128,16 +131,10 @@ means the writer leaves rumble flags and motor bytes unclaimed, preserving the
 current output exactly. A rumble object contains normalized low-frequency and
 high-frequency amplitudes.
 
-The writer also owns a persistent `audio_haptics_enabled` output-state bit. The
-manager changes it through a dedicated method when the USB stream starts or
-stops. Every subsequent trigger report includes the correct mode flags, so a
-trigger preview cannot accidentally disable USB audio haptics. Changing this
-mode queues a fresh report even when the trigger pair is unchanged.
-
-The I/O queue stores triggers, rumble, and audio-haptics mode as one pending
+The I/O queue stores triggers and optional compatible rumble as one pending
 frame. State-change suppression compares the full encoded state, so a changing
-Bluetooth body effect or USB mode can produce a write even when the triggers
-are unchanged. USB audio amplitude updates do not cause extra HID reports.
+Bluetooth body effect can produce a write even when the triggers are unchanged.
+USB audio amplitude updates do not cause extra HID reports.
 
 ## Data flow
 
@@ -240,10 +237,11 @@ Audio target exchange is protected by a short lock or an atomic snapshot. The
 callback never parses telemetry, logs repeatedly, opens devices, or performs
 HID writes.
 
-The implementation must verify whether the controller needs haptics-control HID
-flags before audible actuator output. Any such flags are enabled only while USB
-body haptics are active and are cleared on stop. They must remain part of the
-same combined output report as trigger effects.
+Hardware validation confirmed that the four-channel USB audio endpoint drives
+the actuators without an additional HID mode flag. The implementation therefore
+does not copy HorizonHaptics' unverified `0x20` output bit. The official Linux
+driver assigns that field to speaker-volume control, so setting it here could
+change unrelated controller state.
 
 Windows WASAPI is the hardware-validated first target. On Linux, the backend may
 select an ALSA device with the same name and channel requirements when
@@ -317,8 +315,8 @@ preferences mechanism.
   output buffer.
 - Audio stream failure: stop and close the stream, mark USB haptics unavailable,
   and keep the main loop alive.
-- HID failure: use the existing reconnect behavior. Pending body state resets to
-  silence on disconnect.
+- HID failure: write silence before closing a usable handle, preserve the last
+  desired frame, and requeue it after a successful reconnect.
 - Invalid telemetry: discard only the bad contribution or frame, never the
   controller connection.
 - DSX selected: body haptics remains inactive and reports the limitation once.
@@ -329,7 +327,7 @@ No haptic exception may terminate `loop.run`.
 
 Add compatible Python 3.13 versions of `numpy` and `sounddevice` to
 `src/pyproject.toml`. Confirm they are included by the ZUV build and Windows
-standalone packaging path. Imports stay inside the USB backend so headless or
+standalone packaging path. USB dependency imports remain guarded so headless or
 Bluetooth-only startup can report dependency problems cleanly.
 
 Add the chosen test runner as a development-only dependency rather than a
@@ -355,8 +353,6 @@ Introduce a test directory and use deterministic fakes. Tests cover:
 - Manager selection for USB, Bluetooth, disconnect, and DSX.
 - USB endpoint selection using fake sounddevice metadata.
 - Audio callback channel routing and silent stop behavior.
-- USB audio-haptics mode changes queue a HID report, persist across trigger
-  previews, and clear on shutdown.
 - Existing `ds.set(left, right)` report bytes remain unchanged.
 - Rumble flags and motor offsets appear only when a payload is present.
 - Bluetooth CRC is recomputed after rumble bytes are written.
