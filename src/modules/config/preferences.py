@@ -38,6 +38,7 @@ GLOBAL_FIELDS = frozenset({
     "enable_startup_pulse",
     "startup_pulse_force",
     "exit_on_game_close",
+    "minimize_to_tray",
     "game_poll_interval_s",
     "check_for_updates",
     "language",

@@ -28,9 +28,11 @@ import customtkinter as ctk
 
 from lang import set_language, t
 from modules import forzahorizon, loop, make_backend
+from modules.about import APP_NAME
 from modules.config import preferences, profiles
 from modules.config.preferences import _version
 from modules.dualsense.adaptive_trigger import off, vibrate
+from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 
 from . import theme as T
 from . import widgets as W
@@ -48,9 +50,6 @@ HAPTIC_FREQ_HZ = 40
 HAPTIC_AMP_ON = 200
 HAPTIC_AMP_OFF = 120
 HAPTIC_DURATION_S = 0.10
-
-SPONSOR_URL = "https://github.com/sponsors/HamzaYslmn"
-CHANGELOG_URL = "https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python/releases/latest"
 
 NAV_ITEMS = ("Controls", "Profiles", "Settings", "System", "Language", "Logs")
 
@@ -84,6 +83,8 @@ class TriggerGUI:
         self._refreshing = False
         self._refresh_callbacks: list = []
         self._log_queue: queue.Queue = queue.Queue(maxsize=4000)
+        self._usb_audio = UsbAudioHaptics()
+        self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
 
         # Theme + DPI
         ctk.set_appearance_mode("dark")
@@ -96,7 +97,7 @@ class TriggerGUI:
 
         # Window
         self.root = ctk.CTk()
-        self.root.title("FH DualSense")
+        self.root.title(APP_NAME)
         self._set_window_icon()
         self._center_window()
         self._tray = TrayController(self.root, on_show=self._show_window, on_quit=self._quit)
@@ -257,7 +258,6 @@ class TriggerGUI:
         )
         self.lbl_version.grid(row=0, column=2, padx=(T.PAD_SM, T.PAD_MD),
                               pady=T.PAD_SM, sticky="e")
-        self.lbl_version.bind("<Button-1>", lambda _e: self._open_url(CHANGELOG_URL))
 
         ctk.CTkFrame(self.root, height=1, corner_radius=0,
                      fg_color=T.BORDER).pack(side="top", fill="x")
@@ -286,31 +286,6 @@ class TriggerGUI:
             )
             btn.pack(side="top", fill="x", padx=T.PAD_SM, pady=2)
             self._nav_buttons[key] = btn
-
-        sfooter = ctk.CTkFrame(sidebar, fg_color="transparent")
-        sfooter.pack(side="bottom", fill="x", padx=T.PAD_SM, pady=T.PAD_MD)
-
-        sponsor_btn = ctk.CTkButton(
-            sfooter,
-            text=f"{T.ICON['heart']}  {t('Sponsor')}",
-            height=34, corner_radius=8,
-            fg_color=T.PINK, hover_color="#e94f8e",
-            text_color="#ffffff",
-            font=ctk.CTkFont(size=T.FS_BODY, weight="bold"),
-            command=lambda: self._open_url(SPONSOR_URL),
-        )
-        sponsor_btn.pack(side="top", fill="x", pady=(0, T.PAD_SM))
-
-        changelog_btn = ctk.CTkButton(
-            sfooter,
-            text=t("Changelog"),
-            height=26, corner_radius=6,
-            fg_color="transparent", hover_color=T.BG_HOVER,
-            text_color=T.TEXT_FAINT,
-            font=ctk.CTkFont(size=T.FS_SMALL),
-            command=lambda: self._open_url(CHANGELOG_URL),
-        )
-        changelog_btn.pack(side="top", fill="x")
 
         self._content = ctk.CTkFrame(body, corner_radius=0, fg_color=T.BG_MAIN)
         self._content.pack(side="left", fill="both", expand=True)
@@ -349,6 +324,7 @@ class TriggerGUI:
 
     def run(self):
         self.root.after(0, self._start_backend)
+        self.root.after(100, self._tick_usb_audio)
         self.root.after(1000, self._tick_status)
         self.root.after(100, self._drain_logs)
         try:
@@ -370,6 +346,8 @@ class TriggerGUI:
 
     def _on_unmap(self, event):
         if event.widget is not self.root:
+            return
+        if not self.settings.minimize_to_tray:
             return
         try:
             if self.root.state() == "iconic":
@@ -408,6 +386,7 @@ class TriggerGUI:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=2.0)
+        self._usb_audio_lifecycle.close()
         if self._listener_cm:
             try:
                 self._listener_cm.__exit__(None, None, None)
@@ -464,7 +443,13 @@ class TriggerGUI:
 
     def _run_loop(self):
         try:
-            loop.run(self._ds, self._listener, self.settings, stop_event=self._stop)
+            loop.run(
+                self._ds,
+                self._listener,
+                self.settings,
+                stop_event=self._stop,
+                usb_audio=self._usb_audio,
+            )
         except Exception:
             log.exception("Telemetry loop crashed")
         finally:
@@ -504,6 +489,13 @@ class TriggerGUI:
                 pass
 
     # MARK: status / profile ------------------------------------------------
+
+    def _tick_usb_audio(self):
+        if self._tearing_down:
+            return
+        controller = self._ds if self._listener is not None else None
+        self._usb_audio_lifecycle.sync(controller, self.settings)
+        self.root.after(1000, self._tick_usb_audio)
 
     def _tick_status(self):
         if self._tearing_down:

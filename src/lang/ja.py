@@ -4,6 +4,7 @@
 NAME = "日本語"
 
 STRINGS = {
+    "About and licenses": "このアプリについてとライセンス",
     # --- body haptics ---
     "Body haptics": "ボディハプティクス",
     "Enable body haptics": "ボディハプティクスを有効化",
@@ -101,12 +102,15 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza テレメトリ（次回起動時に適用）",
     "Startup pulse": "起動時の振動",
     "Reconnect": "再接続",
+    "Application behavior": "アプリの動作",
     "Game detection": "ゲーム検出",
     "UDP port": "UDP ポート",
     "Startup buzz strength": "起動時の振動の強さ",
     "Auto-reconnect when controller drops": "コントローラー切断時に自動再接続",
     "Reconnect check interval (s)": "再接続の確認間隔 (秒)",
     "Auto-exit when the game closes": "ゲーム終了時に自動終了",
+    "Close the app when the game closes": "ゲーム終了時にアプリも終了",
+    "Move the app to the tray when minimized": "最小化時にアプリをトレイへ移動",
     "Game-watch check interval (s)": "ゲーム監視の確認間隔 (秒)",
 
     # --- DSX ---

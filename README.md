@@ -1,19 +1,19 @@
 <p align="right">
-  <strong>English</strong> •
+  <a href="README_EN.md">English</a> •
   <a href="docs/ReadmeTR.md">Türkçe</a> •
   <a href="docs/ReadmeJA.md">日本語</a> •
-  <a href="docs/ReadmeZH.md">简体中文</a>
+  <strong>简体中文</strong>
 </p>
 
 <div align="center">
-  <h1>🏎️ Forza Horizon - DualSense Adaptive Triggers</h1>
-  <p><strong>Real trigger feedback for Forza Horizon on PC.</strong></p>
-  <p><em>Feel the brakes. Feel the engine. No setup juggling.</em></p>
+  <h1>🏎️ FH-DualSense-Enhanced</h1>
+  <p><strong>PC 端地平线（Forza Horizon）增强扳机与握把触觉反馈。</strong></p>
+  <p><em>感受刹车。感受引擎。免去繁琐设置。</em></p>
 </div>
 
-> My Steam profile: <https://steamcommunity.com/id/teccno/>
+> 我的 Steam 个人主页: <https://steamcommunity.com/id/teccno/>
 > 
-> For CS:GO item Sponsorship :D : <https://steamcommunity.com/tradeoffer/new/?partner=291638630&token=Xyg4vITU>
+> 用于赞助的 CS:GO 交易链接 :D : <https://steamcommunity.com/tradeoffer/new/?partner=291638630&token=Xyg4vITU>
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=-3Cp0PfL52Y">
@@ -21,303 +21,290 @@
   </a>
 </div>
 
-> 💛 Huge thanks to **[Jared (jmac122)](https://github.com/jmac122)** for sponsoring this project by gifting me Forza Horizon 6.
+> 💛 非常感谢 **[Jared (jmac122)](https://github.com/jmac122)** 送给我《极限竞速：地平线 6》来赞助支持本项目，让它能够继续发展。
 
 ---
 
-## 📜 Contents
-1. [What it does](#-what-it-does)
-2. [Install](#-install)
-3. [In-game setup](#-in-game-setup)
-4. [Enable Steam Haptics](#-enable-steam-haptics)
-5. [Run it](#-run-it)
-6. [Auto-launch with Steam](#-auto-launch-with-steam)
-7. [Tuning the feel](#-tuning-the-feel)
-8. [Troubleshooting](#-troubleshooting)
-9. [Credits](#-credits)
-
-
+## 📜 目录
+1. [功能简介](#-功能简介)
+2. [安装步骤](#-安装步骤)
+3. [游戏内设置](#-游戏内设置)
+4. [启用 Steam 触感反馈](#-启用-steam-触感反馈)
+5. [启动运行](#-启动运行)
+6. [随 Steam 自动启动](#-随-steam-自动启动)
+7. [调校反馈手感](#-调校反馈手感)
+8. [故障排查](#-故障排查)
+9. [赞助与致谢](#-赞助与致谢)
 
 ---
 
-## 💡 What it does
+## 💡 功能简介
 
-Forza Horizon sends car telemetry over UDP, but Steam Input doesn't use the DualSense's **adaptive triggers**. This tiny app fills the gap:
+《极限竞速：地平线》通过 UDP 发送车辆遥测数据，但 Steam 输入默认无法使用 DualSense 的**自适应扳机**。这个小程序弥补了这一空缺：
 
-- **Left trigger (brake)** — pushes back harder the more you press. Buzzes like ABS when tires slip. Extra resistance when handbraking.
-- **Right trigger (throttle)** — soft progressive resistance. Thumps on gear shifts. Buzzes at the rev limiter.
-- **Body haptics:** optional engine, road, collision, suspension, puddle, tire-slip, and ABS feedback in the controller grips.
+- **左扳机（刹车）** - 踩得越深，阻力越大。当轮胎打滑时，会产生类似 ABS 介入的防抱死震动。拉起手刹时，会有额外的阻力加成。
+- **右扳机（油门）** - 柔和的渐进阻力。换挡时会有明显的换挡冲击。转速达到红线区时会有震动。
+- **握把触觉** - 可选的发动机、路面、碰撞、悬挂、积水、打滑和 ABS 握把反馈。
 
-### How it talks to your controller without fighting Steam
+### 它是如何在不与 Steam 冲突的情况下与手柄通信的
 
 ```
-┌──────────────────┐    UDP 5300     ┌──────────────────┐    HID write    ┌─────────────┐
-│  Forza Horizon   │ ──────────────► │  This app        │ ──────────────► │  DualSense  │
-│  (Data Out)      │  telemetry      │  (trigger bits   │  triggers only  │  controller │
-└──────────────────┘  324 bytes      │   only)          │                 └─────────────┘
-                                     └──────────────────┘                        ▲
+┌──────────────────┐    UDP 5300     ┌──────────────────┐    HID 写入     ┌─────────────┐
+│  Forza Horizon   │ ──────────────► │  本程序          │ ──────────────► │  DualSense  │
+│  (数据输出)      │ 遥测数据 324字节 │  (仅控制扳机字节)│  (仅修改自适应  │   手柄      │
+└──────────────────┘                 └──────────────────┘   扳机效果)     └─────────────┘
+                                                                                 ▲
                                                                                  │
-                                     ┌──────────────────┐    HID write           │
-                                     │  Steam Input     │ ──────────────────────►│
-                                     │  (rumble bits)   │  rumble + buttons      │
+                                     ┌──────────────────┐    HID 写入            │
+                                     │  Steam Input     │ ───────────────────────►│
+                                     │  (控制常规震动)  │  (常规震动 + 按键输入)  │
                                      └──────────────────┘
 ```
 
-Body haptics is disabled by default, preserving the original trigger-only HID
-reports. When it is enabled, output is selected automatically:
+握把触觉默认开启，并会自动根据连接方式选择输出。若你只想使用自适应扳机，可以在设置中关闭握把触觉：
 
-- **USB:** four-channel 48 kHz audio drives the left and right haptic actuators. The HID rumble bytes remain untouched.
-- **Bluetooth:** the same telemetry effects are reduced to compatible low/high rumble and sent atomically with the trigger report.
-- **DSX mode:** adaptive triggers continue to work, but this body-haptics backend remains disabled.
+- **USB：**通过 DualSense 的四声道 48 kHz 音频端点驱动左右触觉执行器，HID 震动字节保持不变。
+- **蓝牙：**将同一套遥测效果降级为高低频兼容震动，并与扳机效果放进同一份 HID 报告。
+- **DSX 模式：**自适应扳机保持原样，但首版不启用此握把触觉后端。
 
-The HID device remains non-blocking, and duplicate HID states are suppressed.
+HID 设备仍使用非阻塞模式，并继续抑制重复状态写入。
 
 ---
 
-## 🛠️ Install
+## 🛠️ 安装步骤
 
-**You need:** Windows 10/11 or Linux, and a DualSense controller (USB or Bluetooth).
+**运行要求:** Windows 10/11 或 Linux，以及 DualSense 手柄（USB 或蓝牙连接）。
 
-1. Go to the [latest release](https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python/releases/latest).
-2. Download **`win_start.bat`** (Windows) or **`linux_start.sh`** (Linux).
-3. Put it in any empty folder.
-4. **Important:** I highly recommend installing **`uv`** manually first. Open PowerShell and run this command:
+1. 前往当前 fork 的[最新发布版本](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest)。
+2. Windows 用户只需下载 **`win_start.bat`**；Linux 用户只需下载 **`linux_start.sh`**。
+3. 运行启动器。它会自动下载 ZUV 软件本体，并准备受管理的 Python 环境。
+4. 如果 Windows 无法自动安装 **`uv`**，请打开 PowerShell 并运行：
    ```powershell
    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
-   - If you skip this, `win_start.bat` will try to install `uv` automatically. However, Windows might block this auto-install with an "Execution Policy" error in PowerShell.
-   - **If you get the Execution Policy error:** Hold **Shift + Right-Click** in the folder, click **"Open PowerShell window here"**, paste `Set-ExecutionPolicy RemoteSigned -scope CurrentUser` and hit Enter, then type `Y` and Enter.
-5. Double-click `win_start.bat` (or `linux_start.sh`).
+   - `win_start.bat` 会优先尝试自动安装 `uv`。Windows 执行策略可能会拦截这个步骤。
+   - **如果遇到执行策略报错:** 在所在文件夹中按住 **Shift + 右键**，点击 **“在此处打开 PowerShell 窗口”**，粘贴 `Set-ExecutionPolicy RemoteSigned -scope CurrentUser` 并回车，然后输入 `Y` 回车确认。
 
-The launcher handles downloading the app, preparing the environment, and running it. Next time you run it, it will also check for updates.
+网络不稳定时，可从同一个 Release 手动下载 **`FH-DualSense-Enhanced.zuv.py`**，把它放在启动器旁边后重新运行。启动器会复用该文件，不再重复下载。正式发布的 ZUV 可以在“系统”页面启用更新检查后，从当前 fork 检查新版本。
 
 > [!NOTE]
-> A standalone **Windows `.exe`** is also attached to each release as an experimental option. The **recommended** way to run the app is still **`win_start.bat`** — it self-updates and works the same across every Windows version.
+> 每个版本还附带独立的 **`FH-DualSense-Enhanced-vX.Y.Z.exe`**。它不需要 Python 环境，但不会自动更新。
 
-> **Linux extras:** install `libhidapi` (`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`) and the udev rule from `app/packaging/linux/70-dualsense.rules`. Then unplug/replug the controller once.
->
-> **Wayland tray:** the minimize-to-tray icon needs the appindicator backend (X11 doesn't). Install these so the launcher can build PyGObject into its venv:
-> - Debian/Ubuntu: `sudo apt install build-essential pkg-config python3-dev libcairo2-dev libgirepository-2.0-dev libayatana-appindicator3-1 gir1.2-ayatanaappindicator3-0.1`
-> - Arch: `sudo pacman -S base-devel cairo gobject-introspection libayatana-appindicator`
-> - Fedora: `sudo dnf install gcc pkg-config python3-devel cairo-devel gobject-introspection-devel libayatana-appindicator-gtk3`
+> **Linux 额外说明:** 安装 `libhidapi` 依赖（`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`）并从 `app/packaging/linux/70-dualsense.rules` 添加 udev 规则。然后将手柄断开并重新连接一次。
 
-### 🎮 Playing with SISR (Xbox App / Windows Store users)
+### 🎮 使用 SISR 玩游戏（Xbox App / 微软商店版用户）
 
-If you are playing the game via the Xbox App or Microsoft Store, you will need a tool that makes the game recognize your controller as an Xbox controller. One option is **[SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR)** — it redirects Steam Input to the system level and emulates a real Xbox controller, so it works even with Windows Store apps and anti-cheat-protected games.
+如果您是在微软商店（Microsoft Store）或 Xbox App 上运行游戏，您将需要一个工具来让游戏把您的手柄识别为 Xbox 手柄。其中一个选择是 **[SISR（Steam Input System Redirector）](https://github.com/Alia5/SISR)**：它将 Steam Input 重定向到系统层级并模拟一个真实的 Xbox 手柄，因此即使在微软商店应用和带反作弊保护的游戏中也能正常工作。
 
-Because SISR routes the controller through **Steam Input**, Steam can grab the physical DualSense exclusively and prevent this app from connecting. To avoid this, **you must start the programs in this exact order**:
+因为 SISR 通过 **Steam Input** 转发手柄，Steam 可能会独占物理 DualSense 手柄，导致本程序无法连接。为了避免这个问题，**您必须按照以下严格的顺序启动程序**：
 
-1. **First, launch THIS APP** (`win_start.bat`) and wait for the short pulse on the triggers.
-2. **Second, launch SISR** (and Steam).
-3. **Finally, launch Forza Horizon.**
+1. **首先启动本程序** (`win_start.bat`)，等待扳机发生一次简短的脉冲震动。
+2. **第二步，启动 SISR（以及 Steam）。**
+3. **最后，启动极限竞速：地平线游戏。**
 
-*(Note: If your controller disconnects while playing, close SISR, restart this app, then open SISR again. For SISR setup and emulation options, see the [SISR README](https://github.com/Alia5/SISR).)*
+*(注：如果在玩游戏时手柄断开连接，请先关闭 SISR，重启本程序，然后再打开 SISR。有关 SISR 的安装与模拟选项，请参阅 [SISR README](https://github.com/Alia5/SISR)。)*
 
 <details>
-<summary>Manual install (for developers)</summary>
+<summary>手动安装（适合开发者）</summary>
 
 ```bash
-git clone https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python
-cd Forza-Horizon-DualSense-Python/src
+# 使用 GitHub 的 Code 按钮克隆当前 fork，然后进入 src 目录。
+cd FH-DualSense-Enhanced/src
 uv sync
 uv run main.py
 ```
 
-Need `uv`? `pip install uv` or [astral.sh/uv](https://astral.sh/uv/).
+需要安装 `uv`？ 使用 `pip install uv` 或访问 [astral.sh/uv](https://astral.sh/uv/)。
 </details>
 
 ---
 
-## 🎯 In-game setup
+## 🎯 游戏内设置
 
-In Forza Horizon, open **Settings → HUD and Gameplay** and scroll to the bottom:
+在《极限竞速：地平线》中，打开 **设置 → HUD 与游戏玩法**，滚动到最下方：
 
-| Setting | Value |
+| 设置项 | 数值 |
 |---------|-------|
-| Data Out | **ON** |
-| Data Out IP Address | **127.0.0.1** |
-| Data Out IP Port | **5300** |
+| 数据输出 (Data Out) | **开启 (ON)** |
+| 数据输出 IP 地址 (Data Out IP Address) | **127.0.0.1** |
+| 数据输出端口 (Data Out IP Port) | **5300** |
 
 > [!NOTE]
-> In some versions of Forza, entering `127.0.0.1` as the IP address may not work. If the application doesn't receive telemetry, try entering `::1` (IPv6 loopback) instead.
+> 在某些版本的地平线游戏中，将 IP 地址填写为 `127.0.0.1` 可能会失效。如果程序没有收到任何遥测包，请尝试改填为 `::1`（IPv6 环回地址）。
 
 <p align="center">
-  <img src="docs/img/en.png" alt="English Settings" width="48%" style="border-radius: 8px;">
+  <img src="docs/img/en.png" alt="英文设置" width="48%" style="border-radius: 8px;">
   &nbsp;
-  <img src="docs/img/tr.png" alt="Turkish Settings" width="48%" style="border-radius: 8px;">
+  <img src="docs/img/tr.png" alt="土耳其文设置" width="48%" style="border-radius: 8px;">
 </p>
 
 ---
 
-## 🔊 Enable Steam Haptics
+## 🔊 启用 Steam 触感反馈
 
-**Steam** can vibrate the left and right rumble motors on your DualSense controller. To enable them:
+**Steam** 可以驱动 DualSense 手柄上的左右常规震动马达。请按照以下步骤开启：
 
-### In Steam:
-1. Right-click **Forza Horizon** in your library → **Properties**.
-2. Go to **Controller → Additional Settings**.
-3. Make sure **DualSense vibration** is turned **ON**.
+### Steam 端设置:
+1. 在 Steam 库中右键点击 **极限竞速：地平线** → **属性**。
+2. 转到 **控制器 → 额外设置**。
+3. 确保 **DualSense 震动** 选项设置为 **开启**。
 
-### In-game (Forza Horizon):
-1. Open **Settings → Advanced Controls**.
-2. Find the **Vibration** option and enable it.
+### 游戏内设置 (极限竞速：地平线):
+1. 打开 **设置 → 高级控制**。
+2. 找到 **震动** 选项并将其启用。
 
-### DualSense software:
-For best results, install the official **PlayStation® Accessories** software:
-- Download: [PlayStation® Accessories](https://fwupdater.dl.playstation.net/fwupdater/PlayStationAccessoriesInstaller.exe)
+### 手柄驱动软件:
+为了获得最佳效果，建议安装官方的 **PlayStation® Accessories** 固件更新软件：
+- 下载地址: [PlayStation® Accessories](https://fwupdater.dl.playstation.net/fwupdater/PlayStationAccessoriesInstaller.exe)
 
-This ensures your DualSense firmware is up to date for windows.
+这可以确保您的 DualSense 固件保持最新状态。
 
-> ℹ️ **About Adaptive Triggers:** Steam doesn't support DualSense adaptive triggers for this game. That's what **this app** does — it adds realistic trigger feedback (brake resistance, engine feedback, ABS pulses, gear thumps, rev limiter buzz) on top of the rumble that Steam provides.
-
----
-
-## ▶️ Run it
-
-Double-click **`win_start.bat`** (Windows) or **`linux_start.sh`** (Linux).
-
-You'll feel a short pulse on both triggers — that means it's working. Now launch Forza Horizon and drive.
-
-> Start the launcher **before** Forza Horizon. If you use HidHide, allowlist `python.exe`.
+> ℹ️ **关于自适应扳机:** 正常情况下，Steam 并不支持此游戏在 DualSense 手柄上的自适应扳机效果。**本程序**的全部意义就在于：在 Steam 原生的震动效果基础之上，叠加还原真实的扳机反馈（刹车阻力、引擎颤动、ABS 脉动、换挡冲击、红线转速抖动）。
 
 ---
 
-## 🎮 Auto-launch with Steam
+## ▶️ 启动运行
 
-Want the triggers to turn on automatically when you press **Play**? Tell Steam to run the launcher first.
-> ⚠️ **Warning:** Sometimes auto-launching this way can cause issues with the application. For the most stable experience, it is recommended to launch the app manually by double-clicking the script.
+双击 **`win_start.bat`** (Windows) 或 **`linux_start.sh`** (Linux)。
 
-1. In Steam, right-click **Forza Horizon** → **Properties**.
-2. Open the **General** tab and find **Launch Options**.
-3. Choose one of the following commands based on your preference (change the path to where your `win_start.bat` actually is):
+你会感到手柄扳机产生了一次简短的脉冲震动，这代表一切运行正常。此时可以开启游戏上路了。
 
-   * **Option A: Keeping Steam Overlay & Playtime Tracking (Recommended)**
-     This wraps the script in `cmd.exe /c` so Steam can properly monitor the process, keeping your **Steam Overlay (Shift+Tab)** and **Playtime Tracking** fully functional while automatically closing the console window afterwards:
+> 请务必在运行极限竞速游戏**之前**运行启动器。如果您使用了 HidHide，请确保将 `python.exe` 加入白名单。
+
+---
+
+## 🎮 随 Steam 自动启动
+
+想在 Steam 点击 **开始游戏** 时，自适应扳机也能自动开启？你可以把启动器的路径写入 Steam 启动选项中。
+> ⚠️ **警告:** 部分系统环境下这种启动方式可能会导致程序连接出错。为了获得最稳定的体验，我们依然强烈建议您直接双击运行脚本来手动启动程序。
+
+1. 在 Steam 中，右键点击 **极限竞速：地平线** → **属性**。
+2. 打开 **通用** 标签页，并找到 **启动选项**。
+3. 根据个人喜好，填入以下命令之一（记得将路径修改为您的 `win_start.bat` 的实际位置）：
+
+   * **方式 A：保留 Steam 界面叠加层和游戏时间统计 (推荐)**
+     这行命令通过 `cmd.exe /c` 包装脚本，让 Steam 能正常监视游戏进程，确保你的 **Steam 界面 (Shift+Tab)** 以及 **游戏时间统计** 功能正常可用，并且命令行窗口在运行后会自动关闭：
      ```text
-     "C:\Windows\System32\cmd.exe" /c ""C:\Your\Path\To\Forza-Horizon-DualSense-Python\win_start.bat" %command%"
+     "C:\Windows\System32\cmd.exe" /c ""C:\您的路径\Forza-Horizon-DualSense-Python\win_start.bat" %command%"
      ```
 
-   * **Option B: Simpler Method**
-     A direct way to launch, though the Steam Overlay and playtime tracking may stop working:
+   * **方式 B：极简命令方式**
+     直接拉起脚本，但可能导致 Steam 界面叠加层和游戏时间统计失效：
      ```text
-     "C:\Your\Path\To\Forza-Horizon-DualSense-Python\win_start.bat" %command%
+     "C:\您的路径\Forza-Horizon-DualSense-Python\win_start.bat" %command%
      ```
 
-That's it. Press **Play** - the launcher runs, then the game opens.
+大功告成。点击 **开始游戏** 时，启动器就会首先拉起，随后运行游戏。
 
-![Steam launch options](docs/img/steaming.png)
+![Steam 启动选项](docs/img/steaming.png)
 
 <details>
-<summary>Advanced — run the Python script directly (no BAT file)</summary>
+<summary>高级 - 直接运行 Python 脚本（不使用 BAT 文件）</summary>
 
-If you cloned the repo and use `uv`, paste this into **Launch Options** instead:
+如果您克隆了本仓库并且正在使用 `uv` 运行，可以把以下命令复制到 **启动选项** 中：
 
 ```text
-cmd /c "start /MIN /D C:\Your\Path\To\Forza-Horizon-DualSense-Python\src uv run main.py" && %command%
+cmd /c "start /MIN /D C:\您的路径\Forza-Horizon-DualSense-Python\src uv run main.py" && %command%
 ```
 </details>
 
 ---
 
-## 🎚️ Tuning the feel
+## 🎚️ 调校反馈手感
 
-Every effect (brake force, ABS buzz, gear thump, rev limiter, etc.) can be tweaked or turned off from the **Settings page in the app** — no file editing needed. Changes apply on next launch.
+所有的效果（刹车力度、ABS 震动、换挡冲击、红线震动等）都可以在**程序的设置（Settings）页面**中进行调校或关闭，不需要手动编辑任何文件。修改将在下次启动程序时生效。
 
-### Body haptics
+默认参数参考了社区反馈，并结合实际测试进行了调校。它是一套实用起点，不代表适合每一只手柄、每一辆车或每一位玩家。
 
-Open **Settings -> Body haptics** and enable **Enable body haptics**. The feature
-is off by default so existing profiles keep their original behavior.
+### 握把触觉
 
-Body haptics are synthesized from telemetry and do not require Forza's in-game
-**Vibration** option. Leave that option on if you want native/Steam rumble;
-disable it only if that output competes with or feels doubled alongside the
-synthesized body haptics.
+握把触觉默认开启。打开**设置 -> 握把触觉**即可调整强度，或关闭**启用握把触觉**以仅保留扳机效果。
 
-Physical excitation determines when these effects are active:
+握把触觉由遥测数据合成，不依赖《极限竞速：地平线》的游戏内**振动**选项。若您希望保留游戏的原生/Steam 震动，可以让该选项保持开启；只有当这些输出与合成握把触觉相互干扰或让振动感觉重复时，才将其关闭。
 
-- A true stationary idle is silent.
-- Stationary revving remains active, as do drivetrain-aware burnouts when the driven wheels spin.
-- Road-material texture is applied only when rolling or wheelspin provides excitation; the selected material does not create vibration by itself.
+这些效果是否启用取决于实际激励：
 
-| Connection | Output |
-|------------|--------|
-| USB | Directional high-fidelity audio haptics through the four-channel DualSense endpoint |
-| Bluetooth | Lower-fidelity compatible rumble using the same telemetry effects |
-| DSX | Body haptics unavailable in the first release; adaptive triggers are unchanged |
+- 车辆真正静止并处于怠速时保持静音；
+- 原地轰油门仍有反馈；程序会按传动布局识别烧胎，只要驱动轮空转，烧胎反馈也会保持启用；
+- 路面材质纹理只有在车辆滚动或车轮空转产生激励时才会叠加；单独选择某种路面材质不会产生振动。
 
-Master, engine, road, impact/suspension, and slip/ABS intensities can be tuned
-per profile.
+| 连接方式 | 输出方式 |
+|---------|---------|
+| USB | 通过 DualSense 四声道音频端点提供有方向性的高保真触觉 |
+| 蓝牙 | 使用相同遥测效果的较低保真高低频兼容震动 |
+| DSX | 首版不提供握把触觉，自适应扳机不受影响 |
 
-> ⚠️ The rev limiter fires based on `rpm / max_rpm`, not a fixed RPM. Different cars hit redline at different ratios, so it may need per-car tweaking.
+总体、发动机、路面、碰撞/悬挂和打滑/ABS 强度均可按配置文件调节。
+
+> ⚠️ 红线限速器效果是根据 `rpm / max_rpm` 比例触发的，而不是固定的 RPM。不同车型的红线比例各不相同，因此可能需要根据车型做出细微调校。
 
 ---
 
-## 🩺 Troubleshooting
+## 🩺 故障排查
 
-| Symptom | Fix |
-|---------|-----|
-| `DualSense gamepad interface not found` | Controller not connected, or HidHide is hiding it — allowlist `python.exe`. |
-| `No UDP packets yet` | Forza's Data Out is off, IP/port is wrong, Windows Firewall is blocking, or try changing the IP from `127.0.0.1` to `::1`. |
-| Windows Defender / SmartScreen blocks `win_start.bat` | 1. On the blue "Windows protected your PC" screen, click **"More info"**.<br>2. Click the **"Run anyway"** button that appears at the bottom. (The script only downloads required dependencies.) |
-| Triggers feel weak | Raise `brake_max_force` / `throttle_max_force`, or lower the matching `curve`. |
-| Triggers feel like a brick wall | Lower `brake_max_force` / `throttle_max_force`, or raise the matching `curve`. |
-| Triggers feel stiff at a light press | Lower the baseline force, or raise the `curve`. |
-| No vibration on gear shift | Car must be moving faster than 3 km/h and changing between valid gears. |
-| Body haptics enabled but no USB grip feedback | Confirm Windows exposes a four-channel DualSense speaker endpoint and reconnect the controller by USB. Trigger effects continue even if audio startup fails. |
-| Bluetooth body haptics feel simpler than USB | Expected: Bluetooth uses compatible low/high rumble and cannot reproduce four independent audio layers. |
-| Console window is blank after the startup pulse | Run from a terminal with `cd src && uv run main.py --headless` to skip the TUI. |
+| 故障现象 | 解决方法 |
+|---------|---------|
+| `DualSense gamepad interface not found` | 手柄没有连接，或者 HidHide 屏蔽了手柄 - 请把 `python.exe` 添加到白名单中。 |
+| `No UDP packets yet` | 地平线游戏里的“数据输出（Data Out）”选项没有开启，IP 地址或端口填写错误，或者 Windows 防火墙进行了拦截。也可以尝试把数据输出 IP 从 `127.0.0.1` 更改为 `::1`。 |
+| Windows Defender / SmartScreen 拦截了 `win_start.bat` | 1. 在蓝色的“Windows 已保护你的电脑”警告弹窗中，点击 **“更多信息”**。<br>2. 点击右下角新出现的 **“仍要运行”** 按钮即可（脚本仅下载所需的依赖库，安全无毒）。 |
+| 扳机感觉太软（阻力太小） | 调大 `brake_max_force` / `throttle_max_force`，或者调小对应的阻力曲线 `curve` 数值。 |
+| 扳机感觉像一堵硬墙（阻力太大） | 调小 `brake_max_force` / `throttle_max_force`，或者调大对应的阻力曲线 `curve` 数值。 |
+| 轻按扳机时就感觉非常僵硬 | 调小基础力度 `baseline_force`，或者调大阻力曲线 `curve` 数值。 |
+| 换挡时没有任何震动反馈 | 车辆速度必须高于 3 km/h，并且处于有效挡位之间的切换状态。 |
+| 已启用握把触觉，但 USB 没有反馈 | 确认 Windows 显示一个四声道 DualSense 扬声器端点，并重新使用 USB 连接。即使音频启动失败，扳机效果仍会继续工作。 |
+| 蓝牙握把触觉比 USB 简单 | 这是正常现象。蓝牙使用高低频兼容震动，无法重现四个独立音频层。 |
+| 在启动脉冲过后面版窗口处于空白无响应状态 | 在终端中使用 `cd src && uv run main.py --headless` 运行以跳过 TUI 界面，改用纯控制台日志输出。 |
 
 ---
 
-## 📁 Project layout
+## 📁 项目结构
 
 ```
 src/
-├── main.py                          # Entry point
+├── main.py                          # 入口文件
 └── modules/
-    ├── settings.py                  # 👈 the file you edit
+    ├── settings.py                  # 👈 你需要调校参数的文件
     ├── dualsense/
-    │   ├── main.py                              # HID layer
-    │   └── adaptive_trigger.py                 # generic effect primitives
+    │   ├── main.py                              # HID 设备交互层
+    │   └── adaptive_trigger.py                 # 通用扳机效果原语
     └── forzahorizon/
-        ├── udp_listener.py                     # UDP parser
-        └── effects.py                          # Forza-aware Controller + animations
+        ├── udp_listener.py                     # UDP 遥测数据解析
+        └── effects.py                          # Forza 专属 Controller 与动画
 ```
 
 ---
 
-## 🎮 DSX Support
+## 🎮 DSX 支持
 
-I have integrated DSX (DualSenseX) support. Due to DSX limitations, you might not get the exact 1:1 experience, but I have done my best. A lower-fidelity version of the adaptive trigger effects is fully supported.
+我们已经集成了对 DSX (DualSenseX) 的支持。由于 DSX 的限制，您可能无法获得完美的 1:1 体验，但我已尽了最大努力。目前已完全支持较低保真度的自适应扳机效果。
 
 ![DSX Configuration](docs/img/dsxconfig.png)
 
 ---
 
-## 🙏 Credits
+## 🙏 赞助与致谢
 
-Built by **[HamzaYslmn](https://github.com/HamzaYslmn)**.
+由 **[HamzaYslmn](https://github.com/HamzaYslmn)** 开发完成。
 
-Body-haptics effect and USB-routing work was informed by
-**[HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics)**. See
-[`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) for its MIT notice.
+握把触觉效果与 USB 声道设计参考了
+**[HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics)**。其 MIT 许可声明见
+[`docs/THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
-### 💛 Sponsors
+### 💛 赞助者
 
-- **[Jared (jmac122)](https://github.com/jmac122)** — gifted me Forza Horizon 6 so this project could keep moving forward. Thank you, Jared!
-- **[BeaudinSan](https://github.com/BeaudinSan)** — thank you for your incredibly generous support! It truly means a lot to me. 
-- **[McLarenF1God](https://github.com/McLarenF1God)** — thank you for Forza Horizon 6 DLC's
-- **[Griever](https://steamcommunity.com/id/Griever666/)** — thank you for DSX + DLC's 
-- **[PlusMinusZer0](https://github.com/PlusMinusZer0)** — thank you for your Pudding!
-- **[dotcom](https://github.com/a0938670973-dotcom)** — thank you for your Cake!
-- **[wallbangz](https://github.com/wallbangz)** — thank you for your Cake!
-- **[BambinoPinguino](https://github.com/BambinoPinguino)** — thank you for your Tea!
-- **[Ereldun](https://steamcommunity.com/)** — thank you for your Coffee!
-- **[Clevens克林](https://steamcommunity.com/)** — thank you for your Candy!
-- **[海 拔 88](https://steamcommunity.com/)** — thank you for your Candy!
-- **[SeriousHamster](https://steamcommunity.com/)** — thank you for your Candy!
+- **[Jared (jmac122)](https://github.com/jmac122)** - 送给我《极限竞速：地平线 6》以支持这个项目能够继续维护下去，非常感谢你，Jared!
+- **[BeaudinSan](https://github.com/BeaudinSan)** - 感谢您极为慷慨的赞助支持！这对我有非凡的意义。
+- **[McLarenF1God](https://github.com/McLarenF1God)** - 感谢赞助《极限竞速：地平线 6》的 DLC！
+- **[Griever](https://steamcommunity.com/id/Griever666/)** - 感谢赞助 DSX 和 DLC！
+- **[PlusMinusZer0](https://github.com/PlusMinusZer0)** - 感谢送给我的布丁！
+- **[dotcom](https://github.com/a0938670973-dotcom)** - 感谢送给我的蛋糕！
+- **[wallbangz](https://github.com/wallbangz)** - 感谢送给我的蛋糕！
+- **[BambinoPinguino](https://github.com/BambinoPinguino)** - 感谢送给我的茶！
+- **[Ereldun](https://steamcommunity.com/)** - 感谢送给我的咖啡！
+- **[Clevens克林](https://steamcommunity.com/)** - 感谢送给我的糖果！
+- **[海 拔 88](https://steamcommunity.com/)** - 感谢送给我的糖果！
 
-A heartfelt thank you as well to the anonymous sponsors who quietly supported this project, and to everyone whose appreciation, kind words, and social media shares helped keep me motivated throughout the journey.
+同时，也要向默默支持该项目的匿名赞助者们，以及所有通过赞赏、鼓励和在社交媒体上分享，一路上给我带来动力的朋友们，致以最诚挚的感谢！
 
 ---
-*Built for an immersive racing experience*
+*为了更具沉浸感的赛车游戏体验而打造*

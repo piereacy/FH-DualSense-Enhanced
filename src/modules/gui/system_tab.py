@@ -41,6 +41,7 @@ def apply_sentinel(enabled: bool) -> None:
 class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
     SHOW_RESET = False
+    SHOW_ABOUT = False
     PAGE_TITLE = "System"
     PAGE_SUBTITLE = "Controller, updates, and app-level options."
 
@@ -61,7 +62,8 @@ class SystemTab(SettingsTab):
     def _build(self):
         self._build_controller_card()
         self._build_dsx_note()
-        self._build_updates_card()
+        if sentinel_path() is not None:
+            self._build_updates_card()
         # Standard sections from SYSTEM_SECTIONS
         super()._build()
         # Run after every card exists so the DSX/controller swap can reference them.
@@ -103,29 +105,28 @@ class SystemTab(SettingsTab):
         controller card for an explanatory note when DSX is on."""
         if self._controller_card is None or self._dsx_note is None:
             return
+        anchor = self._updates_card
+        if anchor is None:
+            anchor = next(
+                (widget for widget in self._scroll.pack_slaves()
+                 if widget not in (self._controller_card, self._dsx_note)),
+                None,
+            )
+        pack_options = {"fill": "x", "pady": (0, T.PAD_MD)}
+        if anchor is not None:
+            pack_options["before"] = anchor
         if self.settings.use_dsx:
             self._controller_card.pack_forget()
-            self._dsx_note.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD),
-                                before=self._updates_card)
+            self._dsx_note.pack(padx=T.PAD_MD, **pack_options)
         else:
             self._dsx_note.pack_forget()
-            self._controller_card.pack(fill="x", pady=(0, T.PAD_MD),
-                                       before=self._updates_card)
+            self._controller_card.pack(**pack_options)
 
     def _build_updates_card(self):
         card = self._updates_card = W.Card(self._scroll)
         card.pack(fill="x", pady=(0, T.PAD_MD))
         W.H2(card, t("Updates")).pack(anchor="w", padx=T.PAD_MD,
                                       pady=(T.PAD_MD, T.PAD_SM))
-        if sentinel_path() is None:
-            W.Danger(
-                card,
-                t("ZUV not found: this build is not running inside a ZUV bundle "
-                  "(ZUV_CACHE_ROOT env var is missing), so the update toggle has "
-                  "nothing to control. Run the bundled .zuv.py to manage updates."),
-                wrap=self.app.px(640),
-            ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
-            return
         self._update_switch = ctk.CTkSwitch(card,
                                             text=t("Check for updates at launch"),
                                             command=self._on_update_toggle)

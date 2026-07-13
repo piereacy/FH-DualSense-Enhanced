@@ -4,6 +4,7 @@
 NAME = "繁體中文（台灣）"
 
 STRINGS = {
+    "About and licenses": "關於與授權條款",
     # --- body haptics ---
     "Body haptics": "握把觸覺",
     "Enable body haptics": "啟用握把觸覺",
@@ -100,12 +101,15 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza 遙測（下次啟動生效）",
     "Startup pulse": "啟動震動",
     "Reconnect": "重新連線",
+    "Application behavior": "軟體行為",
     "Game detection": "遊戲偵測",
     "UDP port": "UDP 連接埠",
     "Startup buzz strength": "啟動震動強度",
     "Auto-reconnect when controller drops": "手把斷線時自動重新連線",
     "Reconnect check interval (s)": "重新連線檢查間隔（秒）",
     "Auto-exit when the game closes": "遊戲關閉時自動離開",
+    "Close the app when the game closes": "關閉遊戲後同時關閉軟體",
+    "Move the app to the tray when minimized": "最小化視窗後移至系統匣",
     "Game-watch check interval (s)": "遊戲監看檢查間隔（秒）",
 
     # --- DSX ---

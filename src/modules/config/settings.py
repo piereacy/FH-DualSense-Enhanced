@@ -21,9 +21,9 @@ class Settings:
     # MARK: L2 brake resistance
     # Rigid curve: 0..wall_engage_at maps baseline..max_force, then firmware wall at 100%.
     enable_brake_resistance: bool = True
-    brake_deadzone: int = 50                  # ignore pedal below this byte
-    brake_baseline_force: int = 18            # force at deadzone exit
-    brake_max_force: int = 80                 # peak force just before the wall
+    brake_deadzone: int = 0                   # community-informed baseline
+    brake_baseline_force: int = 0             # force at deadzone exit
+    brake_max_force: int = 5                  # peak force just before the wall
     brake_curve: float = 5.0                  # parabolic exponent; higher = softer mid, harder near wall
     brake_wall_engage_at: int = 250           # byte that triggers firmware wall. DO NOT CHANGE
     brake_wall_release_at: int = 200          # hysteresis exit byte. DO NOT CHANGE
@@ -32,25 +32,25 @@ class Settings:
     brake_static_wall_force: int = 255        # static wall strength
 
     # MARK: L2 handbrake bonus
-    enable_handbrake_bonus: bool = True
-    handbrake_bonus: int = 60                 # flat extra force while handbrake is engaged
+    enable_handbrake_bonus: bool = False
+    handbrake_bonus: int = 0                  # flat extra force while handbrake is engaged
 
     # MARK: L2 ABS pulse
     # Vibrates when tire slip crosses thresholds under hard braking.
     enable_abs: bool = True
-    abs_brake_threshold: int = 80             # min brake byte to arm
-    abs_min_speed_kmh: float = 15.0           # min speed to arm
-    abs_slip_ratio_threshold: float = 1.0     # per-wheel slip trigger
-    abs_combined_slip_threshold: float = 1.0  # combined slip trigger
-    abs_freq: int = 10                        # pulse frequency
-    abs_amp: int = 20                         # pulse amplitude
+    abs_brake_threshold: int = 255            # min brake byte to arm
+    abs_min_speed_kmh: float = 0.0            # min speed to arm
+    abs_slip_ratio_threshold: float = 0.3     # per-wheel slip trigger
+    abs_combined_slip_threshold: float = 0.3  # combined slip trigger
+    abs_freq: int = 60                        # pulse frequency
+    abs_amp: int = 90                         # pulse amplitude
 
     # MARK: R2 throttle resistance
     # Light rigid curve: 0..wall_engage_at maps baseline..max_force, then firmware wall at 100%.
     enable_throttle_resistance: bool = True
-    accel_deadzone: int = 50                  # ignore pedal below this byte
-    throttle_baseline_force: int = 1          # force at deadzone exit
-    throttle_max_force: int = 8               # peak force just before the wall (lighter than brake)
+    accel_deadzone: int = 0                   # community-informed baseline
+    throttle_baseline_force: int = 0          # force at deadzone exit
+    throttle_max_force: int = 1               # peak force just before the wall (lighter than brake)
     throttle_curve: float = 5.0               # parabolic exponent; higher = softer early, firmer near wall
     throttle_wall_engage_at: int = 250        # byte that triggers firmware wall. DO NOT CHANGE
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE
@@ -67,7 +67,7 @@ class Settings:
     # `wheelspin_amp` is the tarmac reference. Off-road / water amps scale off it
     # (water 0.5x, dirt 1.5x, gravel 2x). Surface freqs are fixed in code.
     enable_wheelspin_buzz: bool = True
-    wheelspin_amp: int = 3
+    wheelspin_amp: int = 90
 
     # MARK: R2 idle buzz
     # Engine-idle oscillation while stopped and accelerator pressed under ~25%.
@@ -77,25 +77,25 @@ class Settings:
     idle_accel_max: int = 64                  # upper byte (~25% of 255): idle fades out past this press
     idle_freq: int = 30                       # base vibrate Hz
     idle_amp_low: int = 1                     # quiet half of the cycle
-    idle_amp_high: int = 30                  # loud half of the cycle
+    idle_amp_high: int = 60                   # loud half of the cycle
     idle_period_s: float = 0.5                # full cycle length (sec)
 
     # MARK: Gear shift
     # One short burst on up/downshift while moving.
-    enable_gear_shift: bool = True            # buzz on R2
-    enable_gear_shift_brake: bool = True      # also buzz on L2 via the wall
+    enable_gear_shift: bool = False           # buzz on R2
+    enable_gear_shift_brake: bool = False     # also buzz on L2 via the wall
     gear_shift_freq: int = 10
-    gear_shift_amp: int = 255
+    gear_shift_amp: int = 10
     gear_shift_duration_ms: float = 100.0     # burst length
 
     # MARK: Body haptics
     # USB uses four-channel audio haptics. Bluetooth automatically falls back
     # to compatible rumble through the existing HID output report.
-    enable_body_haptics: bool = False
-    body_haptics_intensity: float = 1.0
-    engine_haptics_intensity: float = 1.0
-    road_haptics_intensity: float = 1.0
-    impact_haptics_intensity: float = 1.0
+    enable_body_haptics: bool = True
+    body_haptics_intensity: float = 0.5
+    engine_haptics_intensity: float = 0.5
+    road_haptics_intensity: float = 0.7
+    impact_haptics_intensity: float = 2.0
     slip_haptics_intensity: float = 1.0
     slip_haptics_threshold: float = 0.8
     collision_haptics_jerk_threshold: float = 3.0
@@ -131,9 +131,10 @@ class Settings:
     # Module name in `lang/` (en, tr, zh, zh_tw, ja). Unknown codes fall back to English.
     language: str = "en"
 
-    # MARK: System - auto exit
+    # MARK: System - application behavior
     # Closes when the game process disappears; telemetry-lost is a fallback for Task Manager kills.
     exit_on_game_close: bool = True
+    minimize_to_tray: bool = True
     game_process_name_contains: tuple = ("forza",)   # substring match, case-insensitive
     game_poll_interval_s: float = 2.0                # psutil scan cadence
     telemetry_lost_exit_s: float = 60.0              # quit if no packets for this long after first packet

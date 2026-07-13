@@ -89,8 +89,9 @@ class _Manager:
     instances = []
     raises = False
 
-    def __init__(self, controller, settings):
+    def __init__(self, controller, settings, audio=None):
         self.controller = controller
+        self.audio = audio
         self.frames = []
         self.closed = False
         type(self).instances.append(self)
@@ -210,3 +211,20 @@ def test_haptics_failure_does_not_block_trigger_output(monkeypatch):
         (off(), off(), None),
     ]
     assert _Manager.instances[0].closed is True
+
+
+def test_loop_injects_shared_usb_audio_into_haptic_manager(monkeypatch):
+    _install(monkeypatch)
+    controller = _DualSense()
+    listener = _Listener([(b"packet", ("127.0.0.1", 5300))])
+    shared_audio = object()
+
+    loop.run(
+        controller,
+        listener,
+        _settings(),
+        stop_event=_StopEvent(1),
+        usb_audio=shared_audio,
+    )
+
+    assert _Manager.instances[0].audio is shared_audio

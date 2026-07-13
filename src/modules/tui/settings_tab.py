@@ -7,6 +7,7 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Input, Label, Switch
 
 from lang import t
+from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
 from modules.config import preferences
 from modules.tui.widgets import RangeSlider
 
@@ -96,8 +97,11 @@ SYSTEM_SECTIONS = [
         ("enable_reconnect", "Auto-reconnect when controller drops", None, None, ""),
         ("reconnect_interval_s", "Reconnect check interval (s)", 0.1, 60.0, ""),
     ]),
+    ("Application behavior", [
+        ("exit_on_game_close", "Close the app when the game closes", None, None, ""),
+        ("minimize_to_tray", "Move the app to the tray when minimized", None, None, ""),
+    ]),
     ("Game detection", [
-        ("exit_on_game_close", "Auto-exit when the game closes", None, None, ""),
         ("game_poll_interval_s", "Game-watch check interval (s)", 0.1, 60.0, ""),
     ]),
 ]
@@ -169,11 +173,14 @@ class SettingsTab(VerticalScroll):
         padding: 0 1 1 3;
     }
     SettingsTab #reset-settings { width: 1fr; margin: 2 0 1 0; }
+    SettingsTab Label.about-copy { width: 1fr; height: auto; padding: 1; }
+    SettingsTab Button.about-link { width: 1fr; margin: 0 1 1 1; }
     SystemTab Label.error { width: 1fr; height: auto; color: $error; padding: 1; text-style: bold; }
     """
 
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
+    SHOW_ABOUT = True
 
     def __init__(self, settings):
         super().__init__()
@@ -233,6 +240,11 @@ class SettingsTab(VerticalScroll):
                         yield Input(value=_format_value(value), id=f"set-{attr}")
                 if hint:
                     yield Label(t(hint), classes="hint")
+        if self.SHOW_ABOUT:
+            yield Label(t("About and licenses"), classes="section")
+            yield Label(ATTRIBUTION, classes="about-copy")
+            yield Button(f"Source: {SOURCE_URL}", id="about-source", classes="about-link")
+            yield Button(f"Sponsor: {SPONSOR_URL}", id="about-sponsor", classes="about-link")
         if self.SHOW_RESET:
             yield Button(t("Reset to defaults"), id="reset-settings", variant="error")
 
@@ -345,6 +357,12 @@ class SettingsTab(VerticalScroll):
     # ---- Reset (two-click confirm) ---------------------------------------
 
     def on_button_pressed(self, event: Button.Pressed):
+        if event.button.id == "about-source":
+            self.app._open_url(SOURCE_URL)
+            return
+        if event.button.id == "about-sponsor":
+            self.app._open_url(SPONSOR_URL)
+            return
         if event.button.id != "reset-settings":
             return
         if not self._reset_armed:

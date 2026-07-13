@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Forza-Horizon-DualSense (Linux).
+"""PyInstaller spec for FH-DualSense-Enhanced (Linux).
 
 One-file ELF binary. On launch the bootloader extracts everything into a
 temp dir (MEIPASS) and auto-deletes it on exit. No Windows VERSIONINFO and
@@ -20,6 +20,7 @@ datas = [
     (str(SRC / "data" / "icon.png"), "data"),
     (str(SRC / "pyproject.toml"), "."),
     (str(SRC / "lang"), "lang"),
+    (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "docs" / "THIRD_PARTY_NOTICES.md"), "docs"),
 ]
 datas += collect_data_files("customtkinter")
@@ -51,7 +52,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="FH-DualSense",
+    name="FH-DualSense-Enhanced",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

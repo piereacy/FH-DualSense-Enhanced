@@ -54,6 +54,7 @@ def apply_sentinel(enabled: bool) -> None:
 class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
     SHOW_RESET = False
+    SHOW_ABOUT = False
 
     DEFAULT_CSS = """
     SystemTab #controller-buttons { height: 3; padding: 0 1; }
@@ -80,15 +81,8 @@ class SystemTab(SettingsTab):
             classes="hint",
         )
 
-        yield Label(t("Updates"), classes="section")
-        if sentinel_path() is None:
-            yield Label(
-                t("ZUV not found: this build is not running inside a ZUV bundle "
-                  "(ZUV_CACHE_ROOT env var is missing), so the update toggle has "
-                  "nothing to control. Run the bundled .zuv.py to manage updates."),
-                classes="error",
-            )
-        else:
+        if sentinel_path() is not None:
+            yield Label(t("Updates"), classes="section")
             with Horizontal(classes="row"):
                 yield Switch(value=self.settings.check_for_updates, id="check_for_updates")
                 yield Label(t("Check for updates at launch"))

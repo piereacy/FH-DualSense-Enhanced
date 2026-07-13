@@ -9,10 +9,12 @@ from textual.containers import Horizontal
 from textual.widgets import Button, Header, Input, Static, Switch, TabbedContent, TabPane
 
 from lang import set_language, t
+from modules.about import APP_NAME
 from modules import loop, forzahorizon, make_backend
 from modules.config import preferences, profiles
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.config.preferences import _version
+from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
@@ -69,18 +71,13 @@ class TriggerTUI(App):
         border: none; background: transparent; color: $text-muted;
     }
     .bb-btn:hover { background: $accent 30%; color: $text; }
-    #bb-sponsor { background: hotpink; color: white; text-style: bold; }
-    #bb-sponsor:hover { background: deeppink; color: white; }
     #bb-changelog { color: $accent; text-style: bold; }
     #bb-changelog:hover { background: $accent 30%; color: $text; }
     """
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("s", "sponsor", "♥ Sponsor"),
     ]
     HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (80, "-normal"), (120, "-wide")]
-    SPONSOR_URL = "https://github.com/sponsors/HamzaYslmn"
-    CHANGELOG_URL = "https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python/releases/latest"
 
     def __init__(self, settings):
         super().__init__()
@@ -93,6 +90,8 @@ class TriggerTUI(App):
         self._listener = None
         self._status_timer = None
         self._tearing_down = False
+        self._usb_audio = UsbAudioHaptics()
+        self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -116,13 +115,11 @@ class TriggerTUI(App):
         with Horizontal(id="bottombar"):
             yield Button(f"q  {t('Quit')}", id="bb-quit", classes="bb-btn")
             yield Static(id="bb-spacer")
-            yield Button(t("Changelog"), id="bb-changelog", classes="bb-btn")
-            yield Button(t("♥ Sponsor"), id="bb-sponsor", classes="bb-btn")
 
     # --- lifecycle ----------------------------------------------------------
 
     def on_mount(self):
-        self.title = "FH DualSense"
+        self.title = APP_NAME
         self.sub_title = f"UDP {self.settings.udp_host}:{self.settings.udp_port}"
 
         root = logging.getLogger()
@@ -153,6 +150,7 @@ class TriggerTUI(App):
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=2.0)
+        self._usb_audio_lifecycle.close()
         if self._listener_cm:
             self._listener_cm.__exit__(None, None, None)
         if self._ds:
@@ -185,7 +183,13 @@ class TriggerTUI(App):
 
     def _run_loop(self):
         try:
-            loop.run(self._ds, self._listener, self.settings, stop_event=self._stop)
+            loop.run(
+                self._ds,
+                self._listener,
+                self.settings,
+                stop_event=self._stop,
+                usb_audio=self._usb_audio,
+            )
         except Exception:
             # An unexpected error here would otherwise kill the backend thread
             log.exception("Telemetry loop crashed")
@@ -224,14 +228,11 @@ class TriggerTUI(App):
         # webbrowser.open() can block while a browser cold-starts
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
 
-    def on_click(self, event) -> None:
-        widget = getattr(event, "widget", None)
-        if widget is not None and widget.id == "version":
-            self._open_url(self.CHANGELOG_URL)
-
     # --- topbar / logs bridge -----------------------------------------------
 
     def refresh_status(self):
+        controller = self._ds if self._listener is not None else None
+        self._usb_audio_lifecycle.sync(controller, self.settings)
         connected = bool(self._ds and self._ds.connected)
         if self.settings.use_dsx:
             state = (f"[bold dodgerblue]{t('DSX: active')}[/]" if connected
@@ -297,19 +298,7 @@ class TriggerTUI(App):
 
     # --- bottombar / bindings -----------------------------------------------
 
-    def action_sponsor(self):
-        self._open_url(self.SPONSOR_URL)
-        log.info("Opened sponsor page: %s", self.SPONSOR_URL)
-
-    def action_changelog(self):
-        self._open_url(self.CHANGELOG_URL)
-        log.info("Opened changelog: %s", self.CHANGELOG_URL)
-
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id
         if bid == "bb-quit":
             self.exit()
-        elif bid == "bb-sponsor":
-            self.action_sponsor()
-        elif bid == "bb-changelog":
-            self.action_changelog()

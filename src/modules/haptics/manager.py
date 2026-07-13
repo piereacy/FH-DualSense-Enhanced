@@ -15,11 +15,13 @@ class HapticManager:
         controller,
         settings,
         audio_factory: Callable[[], UsbAudioHaptics] = UsbAudioHaptics,
+        audio: UsbAudioHaptics | None = None,
     ):
         self._controller = controller
         self._settings = settings
         self._audio_factory = audio_factory
-        self._audio = None
+        self._audio = audio
+        self._owns_audio = audio is None
         self._mode: str | None = None
         self._last_transport: str | None = None
         self._bluetooth_rumble_owned = False
@@ -38,15 +40,24 @@ class HapticManager:
         log.warning(message, *args)
 
     def _stop_audio(self) -> None:
-        if self._audio is None or not self._audio.running:
+        if self._audio is None:
             return
         try:
             self._audio.set_frame(SILENT_FRAME)
-            self._audio.stop()
+            if self._owns_audio and self._audio.running:
+                self._audio.stop()
         except Exception as exc:
             self._warn_once("audio-stop", "USB body haptics failed to stop cleanly: %s", exc)
 
     def _route_usb(self, frame: HapticFrame) -> None:
+        if self._audio is not None and not self._owns_audio:
+            try:
+                self._audio.set_frame(frame)
+                self._mode = "usb" if self._audio.running else None
+            except Exception as exc:
+                self._warn_once("audio-route", "USB body haptics backend failed: %s", exc)
+                self._mode = None
+            return
         if self._usb_start_failed:
             return
         try:

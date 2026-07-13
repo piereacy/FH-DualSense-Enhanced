@@ -9,6 +9,7 @@ load_dotenv("./dev.env")
 
 
 from modules import forzahorizon, make_backend, setup_logging, loop
+from modules.about import APP_NAME
 from modules.config import paths, preferences, Settings
 
 log = logging.getLogger("fhds")
@@ -70,7 +71,9 @@ def _confirm(prompt: str) -> bool:
 
 # MARK: Entry point
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(description="FH DualSense adaptive triggers and optional body haptics")
+    p = argparse.ArgumentParser(
+        description=f"{APP_NAME} adaptive triggers and optional body haptics"
+    )
     p.add_argument("--host", default="127.0.0.1", help="UDP bind address")
     p.add_argument("--port", type=int, default=None, help="UDP port")
     p.add_argument("--debug", action="store_true", help="Verbose per-packet logs")

@@ -1,26 +1,37 @@
 @echo off
-REM FH DualSense - Windows launcher (zuv).
-REM Bundle lives in app/. Auto-downloads from GitHub Releases if missing.
-REM Set PRERELEASE=true to track rolling test builds (v999.0.0 tag).
+REM FH-DualSense-Enhanced Windows launcher.
+REM Downloads the ZUV bundle when needed and lets uv provision Python.
 setlocal EnableDelayedExpansion
-
-set "PRERELEASE=false"
 
 set "DIR=%~dp0"
 set "APP=%DIR%app"
-set "BUNDLE=%APP%\fhds.zuv.py"
-set "REPO=HamzaYslmn/Forza-Horizon-DualSense-Python"
+set "BUNDLE=%APP%\FH-DualSense-Enhanced.zuv.py"
+set "MANUAL=%DIR%FH-DualSense-Enhanced.zuv.py"
+set "REPO=piereacy/FH-DualSense-Enhanced"
+set "URL=https://github.com/%REPO%/releases/latest/download/FH-DualSense-Enhanced.zuv.py"
+set "FLAGS="
+set "GAME="
 
-if /i "%PRERELEASE%"=="true" (
-    set "URL=https://github.com/%REPO%/releases/download/v999.0.0/fhds.zuv.py"
-    set "FLAGS=--prerelease"
-) else (
-    set "URL=https://github.com/%REPO%/releases/latest/download/fhds.zuv.py"
-    set "FLAGS="
+if not exist "%APP%" mkdir "%APP%"
+if not exist "%BUNDLE%" (
+    if exist "%MANUAL%" (
+        echo Using manually downloaded FH-DualSense-Enhanced.zuv.py...
+        copy /y "%MANUAL%" "%BUNDLE%" >nul
+    )
+)
+if not exist "%BUNDLE%" (
+    echo Downloading FH-DualSense-Enhanced.zuv.py...
+    curl.exe -L --fail -o "%BUNDLE%" "%URL%" || (
+        echo ERROR: Download failed. Download the ZUV manually from:
+        echo https://github.com/%REPO%/releases
+        echo Then place it beside win_start.bat and retry.
+        pause
+        exit /b 1
+    )
 )
 
-REM Args starting with -- forward to bundle; rest = Steam wrapper game cmd.
-set "GAME="
+REM Args starting with -- are forwarded to the app. Other args form an optional
+REM Steam wrapper command, for example: start "" steam://rungameid/1551360
 :argloop
 if "%~1"=="" goto ready
 set "a=%~1"
@@ -36,40 +47,31 @@ goto next_arg
 :flag_arg
 set "FLAGS=!FLAGS! %1"
 :next_arg
-
 shift
 goto argloop
 
 :ready
-if not exist "%APP%" mkdir "%APP%"
-
-if not exist "%BUNDLE%" (
-    echo Downloading fhds.zuv.py...
-    curl.exe -L --fail -o "%BUNDLE%" "%URL%" || (
-        echo Download failed. Get it manually from https://github.com/%REPO%/releases
-        pause & exit /b 1
+where uv >nul 2>nul
+if errorlevel 1 (
+    echo Installing uv from https://astral.sh/uv/install.ps1 ...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+    set "PATH=%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin;%PATH%"
+    where uv >nul 2>nul || (
+        echo ERROR: uv was installed but is not available on PATH.
+        echo Restart Windows or install uv manually, then retry.
+        pause
+        exit /b 1
     )
 )
 
-where uv >nul 2>nul
-if errorlevel 1 (
-    echo Installing uv...
-    powershell -NoProfile -Command "irm https://astral.sh/uv/install.ps1 | iex"
-    set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-    where uv >nul 2>nul || (echo uv not on PATH - restart terminal. & pause & exit /b 1)
-)
-
-REM Optional Steam wrapper: pass game cmd (e.g. start "" steam://rungameid/1551360)
 if defined GAME start "" %GAME%
 
-REM Don't let host Python env leak into the bundled venv.
+REM Do not let a host Python installation leak into the managed ZUV runtime.
 set "PYTHONHOME="
 set "PYTHONPATH="
 set "PYTHONNOUSERSITE=1"
-REM Force uv to use its own managed Python (python-build-standalone) instead
 set "UV_PYTHON_PREFERENCE=only-managed"
 
-
 uv run "%BUNDLE%" %FLAGS%
-endlocal
-exit /b %ERRORLEVEL%
+set "RESULT=%ERRORLEVEL%"
+endlocal & exit /b %RESULT%

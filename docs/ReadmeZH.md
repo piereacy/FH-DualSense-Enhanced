@@ -1,13 +1,13 @@
 <p align="right">
-  <a href="../README.md">English</a> •
+  <a href="../README_EN.md">English</a> •
   <a href="ReadmeTR.md">Türkçe</a> •
   <a href="ReadmeJA.md">日本語</a> •
   <strong>简体中文</strong>
 </p>
 
 <div align="center">
-  <h1>🏎️ Forza Horizon - DualSense Adaptive Triggers</h1>
-  <p><strong>PC 端地平线（Forza Horizon）手柄真实扳机反馈。</strong></p>
+  <h1>🏎️ FH-DualSense-Enhanced</h1>
+  <p><strong>PC 端地平线（Forza Horizon）增强扳机与握把触觉反馈。</strong></p>
   <p><em>感受刹车。感受引擎。免去繁琐设置。</em></p>
 </div>
 
@@ -61,7 +61,7 @@
                                      └──────────────────┘
 ```
 
-握把触觉默认关闭，因此原有的纯扳机 HID 报告保持不变。启用后会自动根据连接方式选择输出：
+握把触觉默认开启，并会自动根据连接方式选择输出。若你只想使用自适应扳机，可以在设置中关闭握把触觉：
 
 - **USB：**通过 DualSense 的四声道 48 kHz 音频端点驱动左右触觉执行器，HID 震动字节保持不变。
 - **蓝牙：**将同一套遥测效果降级为高低频兼容震动，并与扳机效果放进同一份 HID 报告。
@@ -75,27 +75,26 @@ HID 设备仍使用非阻塞模式，并继续抑制重复状态写入。
 
 **运行要求:** Windows 10/11 或 Linux，以及 DualSense 手柄（USB 或蓝牙连接）。
 
-1. 前往 [最新发布版本 (latest release)](https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python/releases/latest)。
-2. 下载 **`win_start.bat`** (Windows) 或 **`linux_start.sh`** (Linux)。
-3. 将下载的文件放到任意一个空白文件夹中。
-4. **重要:** 我们强烈建议您先手动安装 **`uv`** 环境。打开 PowerShell 并运行以下命令：
+1. 前往当前 fork 的[最新发布版本](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest)。
+2. Windows 用户只需下载 **`win_start.bat`**；Linux 用户只需下载 **`linux_start.sh`**。
+3. 运行启动器。它会自动下载 ZUV 软件本体，并准备受管理的 Python 环境。
+4. 如果 Windows 无法自动安装 **`uv`**，请打开 PowerShell 并运行：
    ```powershell
    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
-   - 如果您跳过此步，`win_start.bat` 在启动时会尝试自动下载安装 `uv`。但 Windows 的执行策略（Execution Policy）可能会在 PowerShell 中拦截并导致自动安装失败。
-   - **如果遇到执行策略（Execution Policy）报错:** 在所在的文件夹中按住 **Shift + 右键**，点击 **“在此处打开 PowerShell 窗口”**，粘贴 `Set-ExecutionPolicy RemoteSigned -scope CurrentUser` 并回车，然后输入 `Y` 回车确认。
-5. 双击运行 `win_start.bat` (或 `linux_start.sh`)。
+   - `win_start.bat` 会优先尝试自动安装 `uv`。Windows 执行策略可能会拦截这个步骤。
+   - **如果遇到执行策略报错:** 在所在文件夹中按住 **Shift + 右键**，点击 **“在此处打开 PowerShell 窗口”**，粘贴 `Set-ExecutionPolicy RemoteSigned -scope CurrentUser` 并回车，然后输入 `Y` 回车确认。
 
-启动器会自动完成应用下载、环境配置以及程序启动。下次运行它时，还会自动检查更新。
+网络不稳定时，可从同一个 Release 手动下载 **`FH-DualSense-Enhanced.zuv.py`**，把它放在启动器旁边后重新运行。启动器会复用该文件，不再重复下载。正式发布的 ZUV 可以在“系统”页面启用更新检查后，从当前 fork 检查新版本。
 
 > [!NOTE]
-> 每个版本还附带一个独立的 **Windows `.exe`** 作为实验性选项。**推荐**的运行方式仍然是 **`win_start.bat`** —— 它会自动更新，并在所有 Windows 版本上以相同方式工作。
+> 每个版本还附带独立的 **`FH-DualSense-Enhanced-vX.Y.Z.exe`**。它不需要 Python 环境，但不会自动更新。
 
 > **Linux 额外说明:** 安装 `libhidapi` 依赖（`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`）并从 `app/packaging/linux/70-dualsense.rules` 添加 udev 规则。然后将手柄断开并重新连接一次。
 
 ### 🎮 使用 SISR 玩游戏（Xbox App / 微软商店版用户）
 
-如果您是在微软商店（Microsoft Store）或 Xbox App 上运行游戏，您将需要一个工具来让游戏把您的手柄识别为 Xbox 手柄。其中一个选择是 **[SISR（Steam Input System Redirector）](https://github.com/Alia5/SISR)** —— 它将 Steam Input 重定向到系统层级并模拟一个真实的 Xbox 手柄，因此即使在微软商店应用和带反作弊保护的游戏中也能正常工作。
+如果您是在微软商店（Microsoft Store）或 Xbox App 上运行游戏，您将需要一个工具来让游戏把您的手柄识别为 Xbox 手柄。其中一个选择是 **[SISR（Steam Input System Redirector）](https://github.com/Alia5/SISR)**：它将 Steam Input 重定向到系统层级并模拟一个真实的 Xbox 手柄，因此即使在微软商店应用和带反作弊保护的游戏中也能正常工作。
 
 因为 SISR 通过 **Steam Input** 转发手柄，Steam 可能会独占物理 DualSense 手柄，导致本程序无法连接。为了避免这个问题，**您必须按照以下严格的顺序启动程序**：
 
@@ -109,8 +108,8 @@ HID 设备仍使用非阻塞模式，并继续抑制重复状态写入。
 <summary>手动安装（适合开发者）</summary>
 
 ```bash
-git clone https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python
-cd Forza-Horizon-DualSense-Python/src
+# 使用 GitHub 的 Code 按钮克隆当前 fork，然后进入 src 目录。
+cd FH-DualSense-Enhanced/src
 uv sync
 uv run main.py
 ```
@@ -160,7 +159,7 @@ uv run main.py
 
 这可以确保您的 DualSense 固件保持最新状态。
 
-> ℹ️ **关于自适应扳机:** 正常情况下，Steam 并不支持此游戏在 DualSense 手柄上的自适应扳机效果。**本程序**的全部意义就在于——在 Steam 原生的震动效果基础之上，叠加还原真实的扳机反馈（刹车阻力、引擎颤动、ABS 脉动、换挡冲击、红线转速抖动）。
+> ℹ️ **关于自适应扳机:** 正常情况下，Steam 并不支持此游戏在 DualSense 手柄上的自适应扳机效果。**本程序**的全部意义就在于：在 Steam 原生的震动效果基础之上，叠加还原真实的扳机反馈（刹车阻力、引擎颤动、ABS 脉动、换挡冲击、红线转速抖动）。
 
 ---
 
@@ -215,9 +214,11 @@ cmd /c "start /MIN /D C:\您的路径\Forza-Horizon-DualSense-Python\src uv run 
 
 所有的效果（刹车力度、ABS 震动、换挡冲击、红线震动等）都可以在**程序的设置（Settings）页面**中进行调校或关闭，不需要手动编辑任何文件。修改将在下次启动程序时生效。
 
+默认参数参考了社区反馈，并结合实际测试进行了调校。它是一套实用起点，不代表适合每一只手柄、每一辆车或每一位玩家。
+
 ### 握把触觉
 
-打开**设置 -> 握把触觉**并启用**启用握把触觉**。该功能默认关闭，因此现有配置会保留原来的行为。
+握把触觉默认开启。打开**设置 -> 握把触觉**即可调整强度，或关闭**启用握把触觉**以仅保留扳机效果。
 
 握把触觉由遥测数据合成，不依赖《极限竞速：地平线》的游戏内**振动**选项。若您希望保留游戏的原生/Steam 震动，可以让该选项保持开启；只有当这些输出与合成握把触觉相互干扰或让振动感觉重复时，才将其关闭。
 
@@ -277,7 +278,7 @@ src/
 
 我们已经集成了对 DSX (DualSenseX) 的支持。由于 DSX 的限制，您可能无法获得完美的 1:1 体验，但我已尽了最大努力。目前已完全支持较低保真度的自适应扳机效果。
 
-![DSX Configuration](docs/img/dsxconfig.png)
+![DSX Configuration](img/dsxconfig.png)
 
 ---
 

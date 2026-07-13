@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Forza-Horizon-DualSense.
+"""PyInstaller spec for FH-DualSense-Enhanced.
 
 One-file, windowed (no console). On launch the bootloader extracts everything
 into %TEMP%\\_MEIxxxxxx (MEIPASS) and auto-deletes it on exit. Recent PyInstaller
@@ -42,13 +42,13 @@ VSVersionInfo(
   kids=[
     StringFileInfo([
       StringTable('040904B0', [
-        StringStruct('CompanyName', 'HamzaYslmn'),
-        StringStruct('FileDescription', 'Forza Horizon DualSense adaptive triggers'),
+        StringStruct('CompanyName', 'FH-DualSense-Enhanced Contributors'),
+        StringStruct('FileDescription', 'Enhanced Forza Horizon DualSense haptics'),
         StringStruct('FileVersion', '{VERSION}'),
-        StringStruct('InternalName', 'FH-DualSense'),
+        StringStruct('InternalName', 'FH-DualSense-Enhanced'),
         StringStruct('LegalCopyright', '(C) 2025 Hamza Yesilmen (HamzaYslmn). Attribution & Sponsor License.'),
-        StringStruct('OriginalFilename', 'FH-DualSense.exe'),
-        StringStruct('ProductName', 'FH DualSense'),
+        StringStruct('OriginalFilename', 'FH-DualSense-Enhanced.exe'),
+        StringStruct('ProductName', 'FH-DualSense-Enhanced'),
         StringStruct('ProductVersion', '{VERSION}'),
       ])
     ]),
@@ -62,6 +62,7 @@ datas = [
     (str(SRC / "data" / "icon.png"), "data"),
     (str(SRC / "pyproject.toml"), "."),
     (str(SRC / "lang"), "lang"),
+    (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "docs" / "THIRD_PARTY_NOTICES.md"), "docs"),
 ]
 datas += collect_data_files("customtkinter")
@@ -93,7 +94,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="FH-DualSense",
+    name="FH-DualSense-Enhanced",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

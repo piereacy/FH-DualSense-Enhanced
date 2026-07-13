@@ -4,6 +4,7 @@
 NAME = "Türkçe"
 
 STRINGS = {
+    "About and licenses": "Hakkında ve lisanslar",
     # --- body haptics ---
     "Body haptics": "Gövde dokunsal geri bildirimi",
     "Enable body haptics": "Gövde dokunsal geri bildirimini etkinleştir",
@@ -101,12 +102,15 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza telemetri (sonraki açılışta uygulanır)",
     "Startup pulse": "Başlangıç titreşimi",
     "Reconnect": "Yeniden bağlanma",
+    "Application behavior": "Uygulama davranışı",
     "Game detection": "Oyun algılama",
     "UDP port": "UDP portu",
     "Startup buzz strength": "Başlangıç titreşim gücü",
     "Auto-reconnect when controller drops": "Kumanda kopunca otomatik yeniden bağlan",
     "Reconnect check interval (s)": "Yeniden bağlanma kontrol aralığı (s)",
     "Auto-exit when the game closes": "Oyun kapanınca otomatik çık",
+    "Close the app when the game closes": "Oyun kapanınca uygulamayı da kapat",
+    "Move the app to the tray when minimized": "Küçültüldüğünde uygulamayı sistem tepsisine taşı",
     "Game-watch check interval (s)": "Oyun izleme kontrol aralığı (s)",
 
     # --- DSX ---

@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 import tkinter as tk
 
+from modules.about import APP_NAME
 from modules.config import paths
 
 log = logging.getLogger("fhds")
@@ -66,7 +67,7 @@ class TrayController:
             pystray.MenuItem("Show", _show, default=True),
             pystray.MenuItem("Quit", _quit),
         )
-        self._icon = pystray.Icon("fhds", image, "FH DualSense", menu)
+        self._icon = pystray.Icon("fh-dualsense-enhanced", image, APP_NAME, menu)
         self._thread = threading.Thread(target=self._icon.run, name="fhds-tray", daemon=True)
         self._thread.start()
         self._started = True

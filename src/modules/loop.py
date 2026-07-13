@@ -14,11 +14,14 @@ def _max_abs(t, prefix):
     return max(abs(t[f"{prefix}_{wheel}"]) for wheel in ("fl", "fr", "rl", "rr"))
 
 
-def run(ds, listener, s, stop_event=None):
+def run(ds, listener, s, stop_event=None, usb_audio=None):
     OFF = dualsense.adaptive_trigger.off()
     controller = forzahorizon.Controller(s)
     haptic_mixer = HapticMixer()
-    haptic_manager = HapticManager(ds, s)
+    if usb_audio is None:
+        haptic_manager = HapticManager(ds, s)
+    else:
+        haptic_manager = HapticManager(ds, s, audio=usb_audio)
     prev = None
     last_pkt = time.monotonic()
     last_log = 0.0

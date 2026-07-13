@@ -1,6 +1,6 @@
 @echo off
-REM Build a standalone single-file EXE of FH-DualSense.
-REM Output: packaging\windows\dist\FH-DualSense-vX.Y.Z.exe
+REM Build a standalone single-file EXE of FH-DualSense-Enhanced.
+REM Output: packaging\windows\dist\FH-DualSense-Enhanced-vX.Y.Z.exe
 REM (no install, no traces - MEIPASS auto-cleans on exit)
 REM Requires: uv  (https://docs.astral.sh/uv/)
 
@@ -25,7 +25,7 @@ if not defined VER (
     popd
     exit /b 1
 )
-echo Building FH-DualSense v%VER% ...
+echo Building FH-DualSense-Enhanced v%VER% ...
 
 set "DIST=%~dp0dist"
 set "WORK=%~dp0build"
@@ -35,7 +35,7 @@ if exist "%DIST%" (
     rmdir /s /q "%DIST%" 2>nul
     if exist "%DIST%" (
         echo.
-        echo ERROR: Could not clean "%DIST%" - a previous FH-DualSense.exe is probably still running.
+        echo ERROR: Could not clean "%DIST%" - a previous FH-DualSense-Enhanced.exe is probably still running.
         echo        Right-click the tray icon and choose Quit, then retry.
         popd
         exit /b 1
@@ -51,12 +51,13 @@ if errorlevel 1 (
 )
 
 REM MARK: rename output to include version
-if exist "%DIST%\FH-DualSense.exe" (
-    move /y "%DIST%\FH-DualSense.exe" "%DIST%\FH-DualSense-v%VER%.exe" >nul
+if exist "%DIST%\FH-DualSense-Enhanced.exe" (
+    move /y "%DIST%\FH-DualSense-Enhanced.exe" "%DIST%\FH-DualSense-Enhanced-v%VER%.exe" >nul
 )
 copy /y "docs\THIRD_PARTY_NOTICES.md" "%DIST%\THIRD_PARTY_NOTICES.md" >nul
+copy /y "LICENSE" "%DIST%\LICENSE" >nul
 
 echo.
-echo Build OK. Executable: %DIST%\FH-DualSense-v%VER%.exe
+echo Build OK. Executable: %DIST%\FH-DualSense-Enhanced-v%VER%.exe
 popd
 endlocal

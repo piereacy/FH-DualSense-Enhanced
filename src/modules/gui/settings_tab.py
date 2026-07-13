@@ -9,6 +9,7 @@ import threading
 import customtkinter as ctk
 
 from lang import t
+from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
 from modules.config import preferences
 
 from . import theme as T
@@ -99,8 +100,11 @@ SYSTEM_SECTIONS = [
         ("enable_reconnect", "Auto-reconnect when controller drops", None, None, ""),
         ("reconnect_interval_s", "Reconnect check interval (s)", 0.1, 60.0, ""),
     ]),
+    ("Application behavior", [
+        ("exit_on_game_close", "Close the app when the game closes", None, None, ""),
+        ("minimize_to_tray", "Move the app to the tray when minimized", None, None, ""),
+    ]),
     ("Game detection", [
-        ("exit_on_game_close", "Auto-exit when the game closes", None, None, ""),
         ("game_poll_interval_s", "Game-watch check interval (s)", 0.1, 60.0, ""),
     ]),
 ]
@@ -126,6 +130,7 @@ class SettingsTab(ctk.CTkFrame):
     """Header + scrollable sectioned list. System tab subclasses this."""
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
+    SHOW_ABOUT = True
     PAGE_TITLE = "Settings"
     PAGE_SUBTITLE = "All changes save instantly."
 
@@ -152,10 +157,34 @@ class SettingsTab(ctk.CTkFrame):
     def _build(self):
         for section, fields in self.SECTIONS:
             self._build_section_card(section, fields)
+        if self.SHOW_ABOUT:
+            self._build_about_card()
         if self.SHOW_RESET:
             self._reset_btn = W.DangerButton(self._scroll, t("Reset to defaults"),
                                              command=self._on_reset)
             self._reset_btn.pack(fill="x", pady=(T.PAD_MD, T.PAD_SM))
+
+    def _build_about_card(self):
+        card = W.Card(self._scroll)
+        card.pack(fill="x", pady=(0, T.PAD_MD))
+        W.H2(card, t("About and licenses")).pack(
+            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
+        )
+        W.Body(card, ATTRIBUTION, wraplength=self.app.px(620)).pack(
+            anchor="w", fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM)
+        )
+        W.GhostButton(
+            card,
+            text=f"Source: {SOURCE_URL}",
+            command=lambda: self.app._open_url(SOURCE_URL),
+            anchor="w",
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
+        W.GhostButton(
+            card,
+            text=f"Sponsor: {SPONSOR_URL}",
+            command=lambda: self.app._open_url(SPONSOR_URL),
+            anchor="w",
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
     def _build_section_card(self, section_title: str, fields: list):
         card = W.Card(self._scroll)

@@ -21,7 +21,7 @@ def test_windows_and_release_builds_install_audio_dependencies():
     assert "--with numpy --with sounddevice" in batch
     assert workflow.count("--with numpy --with sounddevice") == 2
     assert "THIRD_PARTY_NOTICES.md" in batch
-    assert "cp win_start.bat linux_start.sh docs/THIRD_PARTY_NOTICES.md release/" in workflow
+    assert "cp win_start.bat linux_start.sh LICENSE docs/THIRD_PARTY_NOTICES.md release/" in workflow
 
 
 def test_pyinstaller_specs_collect_sounddevice_runtime():
@@ -38,7 +38,7 @@ def test_pyinstaller_specs_collect_sounddevice_runtime():
 
 def test_horizonhaptics_notice_and_user_docs_are_present():
     notice = (ROOT / "docs/THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README_EN.md").read_text(encoding="utf-8")
     readme_zh = (ROOT / "docs/ReadmeZH.md").read_text(encoding="utf-8")
 
     assert "79fbe2fd7a56e21bd101867dbf14718f2e91ffab" in notice

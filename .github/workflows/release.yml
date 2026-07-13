@@ -79,9 +79,9 @@ jobs:
       - name: Build zuv bundle
         run: |
           mkdir -p release
-          uvx zuv build src -o release/fhds.zuv.py \
-            --update-repo HamzaYslmn/Forza-Horizon-DualSense-Python
-          cp win_start.bat linux_start.sh docs/THIRD_PARTY_NOTICES.md release/
+          uvx zuv build src -o release/FH-DualSense-Enhanced.zuv.py \
+            --update-repo "$GITHUB_REPOSITORY"
+          cp win_start.bat linux_start.sh LICENSE docs/THIRD_PARTY_NOTICES.md release/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
-      - name: Build FH-DualSense.exe
+      - name: Build FH-DualSense-Enhanced.exe
         shell: pwsh
         run: |
           uvx --from "pyinstaller>=6.11.1" `
@@ -114,14 +114,14 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ needs.prepare.outputs.tag }}"
-          $dest = "packaging\windows\dist\FH-DualSense-$tag.exe"
-          Move-Item -Force "packaging\windows\dist\FH-DualSense.exe" $dest
+          $dest = "packaging\windows\dist\FH-DualSense-Enhanced-$tag.exe"
+          Move-Item -Force "packaging\windows\dist\FH-DualSense-Enhanced.exe" $dest
           Write-Host "Built $dest"
 
       - uses: actions/upload-artifact@v4
         with:
           name: exe
-          path: packaging/windows/dist/FH-DualSense-*.exe
+          path: packaging/windows/dist/FH-DualSense-Enhanced-*.exe
 
   # MARK: Linux standalone ELF -------------------------------------------
   elf:
@@ -140,7 +140,7 @@ jobs:
             gir1.2-ayatanaappindicator3-0.1 \
             python3-gi gir1.2-gtk-3.0 libportaudio2
 
-      - name: Build FH-DualSense (ELF)
+      - name: Build FH-DualSense-Enhanced (ELF)
         run: |
           tag="${{ needs.prepare.outputs.tag }}"
           uvx --from "pyinstaller>=6.11.1" \
@@ -152,14 +152,14 @@ jobs:
               --distpath "$GITHUB_WORKSPACE/packaging/linux/dist" \
               --workpath "$GITHUB_WORKSPACE/packaging/linux/build" \
               --noconfirm --clean
-          mv "$GITHUB_WORKSPACE/packaging/linux/dist/FH-DualSense" \
-             "$GITHUB_WORKSPACE/packaging/linux/dist/FH-DualSense-$tag"
-          echo "Built packaging/linux/dist/FH-DualSense-$tag"
+          mv "$GITHUB_WORKSPACE/packaging/linux/dist/FH-DualSense-Enhanced" \
+             "$GITHUB_WORKSPACE/packaging/linux/dist/FH-DualSense-Enhanced-$tag"
+          echo "Built packaging/linux/dist/FH-DualSense-Enhanced-$tag"
 
       - uses: actions/upload-artifact@v4
         with:
           name: elf
-          path: packaging/linux/dist/FH-DualSense-v*
+          path: packaging/linux/dist/FH-DualSense-Enhanced-v*
 
   # MARK: combined release -----------------------------------------------
   release:
@@ -189,17 +189,19 @@ jobs:
           body: |
             ## ✅ Recommended: launcher scripts
 
-            Download **`win_start.bat`** (Windows) or **`linux_start.sh`** (Linux), drop it in any folder, and double-click. The launcher fetches `fhds.zuv.py`, installs `uv` if needed, runs the app, and self-updates on every launch. This is the supported path and works the same across all Windows versions.
+            Download **`win_start.bat`** on Windows or **`linux_start.sh`** on Linux and run it. The launcher downloads the ZUV application bundle, and the Windows launcher installs `uv` when needed. `uv` then provisions the managed Python runtime. The published ZUV checks this fork's releases for updates.
+
+            If the automatic download is unreliable, use the manual ZUV fallback: download **`FH-DualSense-Enhanced.zuv.py`** from this Release, place it beside the launcher, and run the launcher again.
 
             ## 🧪 Experimental: standalone binaries
 
-            `FH-DualSense.exe` (Windows) and `FH-DualSense-vX.Y.Z` (Linux) are one-file GUI builds (no install, MEIPASS auto-cleans on exit). They are **experimental** and do **not** self-update. The Linux binary is built on Ubuntu, so very old or very different distros may need the launcher instead. Prefer the launcher scripts unless you specifically can't run them.
+            `FH-DualSense-Enhanced-vX.Y.Z.exe` (Windows) and `FH-DualSense-Enhanced-vX.Y.Z` (Linux) are one-file GUI builds. They do not self-update. The Linux binary is built on Ubuntu, so very old or different distributions may need the ZUV launcher instead.
 
             ---
             > **Heads up**
-            > - The bundle self-updates each run from this release. Keep `fhds.zuv.py` next to your launcher script.
+            > - A manually downloaded ZUV can be kept next to the launcher script. The launcher copies it into its managed `app` folder.
             > - Settings live in `data/user_preferences.json` next to the launcher and survive updates.
             > - Linux: launcher offers to install `70-dualsense.rules` to `/etc/udev/rules.d/` once.
-            > - Prerelease channel: run `uv run fhds.zuv.py --prerelease` to track rolling test builds.
+            > - Prerelease channel: run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to track rolling test builds.
           files: release/*
 

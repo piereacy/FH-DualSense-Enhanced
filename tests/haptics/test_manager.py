@@ -183,3 +183,27 @@ def test_failed_usb_start_is_retried_after_transport_reconnect():
     manager.route(HapticFrame(right_low=0.3))
 
     assert factory.instances[0].start_calls == 2
+
+
+def test_external_usb_audio_receives_frames_without_worker_lifecycle_calls():
+    audio = _Audio()
+    manager = HapticManager(_Controller("usb"), _settings(), audio=audio)
+    frame = HapticFrame(left_low=0.3)
+
+    assert manager.route(frame) is None
+    manager.close()
+
+    assert audio.start_calls == 0
+    assert audio.stop_calls == 0
+    assert audio.frames == [frame, SILENT_FRAME]
+
+
+def test_external_usb_audio_does_not_change_bluetooth_routing():
+    audio = _Audio()
+    manager = HapticManager(_Controller("bluetooth"), _settings(), audio=audio)
+    frame = HapticFrame(right_high=0.7)
+
+    assert manager.route(frame) == to_compatible_rumble(frame)
+    assert audio.start_calls == 0
+    assert audio.stop_calls == 0
+    assert audio.frames == [SILENT_FRAME]

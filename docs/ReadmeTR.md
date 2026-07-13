@@ -6,7 +6,7 @@
 </p>
 
 <div align="center">
-  <h1>🏎️ Forza Horizon - DualSense Adaptive Triggers</h1>
+  <h1>🏎️ FH-DualSense-Enhanced</h1>
   <p><strong>PC'de Forza Horizon için gerçek tetik tepkisi.</strong></p>
   <p><em>Frenleri hisset. Motoru hisset. Kurulum karmaşası yok.</em></p>
 </div>
@@ -74,9 +74,9 @@ Bu yüzden ikisini aynı anda çalıştırabilirsiniz ve hiçbir şey birbirini 
 
 **Gereksinimler:** Windows 10/11 veya Linux ve bir DualSense kontrolcüsü (USB veya Bluetooth).
 
-1. [En son sürüme (latest release)](https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python/releases/latest) gidin.
-2. **`win_start.bat`** (Windows) veya **`linux_start.sh`** (Linux) dosyasını indirin.
-3. Dosyayı boş bir klasöre koyun.
+1. Bu fork'un [en son sürümüne](../../releases/latest) gidin.
+2. **`FH-DualSense-Enhanced.zuv.py`** ile birlikte **`win_start.bat`** (Windows) veya **`linux_start.sh`** (Linux) dosyasını indirin.
+3. ZUV paketini ve başlatıcıyı aynı klasörde tutun.
 4. **Önemli:** Öncelikle **`uv`** aracını manuel olarak kurmanızı şiddetle tavsiye ederiz. PowerShell'i açıp şu komutu çalıştırın:
    ```powershell
    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
@@ -85,16 +85,16 @@ Bu yüzden ikisini aynı anda çalıştırabilirsiniz ve hiçbir şey birbirini 
    - **Eğer Çalıştırma Politikası hatası alırsanız:** Klasörde **Shift + Sağ Tık** yapın, **"PowerShell penceresini burada açın"** seçeneğine tıklayın, `Set-ExecutionPolicy RemoteSigned -scope CurrentUser` yapıştırıp Enter'a basın, ardından `Y` yazıp tekrar Enter'a basın.
 5. `win_start.bat` (veya `linux_start.sh`) dosyasına çift tıklayarak çalıştırın.
 
-Başlatıcı (launcher) uygulamanın indirilmesini, ortamın hazırlanmasını ve çalıştırılmasını otomatik halleder. Sonraki açılışlarda güncellemeleri de denetler.
+Başlatıcı yönetilen Python ortamını hazırlar ve yanındaki ZUV paketini çalıştırır. Yayınlanan ZUV, Sistem sayfasında güncelleme denetimi etkinleştirildiğinde bu fork'taki güncellemeleri kontrol edebilir.
 
 > [!NOTE]
-> Her sürüme deneysel bir seçenek olarak ayrıca tek dosyalık bir **Windows `.exe`** de eklenmiştir. Uygulamayı çalıştırmanın **önerilen** yolu yine **`win_start.bat`**'tır — kendini günceller ve her Windows sürümünde aynı şekilde çalışır.
+> Her sürüm ayrıca bağımsız bir **`FH-DualSense-Enhanced-vX.Y.Z.exe`** içerir. Python ortamı gerektirmez, ancak kendini güncellemez.
 
 > **Linux ekstraları:** `libhidapi` paketini kurun (`sudo apt install libhidapi-hidraw0` / `sudo pacman -S hidapi` / `sudo dnf install hidapi`) ve `app/packaging/linux/70-dualsense.rules` dosyasındaki udev kuralını ekleyin. Ardından kontrolcüyü bir kez çıkarıp geri takın.
 
 ### 🎮 SISR ile Oynama (Xbox Uygulaması / Windows Mağazası kullanıcıları)
 
-Oyunu Xbox Uygulaması veya Microsoft Store üzerinden oynuyorsanız, oyunun kontrolcünüzü Xbox kumandası olarak tanıması için bir araca ihtiyacınız olacak. Seçeneklerden biri **[SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR)** — Steam Input'u sistem seviyesine yönlendirip gerçek bir Xbox kontrolcüsü taklit eder, böylece Windows Mağazası uygulamaları ve hile korumalı (anti-cheat) oyunlarda bile çalışır.
+Oyunu Xbox Uygulaması veya Microsoft Store üzerinden oynuyorsanız, oyunun kontrolcünüzü Xbox kumandası olarak tanıması için bir araca ihtiyacınız olacak. Seçeneklerden biri **[SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR)** - Steam Input'u sistem seviyesine yönlendirip gerçek bir Xbox kontrolcüsü taklit eder, böylece Windows Mağazası uygulamaları ve hile korumalı (anti-cheat) oyunlarda bile çalışır.
 
 SISR kontrolcüyü **Steam Input** üzerinden yönlendirdiği için, Steam fiziksel DualSense'i özel olarak ele geçirip bu uygulamanın bağlanmasını engelleyebilir. Bunu önlemek için **programları tam olarak şu sırayla başlatmalısınız**:
 
@@ -108,8 +108,8 @@ SISR kontrolcüyü **Steam Input** üzerinden yönlendirdiği için, Steam fizik
 <summary>Manuel kurulum (geliştiriciler için)</summary>
 
 ```bash
-git clone https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python
-cd Forza-Horizon-DualSense-Python/src
+# Bu fork'u GitHub Code düğmesiyle klonlayın, sonra src dizinine girin.
+cd FH-DualSense-Enhanced/src
 uv sync
 uv run main.py
 ```

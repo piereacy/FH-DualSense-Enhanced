@@ -4,6 +4,7 @@
 NAME = "Русский"
 
 STRINGS = {
+    "About and licenses": "О программе и лицензиях",
     # --- body haptics ---
     "Body haptics": "Тактильная отдача корпуса",
     "Enable body haptics": "Включить тактильную отдачу корпуса",
@@ -103,12 +104,15 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza-телеметрия (применится при следующем запуске)",
     "Startup pulse": "Импульс при запуске",
     "Reconnect": "Переподключение",
+    "Application behavior": "Поведение приложения",
     "Game detection": "Определение игры",
     "UDP port": "UDP-порт",
     "Startup buzz strength": "Сила вибрации при запуске",
     "Auto-reconnect when controller drops": "Автопереподключение при отключении геймпада",
     "Reconnect check interval (s)": "Интервал проверки подключения (с)",
     "Auto-exit when the game closes": "Автовыход при закрытии игры",
+    "Close the app when the game closes": "Закрывать приложение после выхода из игры",
+    "Move the app to the tray when minimized": "Сворачивать приложение в системный трей",
     "Game-watch check interval (s)": "Интервал проверки игры (с)",
 
     # --- DSX ---

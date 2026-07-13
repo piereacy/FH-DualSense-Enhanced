@@ -11,6 +11,13 @@ from modules.haptics.mixer import HapticMixer
 def settings():
     value = Settings()
     value.enable_body_haptics = True
+    value.body_haptics_intensity = 1.0
+    value.engine_haptics_intensity = 1.0
+    value.road_haptics_intensity = 1.0
+    value.impact_haptics_intensity = 1.0
+    value.slip_haptics_intensity = 1.0
+    value.accel_deadzone = 50
+    value.abs_min_speed_kmh = 15.0
     return value
 
 

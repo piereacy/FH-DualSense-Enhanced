@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build a standalone single-file ELF of FH-DualSense.
-# Output: packaging/linux/dist/FH-DualSense-vX.Y.Z
+# Build a standalone single-file ELF of FH-DualSense-Enhanced.
+# Output: packaging/linux/dist/FH-DualSense-Enhanced-vX.Y.Z
 # (no install, no traces - MEIPASS auto-cleans on exit)
 # Requires: uv  (https://docs.astral.sh/uv/)
 set -e
@@ -16,7 +16,7 @@ if [ -z "$VER" ]; then
     echo "Could not read version from src/pyproject.toml"
     exit 1
 fi
-echo "Building FH-DualSense v$VER ..."
+echo "Building FH-DualSense-Enhanced v$VER ..."
 
 rm -rf "$WORK" "$DIST"
 
@@ -29,8 +29,8 @@ uvx --from "pyinstaller>=6.11.1" \
     --noconfirm --clean
 
 # MARK: rename output to include version
-mv -f "$DIST/FH-DualSense" "$DIST/FH-DualSense-v$VER"
-chmod +x "$DIST/FH-DualSense-v$VER"
+mv -f "$DIST/FH-DualSense-Enhanced" "$DIST/FH-DualSense-Enhanced-v$VER"
+chmod +x "$DIST/FH-DualSense-Enhanced-v$VER"
 
 echo
-echo "Build OK. Binary: $DIST/FH-DualSense-v$VER"
+echo "Build OK. Binary: $DIST/FH-DualSense-Enhanced-v$VER"

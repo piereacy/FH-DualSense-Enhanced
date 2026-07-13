@@ -4,6 +4,7 @@
 NAME = "Deutsch"
 
 STRINGS = {
+    "About and licenses": "Info und Lizenzen",
     # --- body haptics ---
     "Body haptics": "Körperhaptik",
     "Enable body haptics": "Körperhaptik aktivieren",
@@ -101,12 +102,15 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza-Telemetrie (wird beim nächsten Start übernommen)",
     "Startup pulse": "Start-Impuls",
     "Reconnect": "Wiederverbinden",
+    "Application behavior": "Anwendungsverhalten",
     "Game detection": "Spielerkennung",
     "UDP port": "UDP-Port",
     "Startup buzz strength": "Start-Surrstärke",
     "Auto-reconnect when controller drops": "Automatisch wiederverbinden bei Controller-Verlust",
     "Reconnect check interval (s)": "Prüfintervall für Wiederverbindung (s)",
     "Auto-exit when the game closes": "Automatisch beenden, wenn das Spiel schließt",
+    "Close the app when the game closes": "App schließen, wenn das Spiel beendet wird",
+    "Move the app to the tray when minimized": "App beim Minimieren in den Infobereich verschieben",
     "Game-watch check interval (s)": "Prüfintervall der Spielüberwachung (s)",
 
     # --- DSX ---
