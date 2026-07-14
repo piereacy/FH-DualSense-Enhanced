@@ -90,5 +90,5 @@
 - [x] Run focused tests after every task and mark completed plan checkboxes.
 - [x] Run `uv run --project src pytest -q` and `git diff --check`.
 - [x] Audit `git diff --stat`, `git status --short --branch`, settings parity and version metadata.
-- [x] Record implemented behavior separately from pending USB, Bluetooth and DSX physical verification in `docs/PROJECT_STATE.md`.
+- [x] Record implemented behavior and USB/Bluetooth physical verification in `docs/PROJECT_STATE.md`; record DSX as explicitly outside the current physical-validation and adaptation scope.
 - [ ] Perform phase-separated hardware tests with the user before changing R2 version or publishing a release.

@@ -4,7 +4,7 @@
 
 - 日期：2026-07-14
 - 分支：`feat/r2-trigger-dynamics`
-- 状态：实现和自动测试完成，USB/BT 核心手感已确认，DSX/真实遥测待验证
+- 状态：实现和自动测试完成，USB/BT 核心手感与 Bluetooth 真实主路径已确认；DSX 实机适配与验证明确不在当前范围
 - 范围：动态轮胎打滑 R2、GT7 风格 ABS L2、折叠实验性设置
 
 ## 目标与边界
@@ -44,4 +44,4 @@ R2 在现有 `TriggerAnimations` 和 `Controller` 优先级链中升级 wheelspi
 
 - 自动测试覆盖驱动轮 longitudinal slip、松油漂移排除、低速 raw rotation、surface signature、EWMA attack/release、hysteresis、ABS 动态 zoned wall、hold、低速 gating 与 DSX fallback。
 - GUI/TUI 字段集合一致，实验性区域默认折叠，新增字段可以 Profile round-trip。
-- 全量 pytest 通过后，再分别进行 USB、Bluetooth 和 DSX 实机验证；未做的硬件路径必须记录为待确认。
+- 全量 pytest 通过后，进行 USB 与 Bluetooth 实机验证。DSX 只保留现有 fallback 和自动回归，不进行实机适配、调校或效果承诺，也不作为发布门槛。
