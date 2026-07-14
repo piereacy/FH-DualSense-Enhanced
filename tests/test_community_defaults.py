@@ -47,3 +47,46 @@ def test_named_profile_is_not_overwritten(tmp_path, monkeypatch):
     raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
     assert raw["profiles"]["Custom"]["brake_max_force"] == 4
     assert settings.brake_max_force == 4
+
+
+def test_r2_named_profile_old_redline_defaults_migrate_to_r3(tmp_path, monkeypatch):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    custom = dict(EXPECTED)
+    custom["rev_limit_freq"] = 30
+    custom["rev_limit_amp"] = 12
+    preferences.PATH.write_text(json.dumps({
+        "version": "2",
+        "active_profile": "Custom",
+        "profiles": {"Custom": custom},
+        "globals": {},
+    }), encoding="utf-8")
+
+    settings = Settings()
+    preferences.load(settings)
+
+    raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+    assert settings.rev_limit_freq == 10
+    assert settings.rev_limit_amp == 96
+    assert raw["profiles"]["Custom"]["rev_limit_freq"] == 10
+    assert raw["profiles"]["Custom"]["rev_limit_amp"] == 96
+
+
+def test_r2_named_profile_custom_redline_values_are_preserved(tmp_path, monkeypatch):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    custom = dict(EXPECTED)
+    custom["rev_limit_freq"] = 7
+    custom["rev_limit_amp"] = 144
+    preferences.PATH.write_text(json.dumps({
+        "version": "2",
+        "active_profile": "Custom",
+        "profiles": {"Custom": custom},
+        "globals": {},
+    }), encoding="utf-8")
+
+    settings = Settings()
+    preferences.load(settings)
+
+    assert settings.rev_limit_freq == 7
+    assert settings.rev_limit_amp == 144

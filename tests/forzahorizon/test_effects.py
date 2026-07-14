@@ -38,6 +38,12 @@ def _settled_wheelspin(animation, telemetry, settings, start=1.0):
     return animation.wheelspin_buzz(telemetry, settings, start + 0.04)
 
 
+def _settled_traction(animation, telemetry, settings, start=1.0):
+    route, frame = animation.traction_buzz(telemetry, settings, start)
+    assert frame is None
+    return animation.traction_buzz(telemetry, settings, start + 0.04)
+
+
 def _unpack_zones(frame):
     _, params = frame
     active = params[0] | (params[1] << 8)
@@ -195,31 +201,134 @@ def test_wheelspin_reset_clears_latched_and_smoothed_state():
     assert animation._wheelspin_ewma.value == 0.0
 
 
-def test_r2_trigger_wheelspin_takes_priority_over_rev_limiter_at_speed():
+@pytest.mark.parametrize(
+    ("brake", "accel", "expected_route"),
+    [
+        (255, 0, "l2"),
+        (0, 255, "r2"),
+        (255, 255, "r2"),
+    ],
+    ids=("brake-only", "accelerator-only", "both-pedals"),
+)
+def test_traction_routes_from_forza_pedal_telemetry(brake, accel, expected_route):
     settings = Settings()
-    controller = Controller(settings)
     telemetry = _telemetry(
-        rpm=9000.0,
-        max_rpm=9000.0,
+        brake=brake,
+        accel=accel,
         tire_slip_ratio_rr=2.0,
     )
 
-    controller.R2(telemetry, settings, 1.0)
-    frame = controller.R2(telemetry, settings, 1.04)
+    route, frame = _settled_traction(
+        TriggerAnimations(), telemetry, settings
+    )
 
+    assert route == expected_route
     assert frame[0] == M_VIBRATE
-    assert frame[1] != (settings.rev_limit_freq, settings.rev_limit_amp)
-    assert frame[1][0] > settings.rev_limit_freq
 
 
-def test_r2_trigger_low_speed_raw_rotation_takes_priority_over_rev_limiter():
+def test_brake_only_traction_uses_all_wheels_but_accelerator_uses_driven_wheels():
+    settings = Settings()
+    front_drive_rear_slip = _telemetry(
+        drive_train=0,
+        tire_slip_ratio_rr=2.0,
+    )
+
+    brake_route, brake_frame = _settled_traction(
+        TriggerAnimations(),
+        {**front_drive_rear_slip, "brake": 255, "accel": 0},
+        settings,
+    )
+    accel_route, accel_frame = _settled_traction(
+        TriggerAnimations(),
+        {**front_drive_rear_slip, "brake": 0, "accel": 255},
+        settings,
+    )
+
+    assert brake_route == "l2"
+    assert brake_frame[0] == M_VIBRATE
+    assert accel_route == "r2"
+    assert accel_frame is None
+
+
+def test_low_speed_braking_does_not_infer_grip_from_wheel_rotation():
+    settings = Settings()
+    telemetry = _telemetry(
+        speed=0.0,
+        brake=255,
+        accel=0,
+        wheel_rotation_speed_rr=120.0,
+    )
+
+    route, frame = _settled_traction(TriggerAnimations(), telemetry, settings)
+
+    assert route == "l2"
+    assert frame is None
+
+
+def test_low_speed_both_pedals_keep_driven_wheel_burnout_on_r2():
+    settings = Settings()
+    telemetry = _telemetry(
+        speed=0.0,
+        drive_train=1,
+        brake=255,
+        accel=255,
+        wheel_rotation_speed_rr=120.0,
+    )
+
+    route, frame = _settled_traction(TriggerAnimations(), telemetry, settings)
+
+    assert route == "r2"
+    assert frame[0] == M_VIBRATE
+
+
+def test_no_pedal_resets_traction_latch_and_ewma():
+    settings = Settings()
+    animation = TriggerAnimations()
+    _settled_traction(
+        animation,
+        _telemetry(accel=255, tire_slip_ratio_rr=2.0),
+        settings,
+    )
+
+    route, frame = animation.traction_buzz(
+        _telemetry(accel=0, brake=0, tire_slip_ratio_rr=2.0),
+        settings,
+        1.08,
+    )
+
+    assert route is None
+    assert frame is None
+    assert animation._wheelspin_active is False
+    assert animation._wheelspin_ewma.value == 0.0
+
+
+def test_l2_abs_and_r2_traction_can_coexist_with_both_pedals(monkeypatch):
+    settings = Settings()
+    controller = Controller(settings)
+    telemetry = _telemetry(
+        brake=255,
+        accel=255,
+        tire_slip_ratio_fl=2.0,
+        tire_slip_ratio_rr=2.0,
+    )
+    times = iter((1.0, 1.04))
+    monkeypatch.setattr(
+        "modules.forzahorizon.effects.time.monotonic", lambda: next(times)
+    )
+
+    controller.update(telemetry, settings)
+    l2, r2 = controller.update(telemetry, settings)
+
+    assert l2[0] == M_VIBRATE_ZONES
+    assert r2[0] == M_VIBRATE
+
+
+def test_r2_trigger_traction_still_uses_low_speed_raw_rotation():
     settings = Settings()
     controller = Controller(settings)
     telemetry = _telemetry(
         speed=0.0,
         drive_train=1,
-        rpm=9000.0,
-        max_rpm=9000.0,
         wheel_rotation_speed_rr=120.0,
     )
 
@@ -227,17 +336,15 @@ def test_r2_trigger_low_speed_raw_rotation_takes_priority_over_rev_limiter():
     frame = controller.R2(telemetry, settings, 1.04)
 
     assert frame[0] == M_VIBRATE
-    assert frame[1] != (settings.rev_limit_freq, settings.rev_limit_amp)
-    assert frame[1][0] > settings.rev_limit_freq
 
 
-def test_r2_trigger_rev_limiter_still_runs_when_driven_wheels_have_grip():
+def test_r2_trigger_never_uses_rev_limiter_when_driven_wheels_have_grip():
     settings = Settings()
     telemetry = _telemetry(rpm=9000.0, max_rpm=9000.0)
 
     frame = Controller(settings).R2(telemetry, settings, 1.0)
 
-    assert frame == (M_VIBRATE, (settings.rev_limit_freq, settings.rev_limit_amp))
+    assert frame[0] != M_VIBRATE
 
 
 def test_abs_requires_brake_and_minimum_speed():

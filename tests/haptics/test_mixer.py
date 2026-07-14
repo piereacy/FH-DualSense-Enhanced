@@ -3,7 +3,7 @@ import math
 import pytest
 
 from modules.config.settings import Settings
-from modules.haptics.frame import SILENT_FRAME
+from modules.haptics.frame import SILENT_FRAME, to_compatible_rumble
 from modules.haptics.mixer import HapticMixer
 
 
@@ -97,6 +97,115 @@ def test_engine_maps_idle_to_redline_frequency(settings):
     assert idle.engine_hz == 40.0
     assert redline.engine_hz == 120.0
     assert redline.engine_amplitude > idle.engine_amplitude
+
+
+def _redline_frame(settings, mixer, now, **telemetry):
+    settings.road_haptics_intensity = 0.0
+    settings.impact_haptics_intensity = 0.0
+    settings.slip_haptics_intensity = 0.0
+    values = {"rpm": 9000.0, "accel": 255}
+    values.update(telemetry)
+    return mixer.update(
+        _telemetry(**values),
+        settings,
+        now=now,
+    )
+
+
+def test_redline_grip_warning_starts_immediately_and_is_bilateral(settings):
+    mixer = HapticMixer()
+
+    frame = _redline_frame(settings, mixer, now=1.0)
+
+    assert frame.left_high == pytest.approx(settings.rev_limit_amp / 255.0)
+    assert frame.right_high == pytest.approx(frame.left_high)
+    assert frame.engine_amplitude > 0.0
+
+
+def test_redline_grip_warning_uses_ten_hz_half_duty_fuel_cut_pulse(settings):
+    mixer = HapticMixer()
+
+    onset = _redline_frame(settings, mixer, now=1.0)
+    still_on = _redline_frame(settings, mixer, now=1.049)
+    off_half = _redline_frame(settings, mixer, now=1.050)
+    next_cycle = _redline_frame(settings, mixer, now=1.100)
+
+    assert onset.left_high > 0.0
+    assert still_on.left_high == pytest.approx(onset.left_high)
+    assert off_half.left_high == 0.0
+    assert next_cycle.left_high == pytest.approx(onset.left_high)
+
+
+def test_redline_grip_warning_holds_for_configured_deadline(settings):
+    mixer = HapticMixer()
+    _redline_frame(settings, mixer, now=1.0)
+
+    held = _redline_frame(settings, mixer, now=1.10, rpm=1000.0)
+    expired = _redline_frame(settings, mixer, now=1.121, rpm=1000.0)
+
+    assert held.left_high > 0.0
+    assert expired.left_high == 0.0
+    assert expired.right_high == 0.0
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda value: setattr(value, "enable_rev_limiter", False),
+        lambda value: setattr(value, "engine_haptics_intensity", 0.0),
+        lambda value: setattr(value, "body_haptics_intensity", 0.0),
+    ],
+    ids=("redline-disabled", "engine-haptics-muted", "body-haptics-muted"),
+)
+def test_redline_grip_warning_obeys_all_haptics_gates(settings, mutate):
+    mutate(settings)
+
+    frame = _redline_frame(settings, HapticMixer(), now=1.0)
+
+    assert frame.left_high == 0.0
+    assert frame.right_high == 0.0
+
+
+def test_disabling_redline_warning_clears_an_existing_hold(settings):
+    mixer = HapticMixer()
+    assert _redline_frame(settings, mixer, now=1.0).left_high > 0.0
+
+    settings.enable_rev_limiter = False
+    frame = _redline_frame(settings, mixer, now=1.01, rpm=1000.0)
+
+    assert frame.left_high == 0.0
+    assert frame.right_high == 0.0
+
+
+def test_redline_grip_warning_requires_accelerator_and_rpm_threshold(settings):
+    mixer = HapticMixer()
+    settings.road_haptics_intensity = 0.0
+
+    no_accel = mixer.update(
+        _telemetry(rpm=9000.0, accel=settings.accel_deadzone - 1),
+        settings,
+        now=1.0,
+    )
+    below_redline = mixer.update(
+        _telemetry(
+            rpm=settings.rev_limit_ratio * 9000.0 - 1.0,
+            accel=255,
+        ),
+        settings,
+        now=2.0,
+    )
+
+    assert no_accel.left_high == no_accel.right_high == 0.0
+    assert below_redline.left_high == below_redline.right_high == 0.0
+
+
+def test_usb_and_bluetooth_share_the_same_normalized_redline_envelope(settings):
+    mixer = HapticMixer()
+    usb_frame = _redline_frame(settings, mixer, now=1.0)
+    bluetooth_rumble = to_compatible_rumble(usb_frame)
+
+    assert usb_frame.left_high == usb_frame.right_high
+    assert bluetooth_rumble.high_frequency == pytest.approx(usb_frame.left_high)
 
 
 def test_true_stationary_idle_is_silent(settings):

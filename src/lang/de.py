@@ -8,9 +8,9 @@ STRINGS = {
     # --- body haptics ---
     "Body haptics": "Körperhaptik",
     "Enable body haptics": "Körperhaptik aktivieren",
-    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+    ("Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
      "Disable in-game vibration only if you feel competing or doubled output."):
-        "Verwendet automatisch hochauflösendes USB-Audio oder kompatibles Bluetooth-Rumble. "
+        "USB und Bluetooth verwenden denselben Haptik-Mix; nur der Übertragungsweg unterscheidet sich. "
         "Deaktiviere die Vibration im Spiel nur, wenn sich die Ausgaben gegenseitig stören "
         "oder doppelt anfühlen.",
     "Master intensity": "Gesamtintensität",
@@ -44,8 +44,6 @@ STRINGS = {
     "Static brake wall": "Statische Bremswand",
     "Brake stiffness": "Bremswiderstand",
     "Handbrake stiffness bonus": "Zusätzlicher Handbremswiderstand",
-    "Redline buzz": "Drehzahlgrenze-Surren",
-    "Wheelspin buzz": "Radschlupf-Surren",
     "Idle buzz": "Leerlauf-Surren",
     "Throttle stiffness": "Gaswiderstand",
 
@@ -55,8 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "Linker Trigger - Statische Wand (optional)",
     "Right trigger - Gas force": "Rechter Trigger - Gaskraft",
     "ABS (anti-lock brake) rumble": "ABS (Antiblockiersystem)-Vibration",
-    "Redline (rev limiter) buzz": "Drehzahlgrenze (Drehzahlbegrenzer)-Surren",
-    "Wheelspin buzz": "Radschlupf-Surren",
     "Idle buzz": "Leerlauf-Surren",
     "Gear shift thump": "Schaltruck",
 
@@ -207,7 +203,15 @@ STRINGS = {
     "Experimental features": "Experimentelle Funktionen",
     "Not recommended for manual adjustment.": "Manuelle Anpassung wird nicht empfohlen.",
     "ABS advanced tuning": "Erweiterte ABS-Abstimmung",
-    "Wheelspin advanced tuning": "Erweiterte Radschlupf-Abstimmung",
+    "Shared feedback": "Gemeinsames Feedback",
+    "Redline grip warning": "Drehzahlgrenzen-Warnung am Griff",
+    "Trigger near redline at": "Nahe der Drehzahlgrenze auslösen bei",
+    "Pulse rate (Hz)": "Pulsrate (Hz)",
+    "Grip pulse strength": "Stärke des Griffpulses",
+    "Pulse hold time (ms)": "Pulshaltezeit (ms)",
+    "Traction/grip feedback": "Traktions-/Grip-Feedback",
+    "Grip feedback strength": "Stärke des Grip-Feedbacks",
+    "Traction/grip advanced tuning": "Erweiterte Traktions-/Grip-Abstimmung",
     "Minimum brake input": "Minimale Bremseingabe",
     "Minimum speed (km/h)": "Mindestgeschwindigkeit (km/h)",
     "Longitudinal slip threshold": "Schwelle für Längsschlupf",

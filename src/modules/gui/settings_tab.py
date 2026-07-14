@@ -42,14 +42,14 @@ SETTING_SECTIONS = [
         ("abs_amp", "Rumble strength", 0, 255, ""),
         ("abs_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
-    ("Redline (rev limiter) buzz", [
-        ("rev_limit_ratio", "Fire near redline at", 0.0, 1.0, ""),
-        ("rev_limit_freq", "Buzz speed (Hz)", 0, 255, ""),
-        ("rev_limit_amp", "Buzz strength", 0, 255, ""),
-        ("rev_limit_hold_ms", "Buzz hold time (ms)", 0.0, 1000.0, ""),
+    ("Redline grip warning", [
+        ("rev_limit_ratio", "Trigger near redline at", 0.0, 1.0, ""),
+        ("rev_limit_freq", "Pulse rate (Hz)", 1, 20, ""),
+        ("rev_limit_amp", "Grip pulse strength", 0, 255, ""),
+        ("rev_limit_hold_ms", "Pulse hold time (ms)", 0.0, 1000.0, ""),
     ]),
-    ("Wheelspin buzz", [
-        ("wheelspin_amp", "Buzz strength", 0, 255, ""),
+    ("Traction/grip feedback", [
+        ("wheelspin_amp", "Grip feedback strength", 0, 255, ""),
         ("wheelspin_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
     ("Idle buzz", [
@@ -62,7 +62,7 @@ SETTING_SECTIONS = [
     ]),
     ("Body haptics", [
         ("enable_body_haptics", "Enable body haptics", None, None,
-         "Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+         "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
          "Disable in-game vibration only if you feel competing or doubled output."),
         ("body_haptics_intensity", "Master intensity", 0.0, 2.0, ""),
         ("engine_haptics_intensity", "Engine intensity", 0.0, 2.0, ""),
@@ -87,7 +87,7 @@ EXPERIMENTAL_SECTIONS = [
         ("abs_hold_ms", "Feedback hold (ms)", 0.0, 500.0, ""),
         ("abs_wall_zones", "Top wall zones", 1, 9, ""),
     ]),
-    ("Wheelspin advanced tuning", [
+    ("Traction/grip advanced tuning", [
         ("wheelspin_slip_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
         ("wheelspin_hysteresis", "Slip hysteresis", 0.0, 0.9, ""),
         ("wheelspin_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),

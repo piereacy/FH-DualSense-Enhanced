@@ -8,9 +8,9 @@ STRINGS = {
     # --- body haptics ---
     "Body haptics": "握把触觉",
     "Enable body haptics": "启用握把触觉",
-    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+    ("Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
      "Disable in-game vibration only if you feel competing or doubled output."):
-        "USB 连接自动使用高保真音频触觉，蓝牙连接自动使用兼容振动。"
+        "USB 与蓝牙使用相同的触觉混合与强度，仅底层传输路径不同。"
         "仅当您感觉输出相互干扰或出现双重振动时，才关闭游戏内振动。",
     "Master intensity": "总体强度",
     "Engine intensity": "发动机强度",
@@ -43,8 +43,6 @@ STRINGS = {
     "Static brake wall": "刹车静态防护墙",
     "Brake stiffness": "刹车阻力",
     "Handbrake stiffness bonus": "手刹额外阻力",
-    "Redline buzz": "红线震动",
-    "Wheelspin buzz": "车轮打滑震动",
     "Idle buzz": "怠速震动",
     "Throttle stiffness": "油门阻力",
 
@@ -54,8 +52,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "左扳机 - 静态防护墙（可选）",
     "Right trigger - Gas force": "右扳机 - 油门力",
     "ABS (anti-lock brake) rumble": "ABS（防抱死刹车）震动",
-    "Redline (rev limiter) buzz": "红线（转速限制器）震动",
-    "Wheelspin buzz": "车轮打滑震动",
     "Idle buzz": "怠速震动",
     "Gear shift thump": "换挡冲击",
 
@@ -166,7 +162,15 @@ STRINGS = {
     "Experimental features": "实验性功能",
     "Not recommended for manual adjustment.": "不建议自行调节。",
     "ABS advanced tuning": "ABS 高级调校",
-    "Wheelspin advanced tuning": "轮胎打滑高级调校",
+    "Shared feedback": "共享反馈",
+    "Redline grip warning": "红线握把警告",
+    "Trigger near redline at": "接近红线时触发",
+    "Pulse rate (Hz)": "脉冲频率（Hz）",
+    "Grip pulse strength": "握把脉冲强度",
+    "Pulse hold time (ms)": "脉冲保持时间（ms）",
+    "Traction/grip feedback": "抓地力反馈",
+    "Grip feedback strength": "抓地力反馈强度",
+    "Traction/grip advanced tuning": "抓地力高级调校",
     "Minimum brake input": "最低刹车输入",
     "Minimum speed (km/h)": "最低速度（km/h）",
     "Longitudinal slip threshold": "纵向滑移阈值",

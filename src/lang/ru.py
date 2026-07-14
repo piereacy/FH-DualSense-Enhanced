@@ -8,10 +8,10 @@ STRINGS = {
     # --- body haptics ---
     "Body haptics": "Тактильная отдача корпуса",
     "Enable body haptics": "Включить тактильную отдачу корпуса",
-    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+    ("Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
      "Disable in-game vibration only if you feel competing or doubled output."):
-        "Автоматически использует высококачественную аудиотактильную отдачу через USB или "
-        "совместимую вибрацию через Bluetooth. Отключайте вибрацию в игре, только если чувствуете, "
+        "USB и Bluetooth используют одну тактильную смесь; отличается только путь передачи. "
+        "Отключайте вибрацию в игре, только если чувствуете, "
         "что сигналы конфликтуют или дублируются.",
     "Master intensity": "Общая интенсивность",
     "Engine intensity": "Интенсивность двигателя",
@@ -44,8 +44,6 @@ STRINGS = {
     "Static brake wall": "Фиксированный упор тормоза",
     "Brake stiffness": "Жёсткость тормоза",
     "Handbrake stiffness bonus": "Доп. жёсткость ручника",
-    "Redline buzz": "Вибрация на отсечке",
-    "Wheelspin buzz": "Вибрация при пробуксовке",
     "Idle buzz": "Вибрация на холостом ходу",
     "Throttle stiffness": "Жёсткость газа",
 
@@ -55,8 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "Левый курок — фиксированный упор (необязательно)",
     "Right trigger - Gas force": "Правый курок — усилие газа",
     "ABS (anti-lock brake) rumble": "Вибрация ABS (антиблокировочной системы)",
-    "Redline (rev limiter) buzz": "Вибрация на отсечке (ограничителе оборотов)",
-    "Wheelspin buzz": "Вибрация при пробуксовке",
     "Idle buzz": "Вибрация на холостом ходу",
     "Gear shift thump": "Толчок при переключении передачи",
 
@@ -178,7 +174,15 @@ STRINGS = {
     "Experimental features": "Экспериментальные функции",
     "Not recommended for manual adjustment.": "Ручная настройка не рекомендуется.",
     "ABS advanced tuning": "Расширенная настройка ABS",
-    "Wheelspin advanced tuning": "Расширенная настройка пробуксовки",
+    "Shared feedback": "Общая обратная связь",
+    "Redline grip warning": "Предупреждение об отсечке на рукоятках",
+    "Trigger near redline at": "Срабатывание у красной зоны",
+    "Pulse rate (Hz)": "Частота импульса (Гц)",
+    "Grip pulse strength": "Сила импульса рукояток",
+    "Pulse hold time (ms)": "Удержание импульса (мс)",
+    "Traction/grip feedback": "Обратная связь сцепления",
+    "Grip feedback strength": "Сила обратной связи сцепления",
+    "Traction/grip advanced tuning": "Расширенная настройка сцепления",
     "Minimum brake input": "Минимальное нажатие тормоза",
     "Minimum speed (km/h)": "Минимальная скорость (км/ч)",
     "Longitudinal slip threshold": "Порог продольного скольжения",

@@ -1,6 +1,6 @@
 """Forza Horizon-aware adaptive trigger logic.
 
-  TriggerAnimations - every effect (ABS, gear shift, rev limiter, resistance...).
+  TriggerAnimations - every trigger effect (ABS, gear shift, traction, resistance...).
                       Owns timing state for effects that span frames.
   Controller        - builds L2 / R2 and produces a frame for each per tick.
 """
@@ -20,6 +20,8 @@ BURNOUT_ROT_THRESHOLD = 30.0
 
 # Forza drive_train enum -> wheels that receive engine torque.
 DRIVEN_WHEELS = {0: ("fl", "fr"), 1: ("rl", "rr"), 2: ("fl", "fr", "rl", "rr")}
+ALL_WHEELS = ("fl", "fr", "rl", "rr")
+_TRACTION_UNSET = object()
 
 
 class _AsymmetricEwma:
@@ -104,7 +106,6 @@ class TriggerAnimations:
     def __init__(self):
         self._prev_gear = None
         self._shift_until = 0.0
-        self._rev_until = 0.0
         self._wheelspin_active = False
         self._wheelspin_ewma = _AsymmetricEwma()
         self._abs_until = 0.0
@@ -113,7 +114,6 @@ class TriggerAnimations:
     def reset_transients(self):
         self._prev_gear = None
         self._shift_until = 0.0
-        self._rev_until = 0.0
         self._wheelspin_active = False
         self._wheelspin_ewma.reset()
         self._abs_until = 0.0
@@ -133,24 +133,6 @@ class TriggerAnimations:
             return vibrate_zones(_amp_to_strength(s.gear_shift_amp), 0, s.wall_zones)
         return vibrate(s.gear_shift_freq, s.gear_shift_amp)
 
-    def rev_buzz(self, t, s, now):
-        # Brief hold so rpm bouncing against the limit doesn't stutter.
-        if not s.enable_rev_limiter:
-            return None
-        handbrake_full_throttle = (
-            t["accel"] >= RAW_MAX * 0.8 and
-            t["handbrake"] > 16 and t["speed"] < 1)
-        if handbrake_full_throttle:
-            return vibrate(s.rev_limit_freq, s.rev_limit_amp)
-        if t["accel"] >= s.accel_deadzone:
-            max_rpm = t["max_rpm"]
-            rpm_r = t["rpm"] / max_rpm if max_rpm > 0 else 0.0
-            if rpm_r > s.rev_limit_ratio:
-                self._rev_until = now + s.rev_limit_hold_ms / 1000.0
-        if now < self._rev_until:
-            return vibrate(s.rev_limit_freq, s.rev_limit_amp)
-        return None
-
     def idle_buzz(self, t, s, now):
         # Software-oscillated idle: alternate vibrate amp every half-period for a chug feel.
         if not s.enable_idle_buzz:
@@ -163,18 +145,17 @@ class TriggerAnimations:
         amp = s.idle_amp_high if loud else s.idle_amp_low
         return vibrate(s.idle_freq, amp)
 
-    def wheelspin_buzz(self, t, s, now):
-        # Only throttle-caused driven-wheel longitudinal slip belongs on R2.
-        # At standstill slip ratio degenerates, so trust raw driven-wheel rotation.
+    def _reset_traction(self):
+        self._wheelspin_active = False
+        self._wheelspin_ewma.reset()
+
+    def _traction_effect(self, t, s, now, wheels, use_rotation_at_low_speed):
         if not s.enable_wheelspin_buzz:
-            self._wheelspin_active = False
-            self._wheelspin_ewma.reset()
+            self._reset_traction()
             return None
-        if t["accel"] < max(1, s.accel_deadzone):
-            self._wheelspin_active = False
-            self._wheelspin_ewma.reset()
+        if t["speed"] < LOW_SPEED_KMH and not use_rotation_at_low_speed:
+            self._reset_traction()
             return None
-        wheels = DRIVEN_WHEELS.get(t["drive_train"], ("fl", "fr", "rl", "rr"))
         sensitivity = max(0.1, float(s.wheelspin_sensitivity))
         if t["speed"] < LOW_SPEED_KMH:
             samples = {
@@ -249,6 +230,42 @@ class TriggerAnimations:
         amplitude = s.wheelspin_amp * output_level * amp_scale * g_damping
         return vibrate(frequency, amplitude)
 
+    def traction_buzz(self, t, s, now):
+        """Return (pedal route, one shared longitudinal-grip effect).
+
+        Forza's pedal telemetry is the source of truth. Braking-only feedback
+        routes to L2; any active accelerator routes it to R2. At speed, braking
+        observes every tire while accelerator-only observes driven tires. Near
+        standstill, raw rotation is valid only when the accelerator is active.
+        """
+        brake_active = t["brake"] >= max(1, s.brake_deadzone)
+        accel_active = t["accel"] >= max(1, s.accel_deadzone)
+        if not brake_active and not accel_active:
+            self._reset_traction()
+            return None, None
+
+        route = "r2" if accel_active else "l2"
+        driven = DRIVEN_WHEELS.get(t["drive_train"], ALL_WHEELS)
+        if t["speed"] < LOW_SPEED_KMH:
+            wheels = driven
+            use_rotation = accel_active
+        else:
+            wheels = ALL_WHEELS if brake_active else driven
+            use_rotation = False
+        return route, self._traction_effect(
+            t, s, now, wheels, use_rotation_at_low_speed=use_rotation
+        )
+
+    def wheelspin_buzz(self, t, s, now):
+        """R2-compatible entry point retained for existing profiles/tests."""
+        if t["accel"] < max(1, s.accel_deadzone):
+            self._reset_traction()
+            return None
+        wheels = DRIVEN_WHEELS.get(t["drive_train"], ALL_WHEELS)
+        return self._traction_effect(
+            t, s, now, wheels, use_rotation_at_low_speed=True
+        )
+
     def abs_pulse(self, t, s, now):
         if (not s.enable_abs
                 or t["brake"] < max(1, s.abs_brake_threshold)
@@ -315,17 +332,17 @@ class Controller:
     L2 priority (top wins):
         1. Gear shift thump    - one-shot burst on every shift, brief
         2. ABS pulse           - tire lockup buzz under hard braking
-        3. Firmware end wall   - hard wall near 100% travel (hysteresis)
-        4. Static brake wall   - optional fixed wall at brake_static_wall_at
-        5. Brake resistance    - default rigid ramp 0..max_force
+        3. Traction feedback   - braking tire longitudinal grip
+        4. Firmware end wall   - hard wall near 100% travel (hysteresis)
+        5. Static brake wall   - optional fixed wall at brake_static_wall_at
+        6. Brake resistance    - default rigid ramp 0..max_force
 
     R2 priority (top wins):
         1. Gear shift thump    - one-shot burst on every shift, brief
         2. Idle buzz           - stationary with light throttle
-        3. Wheelspin buzz      - driven wheels slipping (surface-aware)
-        4. Rev limiter buzz    - rpm/max_rpm >= rev_limit_ratio
-        5. Firmware end wall   - hard wall near 100% travel (hysteresis)
-        6. Throttle resistance - default rigid ramp 0..max_force
+        3. Traction feedback   - accelerator/both-pedal longitudinal grip
+        4. Firmware end wall   - hard wall near 100% travel (hysteresis)
+        5. Throttle resistance - default rigid ramp 0..max_force
     """
 
     def __init__(self, settings):
@@ -343,10 +360,18 @@ class Controller:
         now = time.monotonic()
         if s.enable_gear_shift or s.enable_gear_shift_brake:
             self.anim.arm_shift(t, s, now)
-        return self.L2(t, s, now), self.R2(t, s, now)
+        route, traction = self.anim.traction_buzz(t, s, now)
+        return (
+            self.L2(t, s, now, traction if route == "l2" else None),
+            self.R2(t, s, now, traction if route == "r2" else None),
+        )
 
-    def L2(self, t, s, now):
+    def L2(self, t, s, now, traction=_TRACTION_UNSET):
         brake = t["brake"]
+
+        if traction is _TRACTION_UNSET:
+            route, effect = self.anim.traction_buzz(t, s, now)
+            traction = effect if route == "l2" else None
 
         # 1. Gear shift thump - brief burst on shift, masks everything below
         if s.enable_gear_shift_brake:
@@ -359,21 +384,29 @@ class Controller:
         if pulse:
             return pulse
 
-        # 3. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
+        # 3. Generic braking traction feedback
+        if traction is not None:
+            return traction
+
+        # 4. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
         self._l2_in_wall = _wall_state(brake, self._l2_in_wall,
                                        s.brake_wall_engage_at, s.brake_wall_release_at)
         if self._l2_in_wall:
             return self.wall
 
-        # 4. Static brake wall - optional fixed wall mid-travel; replaces ramp
+        # 5. Static brake wall - optional fixed wall mid-travel; replaces ramp
         if s.enable_brake_static_wall:
             return build_brake_walls(s.brake_static_wall_at, s.brake_static_wall_force, s.wall_zones)
 
-        # 5. Brake resistance - default rigid ramp
+        # 6. Brake resistance - default rigid ramp
         return self.anim.brake_resistance(t, s)
 
-    def R2(self, t, s, now):
+    def R2(self, t, s, now, traction=_TRACTION_UNSET):
         accel = t["accel"]
+
+        if traction is _TRACTION_UNSET:
+            route, effect = self.anim.traction_buzz(t, s, now)
+            traction = effect if route == "r2" else None
 
         # 1. Gear shift thump - brief burst on shift, masks everything below
         if s.enable_gear_shift:
@@ -386,21 +419,15 @@ class Controller:
         if idle is not None:
             return idle
 
-        # 3. Wheelspin buzz - real tire slip outranks the correlated high RPM
-        spin = self.anim.wheelspin_buzz(t, s, now)
-        if spin is not None:
-            return spin
+        # 3. Generic accelerator/both-pedal traction feedback
+        if traction is not None:
+            return traction
 
-        # 4. Rev limiter buzz - high RPM with grip, or handbrake full throttle
-        rev = self.anim.rev_buzz(t, s, now)
-        if rev:
-            return rev
-
-        # 5. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
+        # 4. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
         self._r2_in_wall = _wall_state(accel, self._r2_in_wall,
                                        s.throttle_wall_engage_at, s.throttle_wall_release_at)
         if self._r2_in_wall:
             return self.wall
 
-        # 6. Throttle resistance - default rigid ramp
+        # 5. Throttle resistance - default rigid ramp
         return self.anim.throttle_ramp(t, s)

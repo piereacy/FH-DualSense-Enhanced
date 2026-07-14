@@ -8,9 +8,9 @@ STRINGS = {
     # --- body haptics ---
     "Body haptics": "ボディハプティクス",
     "Enable body haptics": "ボディハプティクスを有効化",
-    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+    ("Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
      "Disable in-game vibration only if you feel competing or doubled output."):
-        "USB接続では高精細オーディオ、Bluetooth接続では互換振動を自動的に使用します。"
+        "USB と Bluetooth は同じ触覚ミックスを使用し、異なるのは転送経路だけです。"
         "出力が競合している、または二重になっていると感じる場合にのみ、"
         "ゲーム内振動を無効にしてください。",
     "Master intensity": "全体の強度",
@@ -44,8 +44,6 @@ STRINGS = {
     "Static brake wall": "ブレーキの固定ウォール",
     "Brake stiffness": "ブレーキの硬さ",
     "Handbrake stiffness bonus": "ハンドブレーキの追加の硬さ",
-    "Redline buzz": "レッドライン振動",
-    "Wheelspin buzz": "ホイールスピン振動",
     "Idle buzz": "アイドリング振動",
     "Throttle stiffness": "アクセルの硬さ",
 
@@ -55,8 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "左トリガー - 固定ウォール（任意）",
     "Right trigger - Gas force": "右トリガー - アクセルの強さ",
     "ABS (anti-lock brake) rumble": "ABS（アンチロックブレーキ）振動",
-    "Redline (rev limiter) buzz": "レッドライン（レブリミッター）振動",
-    "Wheelspin buzz": "ホイールスピン振動",
     "Idle buzz": "アイドリング振動",
     "Gear shift thump": "シフトショック",
 
@@ -167,7 +163,15 @@ STRINGS = {
     "Experimental features": "実験的機能",
     "Not recommended for manual adjustment.": "手動での調整は推奨しません。",
     "ABS advanced tuning": "ABS 詳細調整",
-    "Wheelspin advanced tuning": "ホイールスピン詳細調整",
+    "Shared feedback": "共通フィードバック",
+    "Redline grip warning": "レッドラインのグリップ警告",
+    "Trigger near redline at": "レッドライン付近の発動位置",
+    "Pulse rate (Hz)": "パルス周期 (Hz)",
+    "Grip pulse strength": "グリップパルスの強さ",
+    "Pulse hold time (ms)": "パルス保持時間 (ms)",
+    "Traction/grip feedback": "トラクション／グリップフィードバック",
+    "Grip feedback strength": "グリップフィードバックの強さ",
+    "Traction/grip advanced tuning": "トラクション／グリップ詳細調整",
     "Minimum brake input": "最小ブレーキ入力",
     "Minimum speed (km/h)": "最低速度 (km/h)",
     "Longitudinal slip threshold": "縦方向スリップしきい値",

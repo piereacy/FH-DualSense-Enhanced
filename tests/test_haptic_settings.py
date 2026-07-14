@@ -22,7 +22,7 @@ BODY_FIELDS = (
 BODY_LABELS = {
     "Body haptics",
     "Enable body haptics",
-    "Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
     "Disable in-game vibration only if you feel competing or doubled output.",
     "Master intensity",
     "Engine intensity",
@@ -37,9 +37,15 @@ BEHAVIOR_LABELS = {
     "Close the app when the game closes",
     "Move the app to the tray when minimized",
 }
-NORMAL_R2_FIELDS = {
+NORMAL_R3_FIELDS = {
     "ABS (anti-lock brake) rumble": ("abs_amp", "abs_sensitivity"),
-    "Wheelspin buzz": ("wheelspin_amp", "wheelspin_sensitivity"),
+    "Redline grip warning": (
+        "rev_limit_ratio",
+        "rev_limit_freq",
+        "rev_limit_amp",
+        "rev_limit_hold_ms",
+    ),
+    "Traction/grip feedback": ("wheelspin_amp", "wheelspin_sensitivity"),
 }
 EXPERIMENTAL_FIELDS = (
     "abs_brake_threshold",
@@ -70,12 +76,20 @@ EXPERIMENTAL_FIELDS = (
     "wheelspin_gravel_freq_min",
     "wheelspin_gravel_freq_max",
 )
-R2_LABELS = {
+R3_LABELS = {
     "Sensitivity",
+    "Shared feedback",
+    "Redline grip warning",
+    "Trigger near redline at",
+    "Pulse rate (Hz)",
+    "Grip pulse strength",
+    "Pulse hold time (ms)",
+    "Traction/grip feedback",
+    "Grip feedback strength",
     "Experimental features",
     "Not recommended for manual adjustment.",
     "ABS advanced tuning",
-    "Wheelspin advanced tuning",
+    "Traction/grip advanced tuning",
     "Minimum brake input",
     "Minimum speed (km/h)",
     "Longitudinal slip threshold",
@@ -206,7 +220,7 @@ def test_every_non_english_catalog_translates_application_behavior_labels():
 def test_gui_and_tui_keep_only_strength_and_sensitivity_in_normal_r2_sections():
     for relative in ("src/modules/gui/settings_tab.py", "src/modules/tui/settings_tab.py"):
         sections = _fields_by_section(ROOT / relative, "SETTING_SECTIONS")
-        for title, expected in NORMAL_R2_FIELDS.items():
+        for title, expected in NORMAL_R3_FIELDS.items():
             assert sections[title] == expected
 
 
@@ -224,7 +238,7 @@ def test_gui_and_tui_expose_identical_advanced_r2_fields():
 
 def test_all_r2_tuning_fields_are_profile_scoped_settings():
     setting_names = {field.name for field in fields(Settings)}
-    normal_fields = {field for values in NORMAL_R2_FIELDS.values() for field in values}
+    normal_fields = {field for values in NORMAL_R3_FIELDS.values() for field in values}
     all_fields = normal_fields | set(EXPERIMENTAL_FIELDS)
 
     assert all_fields <= setting_names
@@ -307,10 +321,24 @@ def test_tui_experimental_settings_mount_collapsed():
     asyncio.run(check())
 
 
-def test_every_non_english_catalog_translates_r2_settings_labels():
+def test_every_non_english_catalog_translates_r3_settings_labels():
     for path in sorted((ROOT / "src/lang").glob("*.py")):
         if path.name in {"__init__.py", "en.py"}:
             continue
         strings = runpy.run_path(str(path))["STRINGS"]
-        missing = R2_LABELS - strings.keys()
+        missing = R3_LABELS - strings.keys()
         assert not missing, f"{path.name} is missing {sorted(missing)}"
+
+
+def test_gui_and_tui_move_shared_feedback_out_of_the_r2_only_group():
+    gui = _sections(ROOT / "src/modules/gui/controls_tab.py", "TRIGGER_CONTROLS")
+    tui = _sections(ROOT / "src/modules/tui/controls_tab.py", "TRIGGER_CONTROLS")
+
+    assert gui == tui
+    groups = {title: dict(items) for title, items in gui}
+    assert "enable_rev_limiter" not in groups["R2 - Throttle"]
+    assert "enable_wheelspin_buzz" not in groups["R2 - Throttle"]
+    assert groups["Shared feedback"] == {
+        "enable_rev_limiter": "Redline grip warning",
+        "enable_wheelspin_buzz": "Traction/grip feedback",
+    }

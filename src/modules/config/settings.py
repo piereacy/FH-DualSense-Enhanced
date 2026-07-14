@@ -62,17 +62,17 @@ class Settings:
     throttle_wall_engage_at: int = 250        # byte that triggers firmware wall. DO NOT CHANGE
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE
 
-    # MARK: R2 rev limiter
-    # Vibrates when rpm/max_rpm exceeds the ratio; brief hold smooths rpm bounce.
+    # MARK: Body haptics redline warning
+    # Bilateral fuel-cut pulse when rpm/max_rpm exceeds the ratio.
     enable_rev_limiter: bool = True
     rev_limit_ratio: float = 0.93             # fraction of max_rpm to fire at
-    rev_limit_freq: int = 30                  # distinct from gravel/dirt drift (15/45 Hz)
-    rev_limit_amp: int = 12                   # stronger than any drift surface so the warning stands out
-    rev_limit_hold_ms: float = 120.0          # min on-time per trigger
+    rev_limit_freq: int = 10                  # bilateral grip pulse rate
+    rev_limit_amp: int = 96                   # high-channel pulse strength (0..255)
+    rev_limit_hold_ms: float = 120.0          # anti-stutter hold after falling below the ratio
 
-    # MARK: R2 wheelspin buzz
-    # Driven-wheel longitudinal slip is the primary signal. Near zero speed,
-    # raw wheel rotation replaces slip ratio so stationary burnouts still work.
+    # MARK: Shared trigger traction/grip feedback
+    # Braking routes longitudinal grip to L2; accelerator or both pedals route
+    # it to R2. Near zero speed, accelerator-driven rotation preserves burnouts.
     enable_wheelspin_buzz: bool = True
     wheelspin_amp: int = 90
     wheelspin_sensitivity: float = 1.0
@@ -113,8 +113,8 @@ class Settings:
     gear_shift_duration_ms: float = 100.0     # burst length
 
     # MARK: Body haptics
-    # USB uses four-channel audio haptics. Bluetooth automatically falls back
-    # to compatible rumble through the existing HID output report.
+    # USB and Bluetooth consume the same normalized HapticFrame. Only their
+    # existing transport/synthesis paths differ.
     enable_body_haptics: bool = True
     body_haptics_intensity: float = 0.5
     engine_haptics_intensity: float = 0.5

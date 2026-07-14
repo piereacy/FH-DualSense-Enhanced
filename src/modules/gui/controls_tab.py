@@ -1,4 +1,4 @@
-"""Controls tab: per-trigger effect on/off switches."""
+"""Controls tab: trigger and shared haptic effect on/off switches."""
 import logging
 
 import customtkinter as ctk
@@ -21,10 +21,12 @@ TRIGGER_CONTROLS = [
     ]),
     ("R2 - Throttle", [
         ("enable_gear_shift",          "Shift thump"),
-        ("enable_rev_limiter",         "Redline buzz"),
-        ("enable_wheelspin_buzz",      "Wheelspin buzz"),
         ("enable_idle_buzz",           "Idle buzz"),
         ("enable_throttle_resistance", "Throttle stiffness"),
+    ]),
+    ("Shared feedback", [
+        ("enable_rev_limiter",    "Redline grip warning"),
+        ("enable_wheelspin_buzz", "Traction/grip feedback"),
     ]),
 ]
 
@@ -45,8 +47,8 @@ class ControlsTab(ctk.CTkFrame):
 
         grid = ctk.CTkFrame(self, fg_color="transparent")
         grid.pack(fill="both", expand=True)
-        grid.grid_columnconfigure(0, weight=1, uniform="cols")
-        grid.grid_columnconfigure(1, weight=1, uniform="cols")
+        for col in range(len(TRIGGER_CONTROLS)):
+            grid.grid_columnconfigure(col, weight=1, uniform="cols")
         grid.grid_rowconfigure(0, weight=1)
 
         for col, (title, toggles) in enumerate(TRIGGER_CONTROLS):

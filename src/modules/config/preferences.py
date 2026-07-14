@@ -175,6 +175,27 @@ def _ensure_active(raw: dict, s) -> dict:
     return raw
 
 
+def _migrate_r2_redline_defaults(raw: dict) -> None:
+    """Move untouched R2 trigger-buzz defaults to the R3 grip-pulse scale.
+
+    Only named profiles explicitly written by internal version 2 qualify.
+    Default is rebuilt from current class defaults during load, and any value
+    the user changed remains untouched.
+    """
+    if not re.match(r"^2(?:\.|$)", str(raw.get("version", ""))):
+        return
+    profiles = raw.get("profiles")
+    if not isinstance(profiles, dict):
+        return
+    for name, snapshot in profiles.items():
+        if name == DEFAULT_PROFILE_NAME or not isinstance(snapshot, dict):
+            continue
+        if snapshot.get("rev_limit_freq") == 30:
+            snapshot["rev_limit_freq"] = 10
+        if snapshot.get("rev_limit_amp") == 12:
+            snapshot["rev_limit_amp"] = 96
+
+
 def load(s) -> None:
     """Read the file and apply the active profile to `s`.
 
@@ -183,6 +204,7 @@ def load(s) -> None:
     """
     raw = _read_raw()
     raw = _ensure_active(raw, s)
+    _migrate_r2_redline_defaults(raw)
     # Reset Default on every launch so updates ship new tuning automatically;
     # named profiles and globals are preserved.
     raw["profiles"][DEFAULT_PROFILE_NAME] = _profile_fields(type(s)())

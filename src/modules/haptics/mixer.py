@@ -58,6 +58,8 @@ class HapticMixer:
         self._collision_left = 0.0
         self._collision_right = 0.0
         self._shift_until = 0.0
+        self._redline_started_at: float | None = None
+        self._redline_until = 0.0
 
     def _update_rolling(self, speed_kmh: float) -> bool:
         if self._rolling:
@@ -125,6 +127,43 @@ class HapticMixer:
             rpm_ratio = 0.0
             engine_hz = 0.0
             engine_amplitude = 0.0
+
+        redline_enabled = bool(getattr(settings, "enable_rev_limiter", False))
+        engine_scale = _setting(settings, "engine_haptics_intensity", 1.0)
+        accel_deadzone = max(1.0, _setting(settings, "accel_deadzone", 0.0))
+        redline_ratio = rpm / max_rpm if max_rpm > 0.0 else 0.0
+        above_redline = (
+            redline_enabled
+            and engine_scale > 0.0
+            and accel_raw >= accel_deadzone
+            and redline_ratio >= _setting(settings, "rev_limit_ratio", 0.93)
+        )
+        hold_seconds = _setting(settings, "rev_limit_hold_ms", 120.0) / 1000.0
+        if not redline_enabled or engine_scale <= 0.0:
+            self._redline_started_at = None
+            self._redline_until = 0.0
+        elif above_redline:
+            if self._redline_started_at is None or now >= self._redline_until:
+                self._redline_started_at = now
+            self._redline_until = now + hold_seconds
+        elif now >= self._redline_until:
+            self._redline_started_at = None
+
+        redline_amplitude = 0.0
+        redline_latched = redline_enabled and engine_scale > 0.0 and (
+            above_redline or now < self._redline_until
+        )
+        if redline_latched and self._redline_started_at is not None:
+            pulse_hz = max(1.0, _setting(settings, "rev_limit_freq", 10.0))
+            period = 1.0 / pulse_hz
+            phase = (now - self._redline_started_at) % period
+            if phase < period * 0.5:
+                redline_amplitude = clamp01(
+                    _setting(settings, "rev_limit_amp", 96.0) / 255.0
+                ) * engine_scale
+
+        left_high += redline_amplitude
+        right_high += redline_amplitude
 
         for wheel in _WHEELS:
             excitation = contact_excitation[wheel]

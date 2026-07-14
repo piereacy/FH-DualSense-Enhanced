@@ -8,10 +8,10 @@ STRINGS = {
     # --- body haptics ---
     "Body haptics": "Gövde dokunsal geri bildirimi",
     "Enable body haptics": "Gövde dokunsal geri bildirimini etkinleştir",
-    ("Automatically uses high-fidelity USB audio or Bluetooth compatible rumble. "
+    ("Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
      "Disable in-game vibration only if you feel competing or doubled output."):
-        "USB bağlantısında yüksek kaliteli ses tabanlı dokunsal geri bildirimi, Bluetooth'ta uyumlu "
-        "titreşimi otomatik olarak kullanır. Oyun içi titreşimi yalnızca çıkışların çakıştığını veya "
+        "USB ve Bluetooth aynı dokunsal karışımı kullanır; yalnızca aktarım yolu farklıdır. "
+        "Oyun içi titreşimi yalnızca çıkışların çakıştığını veya "
         "iki kez uygulandığını hissederseniz kapatın.",
     "Master intensity": "Genel yoğunluk",
     "Engine intensity": "Motor yoğunluğu",
@@ -44,8 +44,6 @@ STRINGS = {
     "Static brake wall": "Sabit fren duvarı",
     "Brake stiffness": "Fren sertliği",
     "Handbrake stiffness bonus": "El freni ek sertliği",
-    "Redline buzz": "Devir sınırı titreşimi",
-    "Wheelspin buzz": "Patinaj titreşimi",
     "Idle buzz": "Rölanti titreşimi",
     "Throttle stiffness": "Gaz sertliği",
 
@@ -55,8 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "Sol tetik - Sabit duvar (isteğe bağlı)",
     "Right trigger - Gas force": "Sağ tetik - Gaz gücü",
     "ABS (anti-lock brake) rumble": "ABS (kilitlenme önleyici fren) titreşimi",
-    "Redline (rev limiter) buzz": "Devir sınırı (redline) titreşimi",
-    "Wheelspin buzz": "Patinaj titreşimi",
     "Idle buzz": "Rölanti titreşimi",
     "Gear shift thump": "Vites darbesi",
 
@@ -167,7 +163,15 @@ STRINGS = {
     "Experimental features": "Deneysel özellikler",
     "Not recommended for manual adjustment.": "Elle ayarlama önerilmez.",
     "ABS advanced tuning": "Gelişmiş ABS ayarı",
-    "Wheelspin advanced tuning": "Gelişmiş patinaj ayarı",
+    "Shared feedback": "Ortak geri bildirim",
+    "Redline grip warning": "Devir sınırı tutuş uyarısı",
+    "Trigger near redline at": "Devir sınırına yakın tetikleme",
+    "Pulse rate (Hz)": "Darbe hızı (Hz)",
+    "Grip pulse strength": "Tutuş darbesi gücü",
+    "Pulse hold time (ms)": "Darbe tutma süresi (ms)",
+    "Traction/grip feedback": "Çekiş/tutuş geri bildirimi",
+    "Grip feedback strength": "Tutuş geri bildirimi gücü",
+    "Traction/grip advanced tuning": "Gelişmiş çekiş/tutuş ayarı",
     "Minimum brake input": "Minimum fren girişi",
     "Minimum speed (km/h)": "Minimum hız (km/sa)",
     "Longitudinal slip threshold": "Boylamsal kayma eşiği",

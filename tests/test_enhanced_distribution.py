@@ -11,8 +11,9 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-INTERNAL_VERSION = "2"
-RELEASE_VERSION = "R2"
+CURRENT_INTERNAL_VERSION = "3"
+CURRENT_RELEASE_VERSION = "R3"
+DOCUMENTED_STABLE_RELEASE = "R2"
 
 
 def _source(path: str) -> str:
@@ -39,7 +40,7 @@ def test_runtime_surfaces_use_the_shared_enhanced_name():
 
 
 def test_runtime_surfaces_map_internal_version_to_public_release_version():
-    assert preferences._release_version() == RELEASE_VERSION
+    assert preferences._release_version() == CURRENT_RELEASE_VERSION
 
     for path in ("src/modules/gui/main.py", "src/modules/tui/main.py"):
         source = _source(path)
@@ -207,7 +208,7 @@ def test_readmes_are_original_enhanced_project_documentation():
     assert "ファイアウォール" in japanese
     assert "握把触覚" in japanese
     for text in (chinese, english, japanese):
-        assert RELEASE_VERSION in text
+        assert DOCUMENTED_STABLE_RELEASE in text
         assert "Forza-Horizon-DualSense-Python 1.6.2" in text
         assert "HorizonHaptics 1.3.0" in text
         assert "1.6.2.post1" in text
@@ -229,7 +230,7 @@ def test_release_identity_uses_public_r2_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 
-    assert project["project"]["version"] == INTERNAL_VERSION
+    assert project["project"]["version"] == CURRENT_INTERNAL_VERSION
     assert 'tags: ["R*", "v*.*.*"]' in workflow
     assert "release[[:space:]]+(R[0-9]+)" in workflow
     assert 'tag="${release}-preview"' in workflow
