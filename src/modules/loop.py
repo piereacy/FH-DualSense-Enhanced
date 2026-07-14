@@ -71,7 +71,11 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                             log.debug("ds.set idle failed: %s", e)
                     idle_silenced = True
                 # Fallback exit when telemetry was flowing and then stopped.
-                if pkt_count > 0 and idle > s.telemetry_lost_exit_s:
+                # This belongs to the same user-facing behavior as process
+                # watching, so disabling exit_on_game_close disables both.
+                if (s.exit_on_game_close
+                        and pkt_count > 0
+                        and idle > s.telemetry_lost_exit_s):
                     log.info("Telemetry lost for %.0fs - exiting.", idle)
                     break
                 continue

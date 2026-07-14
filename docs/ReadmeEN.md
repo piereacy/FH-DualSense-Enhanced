@@ -56,7 +56,15 @@ The standalone EXE does not update itself. Settings are stored in a `data` folde
 
 ### Linux
 
-Download and run `linux_start.sh`. Linux requires hidapi and suitable udev permissions; the launcher provides setup guidance.
+Download and run `linux_start.sh`. The launcher only downloads and starts the application; it does not install system udev rules. If the log reports insufficient DualSense permissions, download [`70-dualsense.rules`](../packaging/linux/70-dualsense.rules), then run:
+
+```bash
+sudo cp 70-dualsense.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+Reconnect the USB controller or pair the Bluetooth controller again afterward.
 
 ## Required game setup
 

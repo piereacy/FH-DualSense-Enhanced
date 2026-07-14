@@ -79,6 +79,23 @@ def test_linux_launcher_downloads_or_reuses_the_enhanced_bundle():
     assert "HamzaYslmn/Forza-Horizon-DualSense-Python" not in launcher
 
 
+def test_linux_docs_describe_manual_udev_setup_without_launcher_claims():
+    chinese = _source("README.md")
+    english = _source("docs/ReadmeEN.md")
+    japanese = _source("docs/ReadmeJA.md")
+    workflow = _source(".github/workflows/release.yml")
+
+    for text in (chinese, english, japanese, workflow):
+        assert "70-dualsense.rules" in text
+    for text in (chinese, english, japanese):
+        assert "sudo udevadm control --reload-rules" in text
+
+    assert "启动器会给出安装提示" not in chinese
+    assert "launcher provides setup guidance" not in english
+    assert "ランチャーにセットアップ案内が表示されます" not in japanese
+    assert "launcher offers to install" not in workflow
+
+
 def test_local_zuv_builder_has_optional_update_repo_and_release_notices():
     path = ROOT / "packaging/zuv/build_zuv.bat"
 
@@ -112,26 +129,22 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     assert 'name="FH-DualSense-Enhanced"' in linux_spec
 
 
-def test_readmes_use_the_upstream_style_three_language_navigation():
-    english_path = ROOT / "docs/ReadmeEN.md"
-    japanese_path = ROOT / "docs/ReadmeJA.md"
-
-    assert english_path.exists(), "English README is missing"
-    assert japanese_path.exists(), "Japanese README is missing"
+def test_readme_uses_same_page_three_language_navigation():
     assert not (ROOT / "README_EN.md").exists(), "obsolete root English README remains"
+    assert not (ROOT / "docs/ReadmeTR.md").exists(), "obsolete Turkish README remains"
     chinese = _source("README.md")
     english = _source("docs/ReadmeEN.md")
     japanese = _source("docs/ReadmeJA.md")
 
+    assert '<a id="readme-zh-cn"></a>' in chinese
+    assert '<a id="readme-en"></a>' in chinese
+    assert '<a id="readme-ja"></a>' in chinese
     assert '<strong>简体中文</strong>' in chinese
-    assert 'href="docs/ReadmeEN.md">English</a>' in chinese
-    assert 'href="docs/ReadmeJA.md">日本語</a>' in chinese
-    assert 'href="../README.md">简体中文</a>' in english
-    assert '<strong>English</strong>' in english
-    assert 'href="ReadmeJA.md">日本語</a>' in english
-    assert 'href="../README.md">简体中文</a>' in japanese
-    assert 'href="ReadmeEN.md">English</a>' in japanese
-    assert '<strong>日本語</strong>' in japanese
+    assert 'href="#readme-zh-cn">简体中文</a>' in chinese
+    assert 'href="#readme-en">English</a>' in chinese
+    assert 'href="#readme-ja">日本語</a>' in chinese
+    assert 'href="docs/ReadmeEN.md">English</a>' not in chinese
+    assert 'href="docs/ReadmeJA.md">日本語</a>' not in chinese
 
     assert "只需下载" in chinese and "win_start.bat" in chinese
     assert "manual" in english.lower() and ZUV_NAME in english

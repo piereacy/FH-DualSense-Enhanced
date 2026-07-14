@@ -198,6 +198,41 @@ def test_idle_timeout_sends_silent_haptics_and_trigger_off(monkeypatch):
     ]
 
 
+def test_telemetry_loss_does_not_exit_when_game_close_exit_is_disabled(monkeypatch):
+    _install(monkeypatch)
+    ticks = iter((0.0, 0.0, 61.0, 62.0))
+    monkeypatch.setattr(loop.time, "monotonic", lambda: next(ticks))
+    controller = _DualSense()
+    listener = _Listener([
+        (b"packet", ("127.0.0.1", 5300)),
+        (None, None),
+        (None, None),
+    ])
+    stop_event = _StopEvent(3)
+
+    loop.run(controller, listener, _settings(), stop_event=stop_event)
+
+    assert stop_event.calls == 4
+
+
+def test_telemetry_loss_exits_when_game_close_exit_is_enabled(monkeypatch):
+    _install(monkeypatch)
+    ticks = iter((0.0, 0.0, 61.0))
+    monkeypatch.setattr(loop.time, "monotonic", lambda: next(ticks))
+    controller = _DualSense()
+    listener = _Listener([
+        (b"packet", ("127.0.0.1", 5300)),
+        (None, None),
+    ])
+    stop_event = _StopEvent(5)
+    settings = _settings()
+    settings.exit_on_game_close = True
+
+    loop.run(controller, listener, settings, stop_event=stop_event)
+
+    assert stop_event.calls == 2
+
+
 def test_haptics_failure_does_not_block_trigger_output(monkeypatch):
     _install(monkeypatch)
     _Manager.raises = True

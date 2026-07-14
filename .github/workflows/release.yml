@@ -225,7 +225,7 @@ jobs:
             > **Heads up**
             > - A manually downloaded ZUV can be kept next to the launcher script. The launcher copies it into its managed `app` folder.
             > - Settings live in `data/user_preferences.json` next to the launcher and survive updates.
-            > - Linux: launcher offers to install `70-dualsense.rules` to `/etc/udev/rules.d/` once.
+            > - Linux: the launcher does not install system udev rules. If HID access is denied, download [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules), copy it to `/etc/udev/rules.d/`, reload the rules, and reconnect the controller.
             > - Prerelease channel: run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to track rolling test builds.
           files: release/*
 
