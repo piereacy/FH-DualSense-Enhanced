@@ -63,6 +63,13 @@ def _version() -> str:
         return ""
 
 
+def _release_version() -> str:
+    """Map the internal PEP 440 package version to the public R release label."""
+    version = _version()
+    match = re.match(r"^(\d+)", version)
+    return f"R{match.group(1)}" if match else ""
+
+
 def _fields(s) -> dict:
     return {k: v for k, v in vars(s).items() if isinstance(v, _SIMPLE)}
 

@@ -13,7 +13,7 @@ from modules.about import APP_NAME
 from modules import loop, forzahorizon, make_backend
 from modules.config import preferences, profiles
 from modules.dualsense.adaptive_trigger import off, vibrate
-from modules.config.preferences import _version
+from modules.config.preferences import _release_version
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 
 from .controls_tab import ControlsTab
@@ -98,7 +98,7 @@ class TriggerTUI(App):
         with Horizontal(id="topbar"):
             yield Static("", id="profile")
             yield Static("", id="status")
-            yield Static(f"v{_version() or '?'}", id="version")
+            yield Static(_release_version() or "?", id="version")
         with TabbedContent(initial="tab-controls"):
             with TabPane(t("Controls"), id="tab-controls"):
                 yield ControlsTab(self.settings)

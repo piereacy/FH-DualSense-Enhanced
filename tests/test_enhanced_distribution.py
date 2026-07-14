@@ -5,10 +5,14 @@ from pathlib import Path
 
 from PIL import Image
 
+from modules.config import preferences
+
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
+INTERNAL_VERSION = "2"
+RELEASE_VERSION = "R2"
 
 
 def _source(path: str) -> str:
@@ -32,6 +36,15 @@ def test_runtime_surfaces_use_the_shared_enhanced_name():
     ):
         source = _source(path)
         assert "APP_NAME" in source, f"{path} does not use APP_NAME"
+
+
+def test_runtime_surfaces_map_internal_version_to_public_release_version():
+    assert preferences._release_version() == RELEASE_VERSION
+
+    for path in ("src/modules/gui/main.py", "src/modules/tui/main.py"):
+        source = _source(path)
+        assert "_release_version" in source
+        assert 'f"v{_version()' not in source
 
 
 def test_runtime_chrome_does_not_link_to_original_release_updates():
@@ -117,6 +130,7 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "HamzaYslmn/Forza-Horizon-DualSense-Python" not in workflow
     assert "Download **`win_start.bat`**" in workflow
     assert "manual ZUV fallback" in workflow
+    assert "FH-DualSense-Enhanced.zuv.py" in workflow
 
 
 def test_windows_packaging_emits_the_enhanced_executable_name():
@@ -125,8 +139,12 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     linux_spec = _source("packaging/linux/fhds.spec")
 
     assert 'name="FH-DualSense-Enhanced"' in spec
-    assert "FH-DualSense-Enhanced-v%VER%.exe" in build
+    assert "FH-DualSense-Enhanced-R%VER%.exe" in build
+    assert "PUBLIC_VERSION = f\"R{VERSION}\"" in spec
+    assert "StringStruct('FileVersion', '{PUBLIC_VERSION}')" in spec
+    assert "StringStruct('ProductVersion', '{PUBLIC_VERSION}')" in spec
     assert 'name="FH-DualSense-Enhanced"' in linux_spec
+    assert "FH-DualSense-Enhanced-R$VER" in _source("packaging/linux/build_elf.sh")
 
 
 def test_readme_uses_same_page_three_language_navigation():
@@ -188,16 +206,37 @@ def test_readmes_are_original_enhanced_project_documentation():
     assert "firewall" in english.lower()
     assert "ファイアウォール" in japanese
     assert "握把触覚" in japanese
-    assert "1.6.2.post1" in japanese
+    for text in (chinese, english, japanese):
+        assert RELEASE_VERSION in text
+        assert "Forza-Horizon-DualSense-Python 1.6.2" in text
+        assert "HorizonHaptics 1.3.0" in text
+        assert "1.6.2.post1" in text
 
 
-def test_release_identity_is_the_enhanced_post_release():
+def test_readmes_describe_r2_features_and_public_artifact_names():
+    chinese = _source("README.md")
+    english = _source("docs/ReadmeEN.md")
+    japanese = _source("docs/ReadmeJA.md")
+
+    for text in (chinese, english, japanese):
+        assert "FH-DualSense-Enhanced-R2.exe" in text
+        assert "wheelspin" in text.lower()
+        assert "ABS wall" in text
+        assert "R2-preview" in text
+
+
+def test_release_identity_uses_public_r2_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 
-    assert project["project"]["version"] == "1.6.2.post1"
-    assert "FH-DualSense-Enhanced 1.6.2 Enhanced R1" in workflow
-    assert "v1.6.2.post1" in workflow
+    assert project["project"]["version"] == INTERNAL_VERSION
+    assert 'tags: ["R*", "v*.*.*"]' in workflow
+    assert "release[[:space:]]+(R[0-9]+)" in workflow
+    assert 'tag="${release}-preview"' in workflow
+    assert 'title="FH-DualSense-Enhanced ${release} Preview"' in workflow
+    assert 'title="FH-DualSense-Enhanced $tag"' in workflow
+    assert "refs/tags/v*" in workflow
+    assert "v[0-9]+\\.[0-9]+\\.[0-9]+" in workflow
 
 
 def test_selected_icon_is_used_by_all_application_surfaces():

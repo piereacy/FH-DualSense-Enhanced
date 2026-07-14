@@ -30,6 +30,7 @@ def _version_tuple(v: str) -> tuple:
     return tuple(parts)
 
 VERSION = _read_version()
+PUBLIC_VERSION = f"R{VERSION}"
 VTUP = _version_tuple(VERSION)
 VERSION_FILE = Path(SPECPATH) / "version_info.txt"
 VERSION_FILE.write_text(f"""# UTF-8
@@ -44,12 +45,12 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'FH-DualSense-Enhanced Contributors'),
         StringStruct('FileDescription', 'Enhanced Forza Horizon DualSense haptics'),
-        StringStruct('FileVersion', '{VERSION}'),
+        StringStruct('FileVersion', '{PUBLIC_VERSION}'),
         StringStruct('InternalName', 'FH-DualSense-Enhanced'),
         StringStruct('LegalCopyright', '(C) 2025 Hamza Yesilmen (HamzaYslmn). Attribution & Sponsor License.'),
         StringStruct('OriginalFilename', 'FH-DualSense-Enhanced.exe'),
         StringStruct('ProductName', 'FH-DualSense-Enhanced'),
-        StringStruct('ProductVersion', '{VERSION}'),
+        StringStruct('ProductVersion', '{PUBLIC_VERSION}'),
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

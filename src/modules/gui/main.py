@@ -30,7 +30,7 @@ from lang import set_language, t
 from modules import forzahorizon, loop, make_backend
 from modules.about import APP_NAME
 from modules.config import preferences, profiles
-from modules.config.preferences import _version
+from modules.config.preferences import _release_version
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 
@@ -252,7 +252,7 @@ class TriggerGUI:
         self.status_pill.grid(row=0, column=1, padx=T.PAD_SM, pady=T.PAD_SM)
 
         self.lbl_version = ctk.CTkLabel(
-            bar, text=f"v{_version() or '?'}",
+            bar, text=_release_version() or "?",
             text_color=T.TEXT_FAINT, cursor="hand2",
             font=ctk.CTkFont(size=T.FS_TINY),
         )

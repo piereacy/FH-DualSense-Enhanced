@@ -1,15 +1,15 @@
 name: release
 
 # Triggers:
-#   - tag vX.Y.Z or vX.Y.Z.postN              -> stable release
-#   - commit msg contains "release vX.Y.Z[.postN]" -> stable release
-#   - commit msg contains "prerelease"        -> prerelease at (latest stable + patch)
-#   - manual workflow_dispatch                -> prerelease at (latest stable + patch)
+#   - tag RN or commit msg contains "release RN" -> stable R-series release
+#   - tag vX.Y.Z or vX.Y.Z.postN                  -> legacy stable release
+#   - legacy "release vX.Y.Z[.postN]" commits     -> legacy stable release
+#   - commit msg contains "prerelease" or manual dispatch -> rolling RN-preview
 
 on:
   push:
     branches: [main, dev]
-    tags: ["v*.*.*"]
+    tags: ["R*", "v*.*.*"]
   workflow_dispatch:
 
 permissions:
@@ -35,29 +35,34 @@ jobs:
           set -e
           tag=""; prerelease=""; title=""
           msg=$(git log -1 --pretty=%s)
+          internal=$(sed -n 's/^version = "\([^"]*\)"/\1/p' src/pyproject.toml | head -1)
+          if [[ ! "$internal" =~ ^[0-9]+$ ]]; then
+            echo "Expected a numeric internal project version, got: $internal" >&2
+            exit 1
+          fi
+          release="R$internal"
 
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            # tag push -> stable
+          if [[ "$GITHUB_REF" =~ ^refs/tags/(R[0-9]+)$ ]]; then
+            # R-series tag push -> stable
+            tag="${BASH_REMATCH[1]}"; prerelease=false
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # legacy tag push -> stable
             tag="${GITHUB_REF#refs/tags/}"; prerelease=false; title="$tag"
+          elif [[ "$msg" =~ release[[:space:]]+(R[0-9]+) ]]; then
+            # explicit R-series stable release commit
+            tag="${BASH_REMATCH[1]}"; prerelease=false
           elif [[ "$msg" =~ release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?) ]]; then
-            # explicit stable release commit
+            # explicit legacy stable release commit
             tag="${BASH_REMATCH[1]}"; prerelease=false; title="$tag"
           elif [[ "$msg" == *prerelease* || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # prerelease -> next patch above the latest published stable release
-            base=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name 2>/dev/null || true)
-            base="${base:-v0.0.0}"
-            if [[ "$base" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-              maj="${BASH_REMATCH[1]}"
-              min="${BASH_REMATCH[2]}"
-              pat="${BASH_REMATCH[3]}"
-            else
-              maj=0; min=0; pat=0
-            fi
-            tag="v${maj}.${min}.$((pat + 1))"
-            prerelease=true; title="🧪 ${tag} - Prerelease"
+            # rolling prerelease for the current R-series version
+            tag="${release}-preview"
+            prerelease=true; title="FH-DualSense-Enhanced ${release} Preview"
           fi
 
-          if [[ "$tag" == "v1.6.2.post1" ]]; then
+          if [[ "$tag" =~ ^R[0-9]+$ ]]; then
+            title="FH-DualSense-Enhanced $tag"
+          elif [[ "$tag" == "v1.6.2.post1" ]]; then
             title="FH-DualSense-Enhanced 1.6.2 Enhanced R1"
           elif [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)\.post([0-9]+)$ ]]; then
             title="FH-DualSense-Enhanced ${BASH_REMATCH[1]} Enhanced R${BASH_REMATCH[2]}"
@@ -171,7 +176,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: elf
-          path: packaging/linux/dist/FH-DualSense-Enhanced-v*
+          path: packaging/linux/dist/FH-DualSense-Enhanced-*
 
   # MARK: combined release -----------------------------------------------
   release:
@@ -201,9 +206,13 @@ jobs:
           body: |
             ## FH-DualSense-Enhanced
 
-            This release adds telemetry-driven DualSense body haptics to the adaptive-trigger experience. Engine, road material, suspension, impacts, puddles, tire slip, wheelspin, and ABS are mixed from live Forza Horizon Data Out telemetry instead of a fixed vibration pattern.
+            Enhanced R2 adds telemetry-driven dynamic wheelspin feedback to the R2 trigger and a GT7-style ABS wall to the L2 trigger. Wheelspin uses driven-wheel slip, asymmetric EWMA smoothing, hysteresis, low-speed raw wheel rotation, G-force damping, and material-specific frequency bands for tarmac, puddles, dirt, and gravel. Wheelspin takes priority over the rev limiter so the R2 trigger follows the active traction event.
+
+            R2 also keeps the existing adaptive-trigger and body-haptics mixer for engine, road material, suspension, impacts, puddles, tire slip, wheelspin, and ABS. The new tuning controls are folded under Experimental settings and use reviewed defaults.
 
             USB and Bluetooth provide broadly similar practical feedback. USB uses the controller audio endpoint for haptics, while Bluetooth uses compatible low and high frequency rumble. Adaptive triggers remain available on both connections.
+
+            R2 starts FH-DualSense-Enhanced's independent R-series versioning to keep the product version concise and avoid implying an official upstream release. It is based on Forza-Horizon-DualSense-Python 1.6.2 and references HorizonHaptics 1.3.0. Historical Enhanced R1 used version 1.6.2.post1.
 
             ## Recommended: launcher scripts
 

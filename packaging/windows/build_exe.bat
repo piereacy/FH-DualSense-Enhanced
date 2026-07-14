@@ -1,13 +1,13 @@
 @echo off
 REM Build a standalone single-file EXE of FH-DualSense-Enhanced.
-REM Output: packaging\windows\dist\FH-DualSense-Enhanced-vX.Y.Z.exe
+REM Output: packaging\windows\dist\FH-DualSense-Enhanced-RN.exe
 REM (no install, no traces - MEIPASS auto-cleans on exit)
 REM Requires: uv  (https://docs.astral.sh/uv/)
 
 setlocal EnableDelayedExpansion
 pushd "%~dp0..\.."
 
-REM MARK: read version = "X.Y.Z" from src\pyproject.toml
+REM MARK: read the internal numeric version from src\pyproject.toml
 set "VER="
 for /f "tokens=*" %%L in ('findstr /b /c:"version" src\pyproject.toml') do (
     if not defined VER (
@@ -25,7 +25,7 @@ if not defined VER (
     popd
     exit /b 1
 )
-echo Building FH-DualSense-Enhanced v%VER% ...
+echo Building FH-DualSense-Enhanced R%VER% ...
 
 set "DIST=%~dp0dist"
 set "WORK=%~dp0build"
@@ -52,12 +52,12 @@ if errorlevel 1 (
 
 REM MARK: rename output to include version
 if exist "%DIST%\FH-DualSense-Enhanced.exe" (
-    move /y "%DIST%\FH-DualSense-Enhanced.exe" "%DIST%\FH-DualSense-Enhanced-v%VER%.exe" >nul
+    move /y "%DIST%\FH-DualSense-Enhanced.exe" "%DIST%\FH-DualSense-Enhanced-R%VER%.exe" >nul
 )
 copy /y "docs\THIRD_PARTY_NOTICES.md" "%DIST%\THIRD_PARTY_NOTICES.md" >nul
 copy /y "LICENSE" "%DIST%\LICENSE" >nul
 
 echo.
-echo Build OK. Executable: %DIST%\FH-DualSense-Enhanced-v%VER%.exe
+echo Build OK. Executable: %DIST%\FH-DualSense-Enhanced-R%VER%.exe
 popd
 endlocal

@@ -6,14 +6,14 @@
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
 - 当前开发分支：`feat/r2-trigger-dynamics`，隔离工作树为 `.worktrees/r2-trigger-dynamics`。
 - 当前开发基线：`128a7b9 chore: ignore local feature worktrees`。交付后的 HEAD 应使用 `git log -1 --oneline` 读取，避免文档因自身提交再次过期。
-- 版本：`1.6.2.post1`，Release workflow 命名为 `FH-DualSense-Enhanced 1.6.2 Enhanced R1`。
+- 版本：公开产品版本 `R2`，`src/pyproject.toml` 的内部 PEP 440 版本为 `2`。稳定 Release 标题为 `FH-DualSense-Enhanced R2`，滚动预发布为 `R2-preview`。
 - Git 历史：审计开始时本地是 shallow clone，只有 7 条已有提交，因此无法从本地恢复上游完整历史。
-- 当前阶段：Enhanced R1 已发布；Enhanced R2 的动态 wheelspin、GT7 风格 ABS wall 和实验性设置已在功能分支实现。USB/Bluetooth synthetic telemetry 手感已经确认；Bluetooth 真实 Forza Data Out 已完成油门打滑、松油漂移排除、低速 raw rotation、新 wheelspin/rev 优先级、L2 扳机键 ABS wall 和铺装/积水/泥土/碎石四种实际材质验证。前驱/后驱实机验证经用户决定不再执行，DSX 不在当前范围；功能分支尚未合入或发布。
+- 当前阶段：Enhanced R2 的功能、实机验证、独立 `R` 版本身份、三语发布文档、ZUV 与 Windows EXE 本地构建均已完成。功能分支尚未合入；`R2-preview` GitHub Actions、Linux ELF CI 和稳定 `R2` Release 尚未执行。
 
 ## 当前开发重心
 
 1. Enhanced R2 已完成当前批准范围内的实现、自动测试与硬件验证；不再继续调整 wheelspin/ABS 默认常量。
-2. 最终软件回归已通过；下一步更新 Enhanced R2 版本号、README 与 Release workflow，并验证构建产物。
+2. R2 发布身份与本地产物门禁已通过；下一步合入并推送 `main`，用 `R2-preview` 验证 Windows/Linux/bundle Release workflow，再发布稳定 `R2`。
 3. DSX 保留当前 adapter 和自动测试结果，不做实机调校、功能扩展或效果承诺，也不作为 Enhanced R2 发布门槛。
 
 ## 最近完成的功能
@@ -24,7 +24,7 @@
 - 静止 gating 已实现：真正静止怠速安静，原地轰油和烧胎保留反馈，路面材质只在滚动或车轮实际空转时激活。实现位于 `src/modules/haptics/mixer.py`，覆盖位于 `tests/haptics/test_mixer.py`。
 - USB 和 Bluetooth 的 trigger + rumble 原子输出、BT CRC、rumble release 和重连恢复已有测试，见 `src/modules/dualsense/main.py`、`tests/dualsense/test_output_report.py` 和 `tests/dualsense/test_reconnect_output.py`。
 - GUI/TUI 的 USB audio lifecycle、关闭游戏退出、最小化到托盘开关已经实现，见 `src/modules/haptics/lifecycle.py`、`src/modules/gui/main.py`、`src/modules/gui/settings_tab.py` 和 `tests/gui/test_window_behavior.py`。
-- 项目已改名为 `FH-DualSense-Enhanced`，版本设为 `1.6.2.post1`，发布脚本可生成 ZUV、Windows EXE 和 Linux ELF。相关入口为 `src/pyproject.toml`、`packaging/` 和 `.github/workflows/release.yml`。
+- 项目已改名为 `FH-DualSense-Enhanced`。R2 使用公开版本 `R2` 和内部版本 `2`，GUI/TUI、Windows VERSIONINFO、构建脚本与 Release workflow 已按此映射；历史 R1 `1.6.2.post1` 只保留在迁移说明和旧 release 兼容分支中。
 - 默认调校已写入 `Settings` 并由 fixture 锁定，见 `src/modules/config/settings.py`、`tests/fixtures/community_defaults_2323.json` 和 `tests/test_community_defaults.py`。`2323` 只是测试 fixture 名称，不是运行时 Profile。
 - About 与许可证归属已集中在 `src/modules/about.py`，Sponsor 只应出现在 About/License surface，对应测试为 `tests/test_about_and_release.py`。
 - 根 `README.md` 已集成中文、英语和日语三个同页 anchor，测试现已验证 `#readme-zh-cn`、`#readme-en` 和 `#readme-ja`，不再要求跳转独立语言页面。
@@ -57,12 +57,23 @@
 - GUI 隐藏构建和展开/折叠脚本已通过；Textual test app 已实际挂载默认折叠的 `Collapsible`。
 - 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证；Bluetooth 真实游戏遥测已确认油门驱动打滑触发 R2 扳机键、松油漂移不触发、低速 raw rotation 触发、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质 signature。前驱/后驱实机验证由用户明确取消，DSX 已移出当前范围。
 
+### Enhanced R2 发布
+
+代码状态：设计位于 `docs/superpowers/specs/2026-07-14-r2-release-design.md`，实施清单位于 `docs/superpowers/plans/2026-07-14-r2-release.md`。本地实现和 Windows/ZUV 门禁已经完成，远端 CI 与公开发布尚未执行。
+
+- `src/pyproject.toml` 使用内部版本 `2`，`preferences._release_version()` 将运行时公开显示映射为 `R2`。
+- Windows 与 Linux 本地构建脚本分别输出 `FH-DualSense-Enhanced-R2.exe` 和 `FH-DualSense-Enhanced-R2`；Windows VERSIONINFO 的 `FileVersion` 与 `ProductVersion` 均为 `R2`。
+- `.github/workflows/release.yml` 支持 `R2`、`release R2`、滚动 `R2-preview`，并保留历史 `vX.Y.Z` / `vX.Y.Z.postN` 兼容。
+- 根 README 的同页三语言、兼容 EN/JA 文档与发行包说明均已说明 R2 体系、上游 `1.6.2`、HorizonHaptics `1.3.0` 和历史 R1 迁移。
+- 固定资产名 `FH-DualSense-Enhanced.zuv.py`、`win_start.bat`、`linux_start.sh`、latest Release 更新和 `--prerelease` 频道继续保留；ZUV 去留留给 R3。
+
 ## 尚未完成的工作
 
 ### 尚未完成
 
 - USB 的轻/重 ABS、Bluetooth 的强 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
-- Enhanced R2 版本号、README、Release workflow、构建产物、合入和 Release 均未处理。
+- `R2-preview` GitHub Actions 尚未执行，因此 Linux ELF 与远端 Windows/bundle 构建尚未验证。
+- 功能分支尚未合入、推送，稳定 tag `R2` 和 GitHub Release 尚未创建。
 
 ### 当前明确不做
 
@@ -79,9 +90,10 @@
 
 ## 下一步建议顺序
 
-1. 确定 Enhanced R2 的包版本与 Release 名称，更新 README、版本和 Release workflow。
-2. 构建并冒烟检查 ZUV、Windows EXE；Linux ELF 仍需在对应环境或 CI 验证。
-3. 决定合入 `main` 与发布 Release 的时机。
+1. 将 `feat/r2-trigger-dynamics` 快进合入 `main` 并推送。
+2. 手动运行 `R2-preview` workflow，确认 bundle、Windows EXE、Linux ELF 和 prerelease 资产。
+3. 在同一已验证提交创建并推送 `R2` tag，核验稳定 GitHub Release。
+4. 发布后更新本文件的最终 Release 链接、CI 结果和 Git 状态。
 
 ## 当前已知 Bug
 
@@ -113,7 +125,7 @@
 - `src/modules/haptics/mixer.py` 中静止、滚动、烧胎和路面材质 gating。R2 扳机改动不应破坏握把现有规则。
 - `src/modules/config/preferences.py` 中 Default Profile 重建、GLOBAL_FIELDS 和 atomic write。
 - `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名及第三方声明。
-- 版本号和 Release workflow，直到 R2 实机验证完成。
+- R2 触觉算法、默认参数和已确认的版本命名；发布阶段只允许修复明确的测试、构建或 Release 阻塞问题。
 
 ## 最近涉及的关键文件
 
@@ -127,7 +139,9 @@
 - `docs/ReadmeTR.md`：旧土耳其语文档已删除。
 - `tests/test_enhanced_distribution.py`：同页 anchor 和 Linux 文档契约。
 - `src/modules/loop.py`、`tests/test_loop_haptics.py`：`exit_on_game_close` 同时控制进程和断流退出。
-- `src/pyproject.toml`、`.github/workflows/release.yml`：R1 版本和发布身份。
+- `src/pyproject.toml`、`src/modules/config/preferences.py`、`.github/workflows/release.yml`：内部版本 `2`、公开 `R2` 映射和 R2/R2-preview 发布身份。
+- `packaging/windows/build_exe.bat`、`packaging/windows/fhds.spec`、`packaging/linux/build_elf.sh`：R2 产物命名与 Windows VERSIONINFO。
+- `docs/superpowers/specs/2026-07-14-r2-release-design.md`、`docs/superpowers/plans/2026-07-14-r2-release.md`：已批准的发布设计和实施清单。
 - `src/modules/haptics/audio.py`、`frame.py`、`mixer.py`、`manager.py`、`lifecycle.py`：R1 body haptics 主体。
 - `src/modules/dualsense/main.py`、`src/modules/loop.py`：trigger 与 rumble 原子输出和主循环接入。
 - `src/modules/config/settings.py`、`preferences.py`：社区默认值、Profile/global 边界和后台设置。
@@ -136,7 +150,7 @@
 
 ## 当前 Git 工作区状态
 
-当前位于 `feat/r2-trigger-dynamics` 隔离工作树。Enhanced R2 生产代码、自动测试和初版文档始于 `14832c0 feat: add R2 dynamic trigger feedback`，USB/Bluetooth synthetic 验证记录随后单独提交；本轮变更范围是 R2 扳机键 wheelspin/rev 优先级修复、3 个回归测试和相应文档同步。准确 HEAD 与工作区清洁状态必须分别用 `git log -1 --oneline`、`git status --short` 读取。功能分支尚未合入 `main` 或发布。
+当前位于 `feat/r2-trigger-dynamics` 隔离工作树。发布实施计划提交为 `7908550 docs: plan R2 release`；R2 发布身份、workflow、文档、契约测试和本地构建结果正在准备提交。准确 HEAD 与工作区清洁状态必须分别用 `git log -1 --oneline`、`git status --short` 读取。功能分支尚未合入 `main` 或发布，`packaging/*/build` 与 `packaging/*/dist` 为忽略的本地产物。
 
 ## 已执行的测试和验证
 
@@ -168,11 +182,16 @@
 - Bluetooth 真实材质验证：泥土稳定为 `surface_rumble=0.120`、`30..70 Hz`，有效采样 `199/199`。
 - Bluetooth 真实材质验证：最终有效碎石区四轮稳定为 `surface_rumble=0.600`，动态输出覆盖 `12..30 Hz`；离开碎石表面时按当前主导轮数据切换到泥土或铺装频带，重新进入后恢复。用户完成四段且未报告手感异常。
 - 材质验证交付检查：`uv run --project src pytest -q` 为 `158 passed`；`uv run --project src python -m compileall -q src/modules src/lang` 与 `git diff --check` 均通过，只有 Git 的 LF/CRLF 策略提示。
+- R2 发布契约先红后绿：修改测试后旧 R1 身份产生 `5 failed, 11 passed`，实现后 `tests/test_enhanced_distribution.py` 为 `16 passed`。
+- R2 发布准备全量回归：`uv run --project src pytest -q` 为 `160 passed`；`compileall` 与 `git diff --check` 通过。
+- update-enabled ZUV 构建与 `uvx zuv inspect` 通过：内部版本 `2`、入口 `main.py`、持久化 volume `data`、更新源 `piereacy/FH-DualSense-Enhanced`，固定资产名为 `FH-DualSense-Enhanced.zuv.py`。
+- Windows EXE 本地构建通过：`FH-DualSense-Enhanced-R2.exe`，大小 37,782,007 bytes，SHA-256 `E920ED7E61144522680D65352E1D4063F5E0F82769A77D05EA272B102DC5BEC3`。
+- EXE VERSIONINFO 为 `FileVersion=R2`、`ProductVersion=R2`、`ProductName=FH-DualSense-Enhanced`；`--help` 退出码为 0。加载 `System.Drawing` 后成功读取 32x32 associated icon，handle 非空。
 
 ## 尚未执行或失败的验证
 
-- 未构建 ZUV、Windows EXE 或 Linux ELF。
-- 未运行 GitHub Actions。
+- ZUV 与 Windows EXE 已完成本地构建；Windows 环境未本地构建 Linux ELF。
+- 尚未运行 GitHub Actions，Linux ELF 和远端 Release 资产仍待 CI 验证。
 - 已连接真实 Forza Data Out 并完成四驱低速 raw rotation、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质。前驱/后驱实机验证由用户取消，不再列为失败或发布门槛。
 - USB 与 Bluetooth 已完成 synthetic wheelspin、关键 surface 和 ABS wall 手感验证；DSX 未执行，并已明确不作为当前任务或发布门槛。
 - 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
@@ -191,4 +210,4 @@
 7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
 8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
 
-建议首先处理的具体任务：不要继续加算法功能。先完成最终回归，再准备 Enhanced R2 的版本号、README、Release workflow 与构建产物；不安排前驱/后驱或 DSX 实机验证。
+建议首先处理的具体任务：不要继续加算法功能。按 `docs/superpowers/plans/2026-07-14-r2-release.md` 从合入、`R2-preview` CI 验证继续，成功后发布稳定 `R2`；不安排前驱/后驱或 DSX 实机验证。

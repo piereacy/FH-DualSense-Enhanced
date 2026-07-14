@@ -10,20 +10,24 @@
   <p><strong>DualSense adaptive triggers and telemetry-driven body haptics for Forza Horizon on PC.</strong></p>
 </div>
 
-FH-DualSense-Enhanced `1.6.2.post1` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
+FH-DualSense-Enhanced `R2` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2` and informed by `HorizonHaptics 1.3.0`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
 
 This is not an official upstream release and does not represent the upstream author's views.
 
+Starting with R2, this project uses its own concise `R` version series to avoid looking like an official upstream version. Historical Enhanced R1 used `1.6.2.post1`; the upstream base version is no longer embedded in the current product version.
+
 ## Highlights
 
-- Progressive brake-trigger resistance with ABS pulses.
-- Progressive throttle-trigger resistance with shift, redline, and wheelspin feedback.
+- The L2 trigger provides progressive brake resistance and a GT7-style ABS wall, preserving an upper resistance wall while pulsing the lower zones.
+- The R2 trigger provides dynamic wheelspin feedback derived from driven-wheel slip, low-speed wheel rotation, asymmetric EWMA smoothing, hysteresis, and G-force damping; it takes priority over the rev limiter.
+- Tarmac, puddles, dirt, and gravel use distinct R2-trigger material frequency bands.
 - Body haptics for engine, road material, suspension, impacts, puddles, tire slip, burnouts, and ABS.
 - No meaningless continuous vibration when the vehicle is truly stationary at idle.
 - Revving and burnouts while stationary still produce appropriate feedback.
 - Road material contributes only while the car moves or the tires create physical excitation.
 - USB and Bluetooth support.
 - Profiles, tray behavior, exit-with-game behavior, and ZUV updates.
+- Dynamic R2 trigger controls live under a collapsed Experimental section; changing them without understanding the algorithm is not recommended.
 
 The default tuning is informed by community feedback and refined through hands-on driving tests. It is a practical starting point, not a universal setting for every car or player.
 
@@ -50,9 +54,11 @@ For the manual network fallback, also download `FH-DualSense-Enhanced.zuv.py`, p
 
 ### Standalone EXE
 
-Downloading only `FH-DualSense-Enhanced-vX.Y.Z.exe` also works. The EXE includes Python and all application dependencies, so BAT, ZUV, uv, and a system Python installation are not required.
+Downloading only `FH-DualSense-Enhanced-R2.exe` also works. The EXE includes Python and all application dependencies, so BAT, ZUV, uv, and a system Python installation are not required.
 
 The standalone EXE does not update itself. Settings are stored in a `data` folder beside the EXE.
+
+To try rolling test builds, use the `R2-preview` Release and run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to follow the prerelease channel.
 
 ### Linux
 

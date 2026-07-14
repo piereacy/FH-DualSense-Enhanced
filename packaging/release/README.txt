@@ -1,8 +1,9 @@
-FH-DualSense-Enhanced v1.6.2.post1
-====================================
+FH-DualSense-Enhanced R2
+========================
 
-这是 Forza-Horizon-DualSense-Python 的非官方增强版本。
-完整中文说明请阅读 README.md，English documentation: README_EN.md。
+这是基于 Forza-Horizon-DualSense-Python 1.6.2、参考 HorizonHaptics 1.3.0 的非官方增强版本。
+从 R2 起采用独立的 R 版本体系；历史 Enhanced R1 使用 1.6.2.post1。
+完整中文、English 和日本語说明请阅读 README.md。
 
 Windows 推荐安装方式
 --------------------
@@ -12,7 +13,9 @@ Windows 推荐安装方式
 
 网络不稳定时，可以同时下载 FH-DualSense-Enhanced.zuv.py，把它放在 win_start.bat 旁边后重新运行。
 
-也可以直接运行 FH-DualSense-Enhanced-v1.6.2.post1.exe。EXE 不需要 Python 环境，但不会自动更新。
+也可以直接运行 FH-DualSense-Enhanced-R2.exe。EXE 不需要 Python 环境，但不会自动更新。
+
+R2 新增动态 wheelspin、四种路面材质频带和 GT7 风格 ABS wall。滚动测试版使用 R2-preview。
 
 默认设置
 --------
