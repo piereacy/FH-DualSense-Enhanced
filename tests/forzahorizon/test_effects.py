@@ -4,7 +4,7 @@ import pytest
 
 from modules.config.settings import Settings
 from modules.dualsense.adaptive_trigger import M_VIBRATE, M_VIBRATE_ZONES
-from modules.forzahorizon.effects import TriggerAnimations, _AsymmetricEwma
+from modules.forzahorizon.effects import Controller, TriggerAnimations, _AsymmetricEwma
 
 
 WHEELS = ("fl", "fr", "rl", "rr")
@@ -17,6 +17,9 @@ def _telemetry(**overrides):
         "drive_train": 2,
         "accel": 255,
         "brake": 0,
+        "handbrake": 0,
+        "rpm": 1000.0,
+        "max_rpm": 9000.0,
         "accel_x": 0.0,
         "accel_z": 0.0,
     }
@@ -190,6 +193,51 @@ def test_wheelspin_reset_clears_latched_and_smoothed_state():
 
     assert animation._wheelspin_active is False
     assert animation._wheelspin_ewma.value == 0.0
+
+
+def test_r2_trigger_wheelspin_takes_priority_over_rev_limiter_at_speed():
+    settings = Settings()
+    controller = Controller(settings)
+    telemetry = _telemetry(
+        rpm=9000.0,
+        max_rpm=9000.0,
+        tire_slip_ratio_rr=2.0,
+    )
+
+    controller.R2(telemetry, settings, 1.0)
+    frame = controller.R2(telemetry, settings, 1.04)
+
+    assert frame[0] == M_VIBRATE
+    assert frame[1] != (settings.rev_limit_freq, settings.rev_limit_amp)
+    assert frame[1][0] > settings.rev_limit_freq
+
+
+def test_r2_trigger_low_speed_raw_rotation_takes_priority_over_rev_limiter():
+    settings = Settings()
+    controller = Controller(settings)
+    telemetry = _telemetry(
+        speed=0.0,
+        drive_train=1,
+        rpm=9000.0,
+        max_rpm=9000.0,
+        wheel_rotation_speed_rr=120.0,
+    )
+
+    controller.R2(telemetry, settings, 1.0)
+    frame = controller.R2(telemetry, settings, 1.04)
+
+    assert frame[0] == M_VIBRATE
+    assert frame[1] != (settings.rev_limit_freq, settings.rev_limit_amp)
+    assert frame[1][0] > settings.rev_limit_freq
+
+
+def test_r2_trigger_rev_limiter_still_runs_when_driven_wheels_have_grip():
+    settings = Settings()
+    telemetry = _telemetry(rpm=9000.0, max_rpm=9000.0)
+
+    frame = Controller(settings).R2(telemetry, settings, 1.0)
+
+    assert frame == (M_VIBRATE, (settings.rev_limit_freq, settings.rev_limit_amp))
 
 
 def test_abs_requires_brake_and_minimum_speed():

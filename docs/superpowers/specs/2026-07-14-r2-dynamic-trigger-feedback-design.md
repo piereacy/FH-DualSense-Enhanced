@@ -35,7 +35,7 @@ R2 在现有 `TriggerAnimations` 和 `Controller` 优先级链中升级 wheelspi
 ## 架构约束
 
 - 在 `src/modules/forzahorizon/effects.py` 内增加小型时间平滑 helper，不建立第二套控制器或 transport。
-- 保持 `Controller.L2()` 和 `Controller.R2()` 的现有优先级；只升级对应 effect 返回值。
+- 保持 `Controller.L2()` 的现有优先级。真实遥测验证后，`Controller.R2()` 只作一项批准调整：dynamic wheelspin 高于 rev-limiter，避免高转速遮蔽真实轮胎空转；其他顺序不变。
 - 不改 `src/modules/dualsense/main.py` 的 USB/BT report layout、BT CRC 或原子 `set()` 路径。
 - 不改 `src/modules/haptics/mixer.py` 的静止、滚动、烧胎和路面 gating。
 - 每个行为先由 pytest 失败测试定义，再写生产代码。

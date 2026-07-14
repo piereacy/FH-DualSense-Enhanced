@@ -321,10 +321,11 @@ class Controller:
 
     R2 priority (top wins):
         1. Gear shift thump    - one-shot burst on every shift, brief
-        2. Rev limiter buzz    - rpm/max_rpm >= rev_limit_ratio
+        2. Idle buzz           - stationary with light throttle
         3. Wheelspin buzz      - driven wheels slipping (surface-aware)
-        4. Firmware end wall   - hard wall near 100% travel (hysteresis)
-        5. Throttle resistance - default rigid ramp 0..max_force
+        4. Rev limiter buzz    - rpm/max_rpm >= rev_limit_ratio
+        5. Firmware end wall   - hard wall near 100% travel (hysteresis)
+        6. Throttle resistance - default rigid ramp 0..max_force
     """
 
     def __init__(self, settings):
@@ -385,15 +386,15 @@ class Controller:
         if idle is not None:
             return idle
 
-        # 3. Rev limiter buzz - rpm at/over rev_limit_ratio, or handbrake-burnout
-        rev = self.anim.rev_buzz(t, s, now)
-        if rev:
-            return rev
-
-        # 4. Wheelspin buzz - driven wheels spinning, surface-aware amp/freq
+        # 3. Wheelspin buzz - real tire slip outranks the correlated high RPM
         spin = self.anim.wheelspin_buzz(t, s, now)
         if spin is not None:
             return spin
+
+        # 4. Rev limiter buzz - high RPM with grip, or handbrake full throttle
+        rev = self.anim.rev_buzz(t, s, now)
+        if rev:
+            return rev
 
         # 5. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
         self._r2_in_wall = _wall_state(accel, self._r2_in_wall,

@@ -13,7 +13,7 @@
 - Work in `.worktrees/r2-trigger-dynamics` on `feat/r2-trigger-dynamics`.
 - Use the approved design in `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`.
 - Write a failing test before each production behavior.
-- Preserve `Controller` effect priority and transport-independent frame generation.
+- Preserve transport-independent frame generation. The user-approved live-telemetry amendment places dynamic wheelspin above rev-limiter on the R2 trigger; all other priority remains unchanged.
 - Preserve body haptics behavior and the USB/Bluetooth output-report implementation.
 - Keep all new tuning fields profile-scoped and GUI/TUI field sets identical.
 - Do not change version or release metadata until behavior and hardware verification are complete.

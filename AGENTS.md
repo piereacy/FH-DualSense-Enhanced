@@ -116,6 +116,7 @@ bash packaging/linux/build_elf.sh
 - `Default` Profile 每次启动会按代码默认值刷新，命名 Profile 和 global fields 必须保留。不要在不了解迁移规则时改写偏好文件结构。
 - 保留 `LICENSE` 要求的署名、原项目链接和 Sponsor 链接，以及 `docs/THIRD_PARTY_NOTICES.md` 中的 HorizonHaptics 归属。
 - 不要把尚未通过测试或实机验证的 R2 行为写成已验证或已发布。以生产代码、自动测试和硬件记录分别标注事实层级。
+- 术语必须消除歧义：版本阶段写 `Enhanced R2`，手柄右扳机写 `R2 扳机键`；不要单独写无法判断含义的 `R2`。
 - 源码和文档使用 UTF-8。项目现有规则要求不新增 em dash 字符，使用普通连字符或中文标点。
 
 ## 完成任务前

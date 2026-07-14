@@ -106,16 +106,18 @@ GUI 的 Tk widget 只由主线程访问。后台日志进入最多 4000 条的 q
 4. 可选静态刹车 wall。
 5. 刹车阻力曲线。
 
-当前 R2 顺序：
+当前 R2 扳机键顺序：
 
 1. 换挡冲击。
 2. 原地轻踩油门 idle buzz。
-3. 红线 buzz。
-4. 轮胎打滑 buzz。
+3. 轮胎打滑 buzz。
+4. 红线 buzz。
 5. 接近行程末端的 firmware wall。
 6. 油门阻力曲线。
 
-动态 wheelspin 只采纳油门状态下 driven wheel 的 longitudinal `tire_slip_ratio_*`；松油漂移和单纯横向 combined slip 不进入 R2。低于 `LOW_SPEED_KMH` 时改用 driven wheel raw rotation 识别原地烧胎。一个主 threshold 与 hysteresis 控制进入和退出，按真实 `dt` 计算的非对称 EWMA 默认约 40 ms attack、125 ms release。主导车轮的 puddle 与 `surface_rumble` 选择 tarmac、water、dirt、gravel 频带，G force 只对 amplitude 作最多约 30% 的反向 damping。
+动态 wheelspin 只采纳油门状态下 driven wheel 的 longitudinal `tire_slip_ratio_*`；松油漂移和单纯横向 combined slip 不进入 R2 扳机键。低于 `LOW_SPEED_KMH` 时改用 driven wheel raw rotation 识别原地烧胎。一个主 threshold 与 hysteresis 控制进入和退出，按真实 `dt` 计算的非对称 EWMA 默认约 40 ms attack、125 ms release。主导车轮的 puddle 与 `surface_rumble` 选择 tarmac、water、dirt、gravel 频带，G force 只对 amplitude 作最多约 30% 的反向 damping。
+
+真实 Forza 遥测显示，高滑移经常伴随高转速；若红线提示优先，会把动态 wheelspin 遮蔽并造成 `(30, 12)` 与材质反馈反复切换。因此 wheelspin 明确高于 rev-limiter：有真实驱动轮空转时表达轮胎和路面，没有打滑但达到红线时才表达转速提示。该调整由 `tests/forzahorizon/test_effects.py` 的高速与低速 priority 回归锁定。
 
 ABS 以四轮 longitudinal slip ratio 为主、combined slip 为低权重辅助。`abs_min_speed_kmh` 只负责低速 gating，pulse frequency 和 strength 由 normalized slip 决定，并用 `abs_hold_ms` 保留短暂 deadline。native USB/BT 输出 `vibrate_zones()`，默认顶部 3 个 zone 为满强度 wall；DSX 无法保留该 wall，`src/modules/dsx/dsx_wrapper.py` 明确退化为随 frequency 变化的 `TM_VIBRATE`。
 
