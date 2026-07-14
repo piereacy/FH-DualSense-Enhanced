@@ -5,15 +5,15 @@
 - 最后更新：2026-07-14，Asia/Shanghai。
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
 - 当前开发分支：`feat/r2-trigger-dynamics`，隔离工作树为 `.worktrees/r2-trigger-dynamics`。
-- 当前开发基线：`128a7b9 chore: ignore local feature worktrees`。交付后的 HEAD 应使用 `git log -1 --oneline` 读取，避免文档因自身提交再次过期。
+- 当前发布基线：tag `R2` 指向 `1cc4520 fix: add manual stable release channel`。发布后的文档提交会位于 tag 之后；最新 HEAD 应使用 `git log -1 --oneline` 读取。
 - 版本：公开产品版本 `R2`，`src/pyproject.toml` 的内部 PEP 440 版本为 `2`。稳定 Release 标题为 `FH-DualSense-Enhanced R2`，滚动预发布为 `R2-preview`。
 - Git 历史：审计开始时本地是 shallow clone，只有 7 条已有提交，因此无法从本地恢复上游完整历史。
-- 当前阶段：Enhanced R2 的功能、实机验证、独立 `R` 版本身份、三语发布文档、ZUV 与 Windows EXE 本地构建均已完成。功能分支尚未合入；`R2-preview` GitHub Actions、Linux ELF CI 和稳定 `R2` Release 尚未执行。
+- 当前阶段：Enhanced R2 已发布。稳定 Release 为 `FH-DualSense-Enhanced R2`，tag `R2` 指向 `1cc4520`，公开地址为 `https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R2`。`R2-preview` 与稳定 R2 的 bundle、Windows EXE、Linux ELF 和 Release jobs 均已通过 GitHub Actions。
 
 ## 当前开发重心
 
 1. Enhanced R2 已完成当前批准范围内的实现、自动测试与硬件验证；不再继续调整 wheelspin/ABS 默认常量。
-2. R2 发布身份与本地产物门禁已通过；下一步合入并推送 `main`，用 `R2-preview` 验证 Windows/Linux/bundle Release workflow，再发布稳定 `R2`。
+2. R2 发布流程已完成；当前只做发布后问题监测，不继续调整已经确认的 R2 算法、默认常量或资产命名。
 3. DSX 保留当前 adapter 和自动测试结果，不做实机调校、功能扩展或效果承诺，也不作为 Enhanced R2 发布门槛。
 
 ## 最近完成的功能
@@ -59,21 +59,21 @@
 
 ### Enhanced R2 发布
 
-代码状态：设计位于 `docs/superpowers/specs/2026-07-14-r2-release-design.md`，实施清单位于 `docs/superpowers/plans/2026-07-14-r2-release.md`。本地实现和 Windows/ZUV 门禁已经完成，远端 CI 与公开发布尚未执行。
+代码状态：设计位于 `docs/superpowers/specs/2026-07-14-r2-release-design.md`，实施清单位于 `docs/superpowers/plans/2026-07-14-r2-release.md`。本地与远端门禁、`R2-preview` 和稳定 `R2` 公开发布均已完成。
 
 - `src/pyproject.toml` 使用内部版本 `2`，`preferences._release_version()` 将运行时公开显示映射为 `R2`。
 - Windows 与 Linux 本地构建脚本分别输出 `FH-DualSense-Enhanced-R2.exe` 和 `FH-DualSense-Enhanced-R2`；Windows VERSIONINFO 的 `FileVersion` 与 `ProductVersion` 均为 `R2`。
 - `.github/workflows/release.yml` 支持 `R2`、`release R2`、滚动 `R2-preview`，并保留历史 `vX.Y.Z` / `vX.Y.Z.postN` 兼容。
 - 根 README 的同页三语言、兼容 EN/JA 文档与发行包说明均已说明 R2 体系、上游 `1.6.2`、HorizonHaptics `1.3.0` 和历史 R1 迁移。
 - 固定资产名 `FH-DualSense-Enhanced.zuv.py`、`win_start.bat`、`linux_start.sh`、latest Release 更新和 `--prerelease` 频道继续保留；ZUV 去留留给 R3。
+- 仓库在本轮没有交付 main/tag 的 push Actions event；因此 workflow 新增了默认 `preview`、显式 `stable` 的手动频道。稳定 run `29338874379` 从 `1cc4520` 完整重建并成功发布，不是手工上传本地产物。
 
 ## 尚未完成的工作
 
 ### 尚未完成
 
 - USB 的轻/重 ABS、Bluetooth 的强 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
-- `R2-preview` GitHub Actions 尚未执行，因此 Linux ELF 与远端 Windows/bundle 构建尚未验证。
-- 功能分支尚未合入、推送，稳定 tag `R2` 和 GitHub Release 尚未创建。
+- 当前批准的 Enhanced R2 发布范围没有尚未完成项。
 
 ### 当前明确不做
 
@@ -90,14 +90,15 @@
 
 ## 下一步建议顺序
 
-1. 将 `feat/r2-trigger-dynamics` 快进合入 `main` 并推送。
-2. 手动运行 `R2-preview` workflow，确认 bundle、Windows EXE、Linux ELF 和 prerelease 资产。
-3. 在同一已验证提交创建并推送 `R2` tag，核验稳定 GitHub Release。
-4. 发布后更新本文件的最终 Release 链接、CI 结果和 Git 状态。
+1. 观察 R2 用户反馈，只修复可复现问题，不在 R2 上继续扩张算法范围。
+2. R3 开始前单独设计 ZUV 的保留、替换或迁移方案，不能直接删除固定 ZUV 资产，否则会破坏 R1/R2 启动器的 latest-asset 链路。
+3. 若继续维护 Release workflow，优先调查仓库未产生 push event 的外部原因；在确认前保留已验证的手动 `stable` 恢复入口。
 
 ## 当前已知 Bug
 
 当前自动化测试没有失败项。真实遥测曾发现 rev limiter 优先级高于 wheelspin，导致高转打滑时动态 wheelspin 被遮蔽；当前工作树已调整优先级、加入回归测试并通过真实 Bluetooth 游戏遥测复验。
+
+发布时观察到 GitHub 未为 main/tag push 创建 Actions run；远端 tag 本身正常。当前已通过带测试的 `workflow_dispatch` stable channel 完成发布。根因属于仓库/Actions 事件交付侧，待确认；现有恢复入口不可在未替代前删除。
 
 真实 USB 与 Bluetooth synthetic telemetry 已测试且未发现手感问题；Bluetooth 游戏实时遥测已完成四驱 wheelspin/松油漂移、低速 raw rotation、新优先级和 ABS wall 主路径确认。DSX 未测试且不在当前范围。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
 
@@ -125,7 +126,7 @@
 - `src/modules/haptics/mixer.py` 中静止、滚动、烧胎和路面材质 gating。R2 扳机改动不应破坏握把现有规则。
 - `src/modules/config/preferences.py` 中 Default Profile 重建、GLOBAL_FIELDS 和 atomic write。
 - `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名及第三方声明。
-- R2 触觉算法、默认参数和已确认的版本命名；发布阶段只允许修复明确的测试、构建或 Release 阻塞问题。
+- R2 触觉算法、默认参数、公开版本命名、稳定 tag 和已发布资产；只允许修复明确且可复现的问题。
 
 ## 最近涉及的关键文件
 
@@ -150,7 +151,7 @@
 
 ## 当前 Git 工作区状态
 
-当前位于 `feat/r2-trigger-dynamics` 隔离工作树。发布实施计划提交为 `7908550 docs: plan R2 release`；R2 发布身份、workflow、文档、契约测试和本地构建结果正在准备提交。准确 HEAD 与工作区清洁状态必须分别用 `git log -1 --oneline`、`git status --short` 读取。功能分支尚未合入 `main` 或发布，`packaging/*/build` 与 `packaging/*/dist` 为忽略的本地产物。
+当前主分支为 `main`。功能分支已快进合入，发布身份提交为 `d78a10b chore: prepare R2 release`，手动稳定频道修复为 `1cc4520 fix: add manual stable release channel`；tag `R2` 指向 `1cc4520`。本段发布后状态文档提交会位于 tag 之后。准确 HEAD 与工作区清洁状态仍应分别用 `git log -1 --oneline`、`git status --short` 读取；`packaging/*/build` 与 `packaging/*/dist` 为忽略的本地产物。
 
 ## 已执行的测试和验证
 
@@ -187,11 +188,13 @@
 - update-enabled ZUV 构建与 `uvx zuv inspect` 通过：内部版本 `2`、入口 `main.py`、持久化 volume `data`、更新源 `piereacy/FH-DualSense-Enhanced`，固定资产名为 `FH-DualSense-Enhanced.zuv.py`。
 - Windows EXE 本地构建通过：`FH-DualSense-Enhanced-R2.exe`，大小 37,782,007 bytes，SHA-256 `E920ED7E61144522680D65352E1D4063F5E0F82769A77D05EA272B102DC5BEC3`。
 - EXE VERSIONINFO 为 `FileVersion=R2`、`ProductVersion=R2`、`ProductName=FH-DualSense-Enhanced`；`--help` 退出码为 0。加载 `System.Drawing` 后成功读取 32x32 associated icon，handle 非空。
+- `R2-preview` run `29337377870`：prepare、bundle、Windows EXE、Linux ELF、Release 全部成功；云端 EXE 与 ZUV 下载后的 SHA-256 均匹配 GitHub asset digest，EXE `--help` 退出码为 0。
+- 稳定 R2 run `29338874379`：相同五个 jobs 全部成功，发布标题 `FH-DualSense-Enhanced R2`，非 draft、非 prerelease，共 7 个附加资产并带 GitHub 自动源码归档。
+- 稳定 ZUV 已完整下载并通过 digest 与 `uvx zuv inspect`；稳定 EXE 与 ELF 的公开 URL 均返回 HTTP `206`，1024-byte range 读取成功。GitHub `releases/latest` 已指向 R2。
 
 ## 尚未执行或失败的验证
 
-- ZUV 与 Windows EXE 已完成本地构建；Windows 环境未本地构建 Linux ELF。
-- 尚未运行 GitHub Actions，Linux ELF 和远端 Release 资产仍待 CI 验证。
+- Windows 环境没有本地运行 Linux ELF；Linux 构建已由两次 Ubuntu GitHub Actions job 验证成功。
 - 已连接真实 Forza Data Out 并完成四驱低速 raw rotation、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质。前驱/后驱实机验证由用户取消，不再列为失败或发布门槛。
 - USB 与 Bluetooth 已完成 synthetic wheelspin、关键 surface 和 ABS wall 手感验证；DSX 未执行，并已明确不作为当前任务或发布门槛。
 - 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
@@ -210,4 +213,4 @@
 7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
 8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
 
-建议首先处理的具体任务：不要继续加算法功能。按 `docs/superpowers/plans/2026-07-14-r2-release.md` 从合入、`R2-preview` CI 验证继续，成功后发布稳定 `R2`；不安排前驱/后驱或 DSX 实机验证。
+建议首先处理的具体任务：先查看 R2 Release 与 issue 是否有可复现反馈；没有反馈时不要继续改 R2。若用户开始 R3，首先讨论 ZUV 迁移策略和 push event 未交付问题，不安排前驱/后驱或 DSX 实机验证，除非用户重新提出。
