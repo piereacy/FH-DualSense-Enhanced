@@ -8,12 +8,12 @@
 - 当前开发基线：`128a7b9 chore: ignore local feature worktrees`。交付后的 HEAD 应使用 `git log -1 --oneline` 读取，避免文档因自身提交再次过期。
 - 版本：`1.6.2.post1`，Release workflow 命名为 `FH-DualSense-Enhanced 1.6.2 Enhanced R1`。
 - Git 历史：审计开始时本地是 shallow clone，只有 7 条已有提交，因此无法从本地恢复上游完整历史。
-- 当前阶段：Enhanced R1 已发布；Enhanced R2 的动态 wheelspin、GT7 风格 ABS wall 和实验性设置已在功能分支实现。USB/Bluetooth synthetic telemetry 手感已经确认；Bluetooth 真实 Forza Data Out 已完成油门打滑、松油漂移排除、低速 raw rotation、新 wheelspin/rev 优先级和 L2 扳机键 ABS wall 验证。不同驱动形式和实际材质覆盖尚待验证，功能分支尚未合入或发布。DSX 不在当前适配与实机验证范围内。
+- 当前阶段：Enhanced R1 已发布；Enhanced R2 的动态 wheelspin、GT7 风格 ABS wall 和实验性设置已在功能分支实现。USB/Bluetooth synthetic telemetry 手感已经确认；Bluetooth 真实 Forza Data Out 已完成油门打滑、松油漂移排除、低速 raw rotation、新 wheelspin/rev 优先级、L2 扳机键 ABS wall 和铺装/积水/泥土/碎石四种实际材质验证。前驱/后驱实机验证经用户决定不再执行，DSX 不在当前范围；功能分支尚未合入或发布。
 
 ## 当前开发重心
 
-1. Bluetooth 真实 Forza Data Out 的主路径已经通过；继续补足前驱、后驱和实际 tarmac/water/dirt/gravel 材质覆盖。
-2. 根据剩余实机结果只调默认常量，不改动既定 transport 边界；全部路径稳定后再决定版本号、合入和发布。
+1. Enhanced R2 已完成当前批准范围内的实现、自动测试与硬件验证；不再继续调整 wheelspin/ABS 默认常量。
+2. 最终软件回归已通过；下一步更新 Enhanced R2 版本号、README 与 Release workflow，并验证构建产物。
 3. DSX 保留当前 adapter 和自动测试结果，不做实机调校、功能扩展或效果承诺，也不作为 Enhanced R2 发布门槛。
 
 ## 最近完成的功能
@@ -55,16 +55,14 @@
 - DSX 对 `M_VIBRATE_ZONES` 回退为 `TM_VIBRATE`，自动测试确认 frequency 保留，但 zoned wall 不存在。
 - `Settings` 新参数均未加入 `GLOBAL_FIELDS`。命名 Profile 和 `FHDS:` 分享码 round-trip 已覆盖。
 - GUI 隐藏构建和展开/折叠脚本已通过；Textual test app 已实际挂载默认折叠的 `Collapsible`。
-- 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证；Bluetooth 真实游戏遥测已确认油门驱动打滑触发 R2 扳机键、松油漂移不触发、低速 raw rotation 触发、新优先级和真实 L2 扳机键 ABS wall。尚未完成：前驱/后驱和实际材质覆盖。DSX 已明确移出当前范围。
+- 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证；Bluetooth 真实游戏遥测已确认油门驱动打滑触发 R2 扳机键、松油漂移不触发、低速 raw rotation 触发、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质 signature。前驱/后驱实机验证由用户明确取消，DSX 已移出当前范围。
 
 ## 尚未完成的工作
 
 ### 尚未完成
 
-- 在 Forza 实际驾驶中继续验证前驱、后驱和四种材质 signature；本次真实遥测车辆为 `drive_train=2`，四驱低速 raw rotation、油门驱动打滑与松油漂移排除已经确认。
 - USB 的轻/重 ABS、Bluetooth 的强 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
-- 根据实机结果调校默认参数；当前默认值是保守实现值，不能写成最终社区验证值。
-- R2 版本号、README、Release workflow、构建产物、合入和 Release 均未处理。
+- Enhanced R2 版本号、README、Release workflow、构建产物、合入和 Release 均未处理。
 
 ### 当前明确不做
 
@@ -81,15 +79,17 @@
 
 ## 下一步建议顺序
 
-1. 使用前驱和后驱车辆重复关键 wheelspin 边界，确认 `DRIVEN_WHEELS` 映射在真实遥测中正确。
-2. 在 tarmac、water、dirt、gravel 上记录真实材质 signature；不要仅凭 synthetic frame 推断游戏内材质识别正确。
-3. 实机确认后复跑全量测试，更新 README、版本和 Release workflow，再决定合入与发布。
+1. 确定 Enhanced R2 的包版本与 Release 名称，更新 README、版本和 Release workflow。
+2. 构建并冒烟检查 ZUV、Windows EXE；Linux ELF 仍需在对应环境或 CI 验证。
+3. 决定合入 `main` 与发布 Release 的时机。
 
 ## 当前已知 Bug
 
 当前自动化测试没有失败项。真实遥测曾发现 rev limiter 优先级高于 wheelspin，导致高转打滑时动态 wheelspin 被遮蔽；当前工作树已调整优先级、加入回归测试并通过真实 Bluetooth 游戏遥测复验。
 
 真实 USB 与 Bluetooth synthetic telemetry 已测试且未发现手感问题；Bluetooth 游戏实时遥测已完成四驱 wheelspin/松油漂移、低速 raw rotation、新优先级和 ABS wall 主路径确认。DSX 未测试且不在当前范围。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
+
+材质验证观察到 wheelspin 首次进入时可能出现单帧 `(30, 12)` rev-limiter 过渡，原因是时间型 EWMA 的第一次 update 只建立时间基准。稳定材质输出未受影响，用户未报告可感知异常；当前记录为观察项，不作为阻塞 Bug。
 
 ## 当前技术债
 
@@ -163,13 +163,17 @@
 - Bluetooth 真实 Forza Data Out：用户确认高油门驱动轮打滑只触发 R2 扳机键，松油漂移不触发 R2 扳机键；监听日志同时暴露 rev limiter 会优先遮蔽 wheelspin，已据此修复。
 - 新优先级修复后的低速实车复验：`drive_train=2`、`speed=1.72 km/h`、`gas=255`、driven-wheel `rotation=33.0 rad/s`、`slip=5.00` 时输出 `WHEELSPIN (6, (31, 20))`；随后 `speed=3.5 km/h`、`rotation=35.7 rad/s` 再次触发。用户确认 R2 扳机键手感合适。
 - Bluetooth trigger-only ABS 实车复验：两次从约 170 km/h 直线重刹，L2 扳机键在 longitudinal slip 达到阈值后持续输出 `M_VIBRATE_ZONES`/`ABS_WALL`，动态强度随 slip 变化并一直覆盖到低速门槛附近；用户确认该测试已经完成。
-- `git diff --check`：中期通过，只有 Git 的 LF/CRLF 提示；交付前需复跑。
+- Bluetooth 真实材质验证：铺装路面稳定为 `surface_rumble=0`、`90..180 Hz`，有效采样 `123/124`；唯一例外是首次进入时的一帧 rev transition。
+- Bluetooth 真实材质验证：积水由主导驱动轮的微小正 `wheel_in_puddle` 优先识别，稳定输出 `80..150 Hz`；进入水区前的泥土采样不计为积水失败。
+- Bluetooth 真实材质验证：泥土稳定为 `surface_rumble=0.120`、`30..70 Hz`，有效采样 `199/199`。
+- Bluetooth 真实材质验证：最终有效碎石区四轮稳定为 `surface_rumble=0.600`，动态输出覆盖 `12..30 Hz`；离开碎石表面时按当前主导轮数据切换到泥土或铺装频带，重新进入后恢复。用户完成四段且未报告手感异常。
+- 材质验证交付检查：`uv run --project src pytest -q` 为 `158 passed`；`uv run --project src python -m compileall -q src/modules src/lang` 与 `git diff --check` 均通过，只有 Git 的 LF/CRLF 策略提示。
 
 ## 尚未执行或失败的验证
 
 - 未构建 ZUV、Windows EXE 或 Linux ELF。
 - 未运行 GitHub Actions。
-- 已连接真实 Forza Data Out 并完成四驱低速 raw rotation、新优先级和真实 L2 扳机键 ABS wall；前驱、后驱和实际材质仍未完成。
+- 已连接真实 Forza Data Out 并完成四驱低速 raw rotation、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质。前驱/后驱实机验证由用户取消，不再列为失败或发布门槛。
 - USB 与 Bluetooth 已完成 synthetic wheelspin、关键 surface 和 ABS wall 手感验证；DSX 未执行，并已明确不作为当前任务或发布门槛。
 - 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
 - 仓库没有配置独立的 lint/type-check gate，本次未虚构或补充此类命令。
@@ -187,4 +191,4 @@
 7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
 8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
 
-建议首先处理的具体任务：不要继续加算法功能。用 trigger-only live harness 分别验证前驱、后驱和四种实际材质 signature；不安排 DSX 适配或实机验证。
+建议首先处理的具体任务：不要继续加算法功能。先完成最终回归，再准备 Enhanced R2 的版本号、README、Release workflow 与构建产物；不安排前驱/后驱或 DSX 实机验证。

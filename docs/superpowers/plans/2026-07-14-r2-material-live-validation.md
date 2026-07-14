@@ -17,43 +17,43 @@
 
 ### Task 1：基线与运行前检查
 
-- [ ] 执行 `uv run --project src pytest -q tests/forzahorizon/test_effects.py`。
-- [ ] 使用 `Get-NetUDPEndpoint -LocalPort 5300 -ErrorAction SilentlyContinue` 确认端口空闲。
-- [ ] 使用 `_enumerate_dualsenses()` 确认仅选择 Bluetooth DualSense。
-- [ ] 确认 Forza Data Out 的目标为 `127.0.0.1:5300`，packet size 为 324 字节。
+- [x] 执行 `uv run --project src pytest -q tests/forzahorizon/test_effects.py`。
+- [x] 使用 `Get-NetUDPEndpoint -LocalPort 5300 -ErrorAction SilentlyContinue` 确认端口空闲。
+- [x] 使用 `_enumerate_dualsenses()` 确认仅选择 Bluetooth DualSense。
+- [x] 确认 Forza Data Out 的目标为 `127.0.0.1:5300`，packet size 为 324 字节。
 
 ### Task 2：铺装路面
 
-- [ ] 启动新的 trigger-only listener，明确通知用户开始。
-- [ ] 记录主导驱动轮、slip/rotation、puddle、surface rumble、分类和 R2 扳机键 frame。
-- [ ] 确认分类为铺装路面，frequency 落入 `90..180`。
-- [ ] 用户确认手感；段尾归零。
+- [x] 启动新的 trigger-only listener，明确通知用户开始。
+- [x] 记录主导驱动轮、slip/rotation、puddle、surface rumble、分类和 R2 扳机键 frame。
+- [x] 确认分类为铺装路面，frequency 落入 `90..180`。
+- [x] 用户完成测试且未报告手感异常；段尾归零。
 
 ### Task 3：积水路面
 
-- [ ] 使用新的 listener 和 `Controller`。
-- [ ] 确认主导驱动轮 `wheel_in_puddle > 0`，分类为积水路面。
-- [ ] 确认 frequency 落入 `80..150`。
-- [ ] 用户确认与铺装路面可辨；段尾归零。
+- [x] 使用新的 listener 和 `Controller`。
+- [x] 确认主导驱动轮 `wheel_in_puddle > 0`，分类为积水路面。
+- [x] 确认 frequency 落入 `80..150`。
+- [x] 用户完成测试且未报告手感异常；段尾归零。
 
 ### Task 4：泥土路面
 
-- [ ] 使用新的 listener 和 `Controller`。
-- [ ] 确认主导驱动轮 `0.10 < abs(surface_rumble) <= 0.30`，分类为泥土路面。
-- [ ] 确认 frequency 落入 `30..70`。
-- [ ] 用户确认与已通过材质可辨；段尾归零。
+- [x] 使用新的 listener 和 `Controller`。
+- [x] 确认主导驱动轮 `0.10 < abs(surface_rumble) <= 0.30`，分类为泥土路面。
+- [x] 确认 frequency 落入 `30..70`。
+- [x] 用户完成测试且未报告手感异常；段尾归零。
 
 ### Task 5：碎石路面
 
-- [ ] 使用新的 listener 和 `Controller`。
-- [ ] 确认主导驱动轮 `abs(surface_rumble) > 0.30`，分类为碎石路面。
-- [ ] 确认 frequency 落入 `12..30`。
-- [ ] 用户确认与已通过材质可辨；段尾归零。
+- [x] 使用新的 listener 和 `Controller`。
+- [x] 确认主导驱动轮 `abs(surface_rumble) > 0.30`，分类为碎石路面。
+- [x] 确认 frequency 落入 `12..30`。
+- [x] 用户完成测试且未报告手感异常；段尾归零。
 
 ### Task 6：交付检查
 
-- [ ] 将四段结果、失败或无法确认项写入 `docs/PROJECT_STATE.md`。
-- [ ] 执行 `uv run --project src pytest -q`。
-- [ ] 执行 `git diff --check`。
-- [ ] 确认没有未经真实数据支持的算法或默认值修改。
-- [ ] 提交验证记录；功能分支保持未合入、未发布，等待后续合并决定。
+- [x] 将四段结果、失败或无法确认项写入 `docs/PROJECT_STATE.md`。
+- [x] 执行 `uv run --project src pytest -q`。
+- [x] 执行 `git diff --check`。
+- [x] 确认没有未经真实数据支持的算法或默认值修改。
+- [x] 提交验证记录；功能分支保持未合入、未发布，等待后续合并决定。
