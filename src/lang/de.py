@@ -202,6 +202,38 @@ STRINGS = {
     "Restart the app to apply the new language.":
         "Starten Sie die App neu, um die neue Sprache zu übernehmen.",
 
+    # --- R2 experimentelle Trigger-Abstimmung ---
+    "Sensitivity": "Empfindlichkeit",
+    "Experimental features": "Experimentelle Funktionen",
+    "Not recommended for manual adjustment.": "Manuelle Anpassung wird nicht empfohlen.",
+    "ABS advanced tuning": "Erweiterte ABS-Abstimmung",
+    "Wheelspin advanced tuning": "Erweiterte Radschlupf-Abstimmung",
+    "Minimum brake input": "Minimale Bremseingabe",
+    "Minimum speed (km/h)": "Mindestgeschwindigkeit (km/h)",
+    "Longitudinal slip threshold": "Schwelle für Längsschlupf",
+    "Combined slip threshold": "Schwelle für kombinierten Schlupf",
+    "Combined slip influence": "Einfluss des kombinierten Schlupfs",
+    "Slip at maximum feedback": "Schlupf bei maximalem Feedback",
+    "Minimum frequency (Hz)": "Minimale Frequenz (Hz)",
+    "Maximum frequency (Hz)": "Maximale Frequenz (Hz)",
+    "Minimum strength": "Minimale Stärke",
+    "Feedback hold (ms)": "Feedback-Haltezeit (ms)",
+    "Top wall zones": "Obere Wandzonen",
+    "Slip hysteresis": "Schlupf-Hysterese",
+    "Attack smoothing (ms)": "Anstiegs-Glättung (ms)",
+    "Release smoothing (ms)": "Abfall-Glättung (ms)",
+    "G-force damping": "G-Kraft-Dämpfung",
+    "Burnout rotation threshold": "Burnout-Drehzahlschwelle",
+    "Burnout rotation at maximum feedback": "Burnout-Drehzahl bei maximalem Feedback",
+    "Tarmac minimum frequency (Hz)": "Asphalt: minimale Frequenz (Hz)",
+    "Tarmac maximum frequency (Hz)": "Asphalt: maximale Frequenz (Hz)",
+    "Water minimum frequency (Hz)": "Wasser: minimale Frequenz (Hz)",
+    "Water maximum frequency (Hz)": "Wasser: maximale Frequenz (Hz)",
+    "Dirt minimum frequency (Hz)": "Erde: minimale Frequenz (Hz)",
+    "Dirt maximum frequency (Hz)": "Erde: maximale Frequenz (Hz)",
+    "Gravel minimum frequency (Hz)": "Schotter: minimale Frequenz (Hz)",
+    "Gravel maximum frequency (Hz)": "Schotter: maximale Frequenz (Hz)",
+
     # --- external links ---
     "Sponsor": "Sponsor",
 }

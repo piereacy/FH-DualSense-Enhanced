@@ -39,12 +39,8 @@ SETTING_SECTIONS = [
         ("throttle_curve", "Stiffness curve shape", 0.1, 20.0, ""),
     ]),
     ("ABS (anti-lock brake) rumble", [
-        ("abs_brake_threshold", "Only when braking harder than", 0, 255, ""),
-        ("abs_min_speed_kmh", "Only when faster than (km/h)", 0.0, 500.0, ""),
-        ("abs_slip_ratio_threshold", "Wheel slip sensitivity", 0.0, 10.0, ""),
-        ("abs_combined_slip_threshold", "Tire grip sensitivity", 0.0, 10.0, ""),
-        ("abs_freq", "Rumble speed (Hz)", 0, 255, ""),
         ("abs_amp", "Rumble strength", 0, 255, ""),
+        ("abs_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
     ("Redline (rev limiter) buzz", [
         ("rev_limit_ratio", "Fire near redline at", 0.0, 1.0, ""),
@@ -54,6 +50,7 @@ SETTING_SECTIONS = [
     ]),
     ("Wheelspin buzz", [
         ("wheelspin_amp", "Buzz strength", 0, 255, ""),
+        ("wheelspin_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
     ("Idle buzz", [
         ("idle_amp_high", "Idle strength", 0, 255, ""),
@@ -73,6 +70,40 @@ SETTING_SECTIONS = [
         ("impact_haptics_intensity", "Impact and suspension intensity", 0.0, 2.0, ""),
         ("slip_haptics_intensity", "Slip and ABS intensity", 0.0, 2.0, ""),
         ("slip_haptics_threshold", "Slip threshold", 0.0, 5.0, ""),
+    ]),
+]
+
+EXPERIMENTAL_SECTIONS = [
+    ("ABS advanced tuning", [
+        ("abs_brake_threshold", "Minimum brake input", 0, 255, ""),
+        ("abs_min_speed_kmh", "Minimum speed (km/h)", 0.0, 500.0, ""),
+        ("abs_slip_ratio_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
+        ("abs_combined_slip_threshold", "Combined slip threshold", 0.0, 10.0, ""),
+        ("abs_combined_slip_weight", "Combined slip influence", 0.0, 1.0, ""),
+        ("abs_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),
+        ("abs_freq_min", "Minimum frequency (Hz)", 0, 255, ""),
+        ("abs_freq", "Maximum frequency (Hz)", 0, 255, ""),
+        ("abs_amp_min", "Minimum strength", 0, 255, ""),
+        ("abs_hold_ms", "Feedback hold (ms)", 0.0, 500.0, ""),
+        ("abs_wall_zones", "Top wall zones", 1, 9, ""),
+    ]),
+    ("Wheelspin advanced tuning", [
+        ("wheelspin_slip_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
+        ("wheelspin_hysteresis", "Slip hysteresis", 0.0, 0.9, ""),
+        ("wheelspin_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),
+        ("wheelspin_attack_ms", "Attack smoothing (ms)", 1.0, 500.0, ""),
+        ("wheelspin_release_ms", "Release smoothing (ms)", 1.0, 1000.0, ""),
+        ("wheelspin_g_damping", "G-force damping", 0.0, 1.0, ""),
+        ("wheelspin_burnout_rotation_threshold", "Burnout rotation threshold", 0.0, 300.0, ""),
+        ("wheelspin_burnout_rotation_full_scale", "Burnout rotation at maximum feedback", 1.0, 1000.0, ""),
+        ("wheelspin_tarmac_freq_min", "Tarmac minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_tarmac_freq_max", "Tarmac maximum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_water_freq_min", "Water minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_water_freq_max", "Water maximum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_dirt_freq_min", "Dirt minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_dirt_freq_max", "Dirt maximum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_gravel_freq_min", "Gravel minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_gravel_freq_max", "Gravel maximum frequency (Hz)", 0, 255, ""),
     ]),
 ]
 
@@ -110,7 +141,7 @@ SYSTEM_SECTIONS = [
 ]
 
 SETTING_RANGES = {a: (lo, hi)
-                  for sections in (SETTING_SECTIONS, SYSTEM_SECTIONS)
+                  for sections in (SETTING_SECTIONS, EXPERIMENTAL_SECTIONS, SYSTEM_SECTIONS)
                   for _, fields in sections
                   for a, _lbl, lo, hi, *_rest in fields
                   if lo is not None and hi is not None}
@@ -131,6 +162,7 @@ class SettingsTab(ctk.CTkFrame):
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
     SHOW_ABOUT = True
+    SHOW_EXPERIMENTAL = True
     PAGE_TITLE = "Settings"
     PAGE_SUBTITLE = "All changes save instantly."
 
@@ -143,6 +175,9 @@ class SettingsTab(ctk.CTkFrame):
         self._entries: dict[str, ctk.CTkEntry] = {}
         self._reset_armed = False
         self._reset_btn: ctk.CTkButton | None = None
+        self._experimental_open = False
+        self._experimental_btn: ctk.CTkButton | None = None
+        self._experimental_body: ctk.CTkFrame | None = None
 
         W.PageHeader(self, t(self.PAGE_TITLE), t(self.PAGE_SUBTITLE)
                      ).pack(fill="x", pady=(0, T.PAD_MD))
@@ -157,12 +192,42 @@ class SettingsTab(ctk.CTkFrame):
     def _build(self):
         for section, fields in self.SECTIONS:
             self._build_section_card(section, fields)
+        if self.SHOW_EXPERIMENTAL:
+            self._build_experimental_card()
         if self.SHOW_ABOUT:
             self._build_about_card()
         if self.SHOW_RESET:
             self._reset_btn = W.DangerButton(self._scroll, t("Reset to defaults"),
                                              command=self._on_reset)
             self._reset_btn.pack(fill="x", pady=(T.PAD_MD, T.PAD_SM))
+
+    def _build_experimental_card(self):
+        card = W.Card(self._scroll)
+        card.pack(fill="x", pady=(0, T.PAD_MD))
+        self._experimental_btn = W.GhostButton(
+            card,
+            text=f"▶ {t('Experimental features')}",
+            command=self._toggle_experimental,
+            anchor="w",
+        )
+        self._experimental_btn.pack(fill="x", padx=T.PAD_SM, pady=(T.PAD_SM, 0))
+        W.Hint(card, t("Not recommended for manual adjustment.")).pack(
+            anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_SM)
+        )
+        self._experimental_body = ctk.CTkFrame(card, fg_color="transparent")
+        for section, fields in EXPERIMENTAL_SECTIONS:
+            self._build_section_card(section, fields, parent=self._experimental_body)
+
+    def _toggle_experimental(self):
+        if self._experimental_body is None or self._experimental_btn is None:
+            return
+        self._experimental_open = not self._experimental_open
+        marker = "▼" if self._experimental_open else "▶"
+        self._experimental_btn.configure(text=f"{marker} {t('Experimental features')}")
+        if self._experimental_open:
+            self._experimental_body.pack(fill="x", padx=T.PAD_SM, pady=(0, T.PAD_SM))
+        else:
+            self._experimental_body.pack_forget()
 
     def _build_about_card(self):
         card = W.Card(self._scroll)
@@ -186,8 +251,8 @@ class SettingsTab(ctk.CTkFrame):
             anchor="w",
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
-    def _build_section_card(self, section_title: str, fields: list):
-        card = W.Card(self._scroll)
+    def _build_section_card(self, section_title: str, fields: list, parent=None):
+        card = W.Card(parent or self._scroll)
         card.pack(fill="x", pady=(0, T.PAD_MD))
         W.H2(card, t(section_title)).pack(anchor="w",
                                           padx=T.PAD_MD,

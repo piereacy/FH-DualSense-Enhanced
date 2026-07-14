@@ -4,7 +4,7 @@ import threading
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
-from textual.widgets import Button, Input, Label, Switch
+from textual.widgets import Button, Collapsible, Input, Label, Switch
 
 from lang import t
 from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
@@ -36,12 +36,8 @@ SETTING_SECTIONS = [
         ("throttle_curve", "Stiffness curve shape", 0.1, 20.0, ""),
     ]),
     ("ABS (anti-lock brake) rumble", [
-        ("abs_brake_threshold", "Only when braking harder than", 0, 255, ""),
-        ("abs_min_speed_kmh", "Only when faster than (km/h)", 0.0, 500.0, ""),
-        ("abs_slip_ratio_threshold", "Wheel slip sensitivity", 0.0, 10.0, ""),
-        ("abs_combined_slip_threshold", "Tire grip sensitivity", 0.0, 10.0, ""),
-        ("abs_freq", "Rumble speed (Hz)", 0, 255, ""),
         ("abs_amp", "Rumble strength", 0, 255, ""),
+        ("abs_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
     ("Redline (rev limiter) buzz", [
         ("rev_limit_ratio", "Fire near redline at", 0.0, 1.0, ""),
@@ -51,6 +47,7 @@ SETTING_SECTIONS = [
     ]),
     ("Wheelspin buzz", [
         ("wheelspin_amp", "Buzz strength", 0, 255, ""),
+        ("wheelspin_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
     ("Idle buzz", [
         ("idle_amp_high", "Idle strength", 0, 255, ""),
@@ -70,6 +67,40 @@ SETTING_SECTIONS = [
         ("impact_haptics_intensity", "Impact and suspension intensity", 0.0, 2.0, ""),
         ("slip_haptics_intensity", "Slip and ABS intensity", 0.0, 2.0, ""),
         ("slip_haptics_threshold", "Slip threshold", 0.0, 5.0, ""),
+    ]),
+]
+
+EXPERIMENTAL_SECTIONS = [
+    ("ABS advanced tuning", [
+        ("abs_brake_threshold", "Minimum brake input", 0, 255, ""),
+        ("abs_min_speed_kmh", "Minimum speed (km/h)", 0.0, 500.0, ""),
+        ("abs_slip_ratio_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
+        ("abs_combined_slip_threshold", "Combined slip threshold", 0.0, 10.0, ""),
+        ("abs_combined_slip_weight", "Combined slip influence", 0.0, 1.0, ""),
+        ("abs_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),
+        ("abs_freq_min", "Minimum frequency (Hz)", 0, 255, ""),
+        ("abs_freq", "Maximum frequency (Hz)", 0, 255, ""),
+        ("abs_amp_min", "Minimum strength", 0, 255, ""),
+        ("abs_hold_ms", "Feedback hold (ms)", 0.0, 500.0, ""),
+        ("abs_wall_zones", "Top wall zones", 1, 9, ""),
+    ]),
+    ("Wheelspin advanced tuning", [
+        ("wheelspin_slip_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
+        ("wheelspin_hysteresis", "Slip hysteresis", 0.0, 0.9, ""),
+        ("wheelspin_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),
+        ("wheelspin_attack_ms", "Attack smoothing (ms)", 1.0, 500.0, ""),
+        ("wheelspin_release_ms", "Release smoothing (ms)", 1.0, 1000.0, ""),
+        ("wheelspin_g_damping", "G-force damping", 0.0, 1.0, ""),
+        ("wheelspin_burnout_rotation_threshold", "Burnout rotation threshold", 0.0, 300.0, ""),
+        ("wheelspin_burnout_rotation_full_scale", "Burnout rotation at maximum feedback", 1.0, 1000.0, ""),
+        ("wheelspin_tarmac_freq_min", "Tarmac minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_tarmac_freq_max", "Tarmac maximum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_water_freq_min", "Water minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_water_freq_max", "Water maximum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_dirt_freq_min", "Dirt minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_dirt_freq_max", "Dirt maximum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_gravel_freq_min", "Gravel minimum frequency (Hz)", 0, 255, ""),
+        ("wheelspin_gravel_freq_max", "Gravel maximum frequency (Hz)", 0, 255, ""),
     ]),
 ]
 
@@ -108,7 +139,7 @@ SYSTEM_SECTIONS = [
 
 # MARK: clamp table, ignores boolean rows
 SETTING_RANGES = {a: (lo, hi)
-                  for sections in (SETTING_SECTIONS, SYSTEM_SECTIONS)
+                  for sections in (SETTING_SECTIONS, EXPERIMENTAL_SECTIONS, SYSTEM_SECTIONS)
                   for _, fields in sections
                   for a, _lbl, lo, hi, *_rest in fields
                   if lo is not None and hi is not None}
@@ -172,6 +203,8 @@ class SettingsTab(VerticalScroll):
         color: $text-muted;
         padding: 0 1 1 3;
     }
+    SettingsTab #experimental-settings { height: auto; margin: 1 0; }
+    SettingsTab #experimental-settings > Contents { height: auto; }
     SettingsTab #reset-settings { width: 1fr; margin: 2 0 1 0; }
     SettingsTab Label.about-copy { width: 1fr; height: auto; padding: 1; }
     SettingsTab Button.about-link { width: 1fr; margin: 0 1 1 1; }
@@ -181,6 +214,7 @@ class SettingsTab(VerticalScroll):
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
     SHOW_ABOUT = True
+    SHOW_EXPERIMENTAL = True
 
     def __init__(self, settings):
         super().__init__()
@@ -188,8 +222,8 @@ class SettingsTab(VerticalScroll):
         # MARK: two-click reset confirmation
         self._reset_armed = False
 
-    def compose(self) -> ComposeResult:
-        for section, fields in self.SECTIONS:
+    def _compose_sections(self, sections):
+        for section, fields in sections:
             yield Label(t(section), classes="section")
             for entry in fields:
                 attr, label, lo, hi, *rest = entry
@@ -240,6 +274,20 @@ class SettingsTab(VerticalScroll):
                         yield Input(value=_format_value(value), id=f"set-{attr}")
                 if hint:
                     yield Label(t(hint), classes="hint")
+
+    def compose(self) -> ComposeResult:
+        yield from self._compose_sections(self.SECTIONS)
+        if self.SHOW_EXPERIMENTAL:
+            with Collapsible(
+                title=t("Experimental features"),
+                collapsed=True,
+                id="experimental-settings",
+            ):
+                yield Label(
+                    t("Not recommended for manual adjustment."),
+                    classes="hint",
+                )
+                yield from self._compose_sections(EXPERIMENTAL_SECTIONS)
         if self.SHOW_ABOUT:
             yield Label(t("About and licenses"), classes="section")
             yield Label(ATTRIBUTION, classes="about-copy")

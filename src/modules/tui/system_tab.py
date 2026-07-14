@@ -55,6 +55,7 @@ class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
     SHOW_RESET = False
     SHOW_ABOUT = False
+    SHOW_EXPERIMENTAL = False
 
     DEFAULT_CSS = """
     SystemTab #controller-buttons { height: 3; padding: 0 1; }

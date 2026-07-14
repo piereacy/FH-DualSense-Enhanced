@@ -36,14 +36,21 @@ class Settings:
     handbrake_bonus: int = 0                  # flat extra force while handbrake is engaged
 
     # MARK: L2 ABS pulse
-    # Vibrates when tire slip crosses thresholds under hard braking.
+    # GT7-style wall: lower zones pulse while the top zones stay maxed.
     enable_abs: bool = True
     abs_brake_threshold: int = 255            # min brake byte to arm
-    abs_min_speed_kmh: float = 0.0            # min speed to arm
+    abs_min_speed_kmh: float = 6.0            # low-speed gate only; does not scale intensity
     abs_slip_ratio_threshold: float = 0.3     # per-wheel slip trigger
     abs_combined_slip_threshold: float = 0.3  # combined slip trigger
-    abs_freq: int = 60                        # pulse frequency
-    abs_amp: int = 90                         # pulse amplitude
+    abs_sensitivity: float = 1.0              # normal UI sensitivity multiplier
+    abs_combined_slip_weight: float = 0.35    # combined slip stays auxiliary
+    abs_slip_full_scale: float = 2.0           # slip mapped to maximum pulse
+    abs_freq_min: int = 20                    # pulse frequency at threshold
+    abs_freq: int = 60                        # maximum pulse frequency
+    abs_amp_min: int = 32                     # pulse amplitude at threshold
+    abs_amp: int = 90                         # maximum pulse amplitude
+    abs_hold_ms: float = 100.0                # anti-stutter hold deadline
+    abs_wall_zones: int = 3                   # top zones remain a maximum wall
 
     # MARK: R2 throttle resistance
     # Light rigid curve: 0..wall_engage_at maps baseline..max_force, then firmware wall at 100%.
@@ -64,10 +71,27 @@ class Settings:
     rev_limit_hold_ms: float = 120.0          # min on-time per trigger
 
     # MARK: R2 wheelspin buzz
-    # `wheelspin_amp` is the tarmac reference. Off-road / water amps scale off it
-    # (water 0.5x, dirt 1.5x, gravel 2x). Surface freqs are fixed in code.
+    # Driven-wheel longitudinal slip is the primary signal. Near zero speed,
+    # raw wheel rotation replaces slip ratio so stationary burnouts still work.
     enable_wheelspin_buzz: bool = True
     wheelspin_amp: int = 90
+    wheelspin_sensitivity: float = 1.0
+    wheelspin_slip_threshold: float = 0.6
+    wheelspin_hysteresis: float = 0.15         # fraction of the active threshold
+    wheelspin_slip_full_scale: float = 3.0
+    wheelspin_attack_ms: float = 40.0
+    wheelspin_release_ms: float = 125.0
+    wheelspin_g_damping: float = 0.25
+    wheelspin_burnout_rotation_threshold: float = 30.0
+    wheelspin_burnout_rotation_full_scale: float = 120.0
+    wheelspin_tarmac_freq_min: int = 90
+    wheelspin_tarmac_freq_max: int = 180
+    wheelspin_water_freq_min: int = 80
+    wheelspin_water_freq_max: int = 150
+    wheelspin_dirt_freq_min: int = 30
+    wheelspin_dirt_freq_max: int = 70
+    wheelspin_gravel_freq_min: int = 12
+    wheelspin_gravel_freq_max: int = 30
 
     # MARK: R2 idle buzz
     # Engine-idle oscillation while stopped and accelerator pressed under ~25%.

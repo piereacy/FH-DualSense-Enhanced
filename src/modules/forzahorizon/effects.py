@@ -4,6 +4,7 @@
                       Owns timing state for effects that span frames.
   Controller        - builds L2 / R2 and produces a frame for each per tick.
 """
+import math
 import time
 
 from modules.dualsense.adaptive_trigger import (
@@ -21,8 +22,44 @@ BURNOUT_ROT_THRESHOLD = 30.0
 DRIVEN_WHEELS = {0: ("fl", "fr"), 1: ("rl", "rr"), 2: ("fl", "fr", "rl", "rr")}
 
 
+class _AsymmetricEwma:
+    """Elapsed-time EWMA with a fast attack and a slower release."""
+
+    def __init__(self):
+        self.value = 0.0
+        self._last_at = None
+
+    def reset(self):
+        self.value = 0.0
+        self._last_at = None
+
+    def update(self, target, now, attack_ms, release_ms):
+        target = max(0.0, min(1.0, float(target)))
+        if self._last_at is None:
+            self._last_at = now
+            return self.value
+        dt = max(0.0, now - self._last_at)
+        self._last_at = now
+        tau_ms = attack_ms if target > self.value else release_ms
+        tau = max(0.001, float(tau_ms) / 1000.0)
+        alpha = 1.0 - math.exp(-dt / tau)
+        self.value += (target - self.value) * alpha
+        self.value = max(0.0, min(1.0, self.value))
+        return self.value
+
+
 def _amp_to_strength(amp_byte):
     return max(1, min(8, (max(0, int(amp_byte)) // 32) + 1))
+
+def _clamp01(value):
+    return max(0.0, min(1.0, float(value)))
+
+def _normalize(value, threshold, full_scale):
+    span = max(1e-6, float(full_scale) - float(threshold))
+    return _clamp01((float(value) - float(threshold)) / span)
+
+def _lerp(low, high, ratio):
+    return float(low) + (float(high) - float(low)) * _clamp01(ratio)
 
 def _max_slip(t, prefix, wheels=("fl", "fr", "rl", "rr")):
     return max(abs(t[f"{prefix}_{w}"]) for w in wheels)
@@ -68,6 +105,19 @@ class TriggerAnimations:
         self._prev_gear = None
         self._shift_until = 0.0
         self._rev_until = 0.0
+        self._wheelspin_active = False
+        self._wheelspin_ewma = _AsymmetricEwma()
+        self._abs_until = 0.0
+        self._abs_level = 0.0
+
+    def reset_transients(self):
+        self._prev_gear = None
+        self._shift_until = 0.0
+        self._rev_until = 0.0
+        self._wheelspin_active = False
+        self._wheelspin_ewma.reset()
+        self._abs_until = 0.0
+        self._abs_level = 0.0
 
     def arm_shift(self, t, s, now):
         gear = t["gear"]
@@ -114,40 +164,128 @@ class TriggerAnimations:
         return vibrate(s.idle_freq, amp)
 
     def wheelspin_buzz(self, t, s, now):
-        # R2 buzz when tires lose grip (wheelspin or drift).
-        # At speed: tire_combined_slip catches both longitudinal + lateral slip.
-        # At standstill: slip values degenerate, so trust raw wheel rotation.
+        # Only throttle-caused driven-wheel longitudinal slip belongs on R2.
+        # At standstill slip ratio degenerates, so trust raw driven-wheel rotation.
         if not s.enable_wheelspin_buzz:
+            self._wheelspin_active = False
+            self._wheelspin_ewma.reset()
             return None
-        if t["accel"] < s.accel_deadzone:
+        if t["accel"] < max(1, s.accel_deadzone):
+            self._wheelspin_active = False
+            self._wheelspin_ewma.reset()
             return None
         wheels = DRIVEN_WHEELS.get(t["drive_train"], ("fl", "fr", "rl", "rr"))
+        sensitivity = max(0.1, float(s.wheelspin_sensitivity))
         if t["speed"] < LOW_SPEED_KMH:
-            if max(abs(t[f"wheel_rotation_speed_{w}"]) for w in wheels) < BURNOUT_ROT_THRESHOLD:
-                return None
+            samples = {
+                wheel: abs(t[f"wheel_rotation_speed_{wheel}"])
+                for wheel in wheels
+            }
+            threshold = max(0.0, s.wheelspin_burnout_rotation_threshold) / sensitivity
+            full_scale = max(threshold + 1e-6, s.wheelspin_burnout_rotation_full_scale)
         else:
-            if max(abs(t[f"tire_combined_slip_{w}"]) for w in wheels) < 1.0:
-                return None
-        # Surface profile: tarmac amp is the reference, others scale off it.
-        amp = s.wheelspin_amp
-        if any(t[f"wheel_in_puddle_{w}"] > 0 for w in wheels):
-            return vibrate(130, 1)            # water: tarmac freq, slippery -> half amp
-        rumble = max(abs(t[f"surface_rumble_{w}"]) for w in wheels)
-        if rumble > 0.30:                                    # gravel / rocks: chunky thump
-            return vibrate(15, min(255, amp * 3))
-        if rumble > 0.10:                                    # dirt / loose: low rumble
-            return vibrate(45, min(255, int(amp * 2)))
-        return vibrate(130, amp)                             # tarmac: sharp squeal
+            samples = {
+                wheel: abs(t[f"tire_slip_ratio_{wheel}"])
+                for wheel in wheels
+            }
+            threshold = max(0.0, s.wheelspin_slip_threshold) / sensitivity
+            full_scale = max(threshold + 1e-6, s.wheelspin_slip_full_scale)
 
-    def abs_pulse(self, t, s):
-        if not s.enable_abs:
+        dominant_wheel, signal = max(samples.items(), key=lambda item: item[1])
+        hysteresis = _clamp01(s.wheelspin_hysteresis)
+        release_at = threshold * (1.0 - hysteresis)
+        self._wheelspin_active = _wall_state(
+            signal, self._wheelspin_active, threshold, release_at
+        )
+        target = _normalize(signal, threshold, full_scale) if self._wheelspin_active else 0.0
+        level = self._wheelspin_ewma.update(
+            target,
+            now,
+            s.wheelspin_attack_ms,
+            s.wheelspin_release_ms,
+        )
+        if level < 0.005:
             return None
-        if t["brake"] < max(1, s.abs_brake_threshold) or t["speed"] < s.abs_min_speed_kmh:
+
+        # Keep distinct road-material signatures without letting material create
+        # energy by itself. The wheel with the strongest driven slip chooses it.
+        puddle = t[f"wheel_in_puddle_{dominant_wheel}"] > 0
+        rumble = abs(t[f"surface_rumble_{dominant_wheel}"])
+        if puddle:
+            freq_min, freq_max, amp_scale = (
+                s.wheelspin_water_freq_min,
+                s.wheelspin_water_freq_max,
+                0.5,
+            )
+        elif rumble > 0.30:
+            freq_min, freq_max, amp_scale = (
+                s.wheelspin_gravel_freq_min,
+                s.wheelspin_gravel_freq_max,
+                2.0,
+            )
+        elif rumble > 0.10:
+            freq_min, freq_max, amp_scale = (
+                s.wheelspin_dirt_freq_min,
+                s.wheelspin_dirt_freq_max,
+                1.5,
+            )
+        else:
+            freq_min, freq_max, amp_scale = (
+                s.wheelspin_tarmac_freq_min,
+                s.wheelspin_tarmac_freq_max,
+                1.0,
+            )
+
+        # HorizonHaptics-inspired G adjustment, deliberately kept subordinate
+        # to slip: one longitudinal G gives 0.8x amplitude at the default 0.25.
+        acceleration = math.sqrt(0.25 * t["accel_x"] ** 2 + t["accel_z"] ** 2)
+        g_force = acceleration / 9.80665
+        g_damping = max(
+            0.7,
+            1.0 / (1.0 + max(0.0, s.wheelspin_g_damping) * g_force),
+        )
+        output_level = 0.15 + 0.85 * level if self._wheelspin_active else level
+        frequency = _lerp(freq_min, freq_max, level)
+        amplitude = s.wheelspin_amp * output_level * amp_scale * g_damping
+        return vibrate(frequency, amplitude)
+
+    def abs_pulse(self, t, s, now):
+        if (not s.enable_abs
+                or t["brake"] < max(1, s.abs_brake_threshold)
+                or t["speed"] < s.abs_min_speed_kmh):
+            self._abs_until = 0.0
+            self._abs_level = 0.0
             return None
-        if (_max_slip(t, "tire_slip_ratio") < s.abs_slip_ratio_threshold
-                and _max_slip(t, "tire_combined_slip") < s.abs_combined_slip_threshold):
+
+        sensitivity = max(0.1, float(s.abs_sensitivity))
+        ratio_threshold = max(0.0, s.abs_slip_ratio_threshold) / sensitivity
+        combined_threshold = max(0.0, s.abs_combined_slip_threshold) / sensitivity
+        ratio_slip = _max_slip(t, "tire_slip_ratio")
+        combined_slip = _max_slip(t, "tire_combined_slip")
+        ratio_active = ratio_slip >= ratio_threshold
+        combined_active = combined_slip >= combined_threshold
+
+        if ratio_active or combined_active:
+            ratio_level = (
+                _normalize(ratio_slip, ratio_threshold, s.abs_slip_full_scale)
+                if ratio_active else 0.0
+            )
+            combined_level = (
+                _normalize(combined_slip, combined_threshold, s.abs_slip_full_scale)
+                * _clamp01(s.abs_combined_slip_weight)
+                if combined_active else 0.0
+            )
+            self._abs_level = max(ratio_level, combined_level)
+            self._abs_until = now + max(0.0, s.abs_hold_ms) / 1000.0
+        elif now >= self._abs_until:
+            self._abs_level = 0.0
             return None
-        return vibrate(s.abs_freq, s.abs_amp)
+
+        frequency = _lerp(s.abs_freq_min, s.abs_freq, self._abs_level)
+        amplitude = _lerp(s.abs_amp_min, s.abs_amp, self._abs_level)
+        return vibrate_zones(
+            _amp_to_strength(amplitude), frequency, s.abs_wall_zones
+        )
 
     def brake_resistance(self, t, s):
         handbrake = s.enable_handbrake_bonus and t["handbrake"]
@@ -197,6 +335,9 @@ class Controller:
 
     def update(self, t, s):
         if not t["on"]:
+            self.anim.reset_transients()
+            self._l2_in_wall = False
+            self._r2_in_wall = False
             return off(), off()
         now = time.monotonic()
         if s.enable_gear_shift or s.enable_gear_shift_brake:
@@ -213,7 +354,7 @@ class Controller:
                 return shift
 
         # 2. ABS pulse - tire lockup under hard braking
-        pulse = self.anim.abs_pulse(t, s)
+        pulse = self.anim.abs_pulse(t, s, now)
         if pulse:
             return pulse
 
@@ -239,7 +380,7 @@ class Controller:
             if shift:
                 return shift
 
-        # 2. Idle buzz - stationary with throttle (future enhancement)
+        # 2. Idle buzz - stationary with light throttle
         idle = self.anim.idle_buzz(t, s, now)
         if idle is not None:
             return idle

@@ -4,17 +4,17 @@
 
 - 最后更新：2026-07-14，Asia/Shanghai。
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
-- 当前分支：`main`，跟踪 `origin/main`。
-- 本轮修复基线：`5e809d2 docs: integrate multilingual README on one page`。交付后的当前 HEAD 应使用 `git log -1 --oneline` 读取，避免文档因自身提交再次过期。
+- 当前开发分支：`feat/r2-trigger-dynamics`，隔离工作树为 `.worktrees/r2-trigger-dynamics`。
+- 当前开发基线：`128a7b9 chore: ignore local feature worktrees`。交付后的 HEAD 应使用 `git log -1 --oneline` 读取，避免文档因自身提交再次过期。
 - 版本：`1.6.2.post1`，Release workflow 命名为 `FH-DualSense-Enhanced 1.6.2 Enhanced R1`。
 - Git 历史：审计开始时本地是 shallow clone，只有 7 条已有提交，因此无法从本地恢复上游完整历史。
-- 当前阶段：Enhanced R1 已实现并发布，已完成文档和退出行为收尾；Enhanced R2 的功能方向已经讨论确认，但生产代码尚未开始修改。
+- 当前阶段：Enhanced R1 已发布；Enhanced R2 的动态 wheelspin、GT7 风格 ABS wall 和实验性设置已在功能分支实现并通过自动测试，尚未进行游戏遥测下的 USB、Bluetooth 和 DSX 实机验证，也尚未合入或发布。
 
 ## 当前开发重心
 
-1. 长期交接文档已经建立，并已随本轮代码事实同步。
-2. README 同页三语言导航、Linux udev 文档和自动退出开关已修复，当前全量测试通过。
-3. 下一阶段直接进入 Enhanced R2，聚焦动态轮胎打滑和 GT7 风格 ABS wall，同时保留 USB 和 Bluetooth。
+1. 用真实 Forza Data Out 分段验证动态 wheelspin 的驱动轮判断、材质频带、attack/release 和 G damping。
+2. 分段验证 native USB/BT 的 GT7 风格 ABS zoned wall，并确认 DSX 只退化为动态 vibration。
+3. 根据实机手感只调默认常量，不改动既定 transport 边界；验证稳定后再决定版本号、合入和发布。
 
 ## 最近完成的功能
 
@@ -31,55 +31,44 @@
 - 旧的 `docs/ReadmeTR.md` 已删除。`docs/ReadmeEN.md` 和 `docs/ReadmeJA.md` 暂时作为兼容文档保留，但根 README 不再链接过去。
 - `exit_on_game_close=False` 现在同时禁用进程消失和 telemetry-lost 退出，应用会在断流后继续等待。启用时仍保留默认约 60 秒的断流 fallback，覆盖位于 `tests/test_loop_haptics.py`。
 - Linux 文档已明确 launcher 不安装系统级 udev rule，并提供 `70-dualsense.rules` 的手动安装命令；根 README、兼容语言文档和 Release body 已同步。
+- Enhanced R2 动态 wheelspin 已实现于 `src/modules/forzahorizon/effects.py`：只使用油门下 driven wheel longitudinal slip，低速使用 raw rotation，加入 threshold/hysteresis、40 ms attack、125 ms release 的时间型 EWMA、四类材质频带和最多约 30% 的 G force damping。覆盖位于 `tests/forzahorizon/test_effects.py`。
+- GT7 风格 ABS wall 已实现：longitudinal slip 为主、combined slip 低权重辅助，速度只做 6 km/h gate，frequency/strength 随 slip 动态变化，默认保持 100 ms，并让顶部 3 个 zone 保持最大 wall。DSX fallback 由 `tests/dsx/test_client.py` 锁定。
+- GUI/TUI 现在只在普通区显示 ABS/wheelspin strength 与 sensitivity，其余 R2 参数位于默认折叠的“实验性功能”，带“不建议自行调节”警告。六个非英语 catalog 已同步，Profile 与分享码 round-trip 已测试。
 
 ## 正在进行的工作
 
 ### 长期文档体系
 
-代码状态：长期文档已经建立。本轮额外修改了 loop 退出条件、README 契约测试和 Linux 使用文档，未修改 R2 生产逻辑。
+代码状态：长期文档已经建立。本轮正在把 R2 生产代码、测试和验证事实同步到架构与交接文档。
 
 - `AGENTS.md` 已从旧的英文项目地图更新为稳定的中文工作指引。
 - `docs/ARCHITECTURE.md` 已按当前代码记录真实架构和技术债。
 - `docs/PROJECT_STATE.md` 已记录当前版本、R2 边界和验证状态。
 
-### Enhanced R2 设计方向
+### Enhanced R2 实现与验证
 
-状态：本次会话已确认方向，仓库中没有 R2 实现、测试或正式设计文件。以下内容不能视为已实现。
+代码状态：设计已记录在 `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`，实施清单位于 `docs/superpowers/plans/2026-07-14-r2-dynamic-trigger-feedback.md`。生产逻辑、设置和自动测试已经实现；当前进行到实机验证前审计。
 
-动态轮胎打滑的已确认方向：
-
-- 只让油门导致的 driven wheel longitudinal slip 进入 R2；松油漂移继续只进入握把触觉。
-- slip 是主信号，G force 仅作约 20% 到 30% 的温和反向 damping。
-- 保留路面材质 signature，不改成单一频率的无差别震动。
-- 使用一个主 threshold 加 hysteresis；极低速继续依赖 raw wheel rotation 识别烧胎。
-- 使用按时间计算的非对称 EWMA，进入快、释放慢。讨论目标约为 30 到 50 ms 建立、100 到 150 ms 释放，最终常量待测试确认。
-- 普通 UI 暴露 strength 和 sensitivity；高级 band、G damping、smoothing、hysteresis 和 burnout threshold 放入折叠的“实验性功能”，并显示“不建议自行调节”。
-
-GT7 风格 ABS wall 的已确认方向：
-
-- L2 顶部约 3 个 zone 保持高强度 wall，下部 zone 产生 ABS vibration。
-- longitudinal tire slip ratio 为主信号，combined slip 只作辅助。
-- `5..8 km/h` 只作为低速 gating，不按车速决定 ABS 强度。
-- pulse frequency 和 amplitude 随 slip 动态变化，并保留约 80 到 120 ms，最终值待测试确认。
-- native USB/BT 使用完整 zoned wall；DSX 无法等价表达时回退为动态 vibration，不伪装成完整 wall。
-- 升级现有 ABS 和 wheelspin 行为，不保留 legacy mode。
-- 实验参数作为 Profile 级设置，以便按车辆保存。
-- 预定实现位置是现有 `TriggerAnimations` 加一个小型共享 smoothing helper，保持 `Controller` priority 和现有 transport 边界。
+- `TriggerAnimations` 新增 `_AsymmetricEwma`、wheelspin latch、ABS hold deadline 和 telemetry-off reset，未建立第二套 controller。
+- `Controller.L2()` 和 `Controller.R2()` 的 first-match priority 保持不变，R2 只升级了原有 wheelspin 与 ABS effect。
+- native USB/BT 继续使用现有 adaptive-trigger frame；`src/modules/dualsense/main.py` 的 report layout、flags 和 BT CRC 未修改。
+- DSX 对 `M_VIBRATE_ZONES` 回退为 `TM_VIBRATE`，自动测试确认 frequency 保留，但 zoned wall 不存在。
+- `Settings` 新参数均未加入 `GLOBAL_FIELDS`。命名 Profile 和 `FHDS:` 分享码 round-trip 已覆盖。
+- GUI 隐藏构建和展开/折叠脚本已通过；Textual test app 已实际挂载默认折叠的 `Collapsible`。
+- 尚未完成：真实游戏遥测、USB/BT/DSX 手感验证和基于实机的默认值调校。
 
 ## 尚未完成的工作
 
-### 代码中尚未实现
+### 尚未完成
 
-- 动态轮胎打滑频率和强度映射。
-- wheelspin 的时间型 EWMA、hysteresis 和 G force damping。
-- GT7 风格 ABS zoned wall、动态 pulse 和 hold deadline。
-- DSX 的 R2/ABS 退化策略。
-- 折叠的“实验性功能”GUI/TUI section、警告文案和所有语言翻译。
-- R2 参数的 Profile round-trip、分享码兼容和默认值测试。
+- 在 Forza 实际驾驶中分段验证动态 wheelspin，尤其是前驱/后驱/四驱、松油漂移排除、低速烧胎和四种材质 signature。
+- 分别验证 USB 与 Bluetooth 的 ABS 顶部 wall、下部动态 pulse 和 100 ms hold；自动测试不能代替真实扳机手感。
+- 使用 DSX 实机确认其退化振动可接受，且 UI/文档没有暗示 DSX 拥有完整 zoned wall。
+- 根据实机结果调校默认参数；当前默认值是保守实现值，不能写成最终社区验证值。
+- R2 版本号、README、Release workflow、构建产物、合入和 Release 均未处理。
 
 ### 仍存在的代码注释不一致
 
-- `src/modules/forzahorizon/effects.py` 的注释把已存在的 `idle_buzz()` 写成 `future enhancement`。
 - `src/modules/config/settings.py` 的 serial 注释与 `src/modules/dualsense/main.py` 的 USB MAC backfill 和 USB 优先去重逻辑表面冲突，正确文案待硬件枚举结果再次确认。
 
 ### 根据代码推测，尚未验证
@@ -89,24 +78,23 @@ GT7 风格 ABS wall 的已确认方向：
 
 ## 下一步建议顺序
 
-1. 为 R2 增加失败测试，先覆盖 driven wheel longitudinal slip、松油漂移不进 R2、低速 raw rotation、surface signature、EWMA 时间常数和 hysteresis。
-2. 在 `src/modules/forzahorizon/effects.py` 实现动态 wheelspin，并保持现有 `Controller.R2()` priority。
-3. 增加 ABS zoned wall、dynamic pulse、hold 和 DSX fallback 测试，再实现 ABS 行为。
-4. 将 R2 参数加入 `src/modules/config/settings.py`，明确普通参数和 experimental 参数，验证 Profile scope 和分享码兼容。
-5. 同步 GUI、TUI 和 `src/lang/` 所有 catalog，加入折叠 experimental section 和警告文案。
-6. 运行全量测试，再分别进行 USB、Bluetooth 和 DSX 真实设备验证。
-7. R2 行为稳定后更新 README、Release workflow 文案、版本和 Release，不提前把设计写成已发布功能。
+1. 枚举当前 DualSense transport，先用 USB 分段验证 R2 wheelspin 输出，再验证 L2 ABS wall；每段之间归零并等待用户确认。
+2. 在实际 Forza Data Out 中验证前驱、后驱、四驱和材质变化；若不符合预期，先补失败测试再调算法。
+3. 切换 Bluetooth 重复关键 wheelspin/ABS 测试，确认功能差异只来自 transport 能力。
+4. 启用 DSX 验证动态 vibration fallback，不期待完整 zoned wall。
+5. 实机确认后复跑全量测试，更新 README、版本和 Release workflow，再决定合入与发布。
 
 ## 当前已知 Bug
 
-当前自动化测试没有失败项。README 导航契约和 `exit_on_game_close` 断流行为已修复，并增加回归测试。
+当前自动化测试没有失败项。R2 尚未发现可由自动测试复现的 Bug。
 
-真实 USB、Bluetooth 和游戏遥测本次未测试，因此硬件路径是否还有设备特有 Bug 仍待实机验证。
+真实 USB、Bluetooth、DSX 和游戏遥测尚未测试，因此默认调校或设备特有问题仍待确认。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
 
 ## 当前技术债
 
 - 遥测是无类型 `dict`，缺少结构化 schema。
 - GUI/TUI 设置定义重复维护。
+- R2 surface frequency band 在 GUI/TUI 中重复声明，依赖 AST parity test 防止漂移。
 - DSX 无 ACK，且没有 body haptics。
 - USB audio endpoint 依赖名称 heuristic，没有用户选择和 host API fallback。
 - ProcessWatcher 使用宽泛的 `forza` 子串。
@@ -124,10 +112,16 @@ GT7 风格 ABS wall 的已确认方向：
 - `src/modules/haptics/mixer.py` 中静止、滚动、烧胎和路面材质 gating。R2 扳机改动不应破坏握把现有规则。
 - `src/modules/config/preferences.py` 中 Default Profile 重建、GLOBAL_FIELDS 和 atomic write。
 - `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名及第三方声明。
-- 版本号和 Release workflow，直到 R2 实现和验证完成。
+- 版本号和 Release workflow，直到 R2 实机验证完成。
 
 ## 最近涉及的关键文件
 
+- `src/modules/forzahorizon/effects.py`、`tests/forzahorizon/test_effects.py`：R2 动态 wheelspin、ABS wall、EWMA、hysteresis、hold 和 telemetry-off reset。
+- `src/modules/config/settings.py`、`tests/fixtures/community_defaults_2323.json`：R2 普通与实验参数默认值。
+- `src/modules/gui/settings_tab.py`、`src/modules/tui/settings_tab.py`、对应 `system_tab.py` 和 `src/lang/`：默认折叠实验区、警告与多语言。
+- `src/modules/dsx/dsx_wrapper.py`、`tests/dsx/test_client.py`：zoned ABS 到 DSX dynamic vibration 的明确退化。
+- `tests/test_haptic_settings.py`：UI parity、Profile/share-code round-trip、翻译和 Textual 挂载。
+- `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`、`docs/superpowers/plans/2026-07-14-r2-dynamic-trigger-feedback.md`：已批准设计和实施清单。
 - `README.md`、`docs/ReadmeEN.md`、`docs/ReadmeJA.md`：同页三语言和 Linux udev 手动安装说明。
 - `docs/ReadmeTR.md`：旧土耳其语文档已删除。
 - `tests/test_enhanced_distribution.py`：同页 anchor 和 Linux 文档契约。
@@ -141,26 +135,29 @@ GT7 风格 ABS wall 的已确认方向：
 
 ## 当前 Git 工作区状态
 
-本轮交付包含长期文档、README、Release 文案、loop 和测试。完成提交与推送后，目标状态为 `main` 与 `origin/main` 同步且工作区干净；任务结束时必须用 `git status --short --branch` 再确认。
+当前位于 `feat/r2-trigger-dynamics` 隔离工作树，R2 生产代码、测试和文档均为未提交改动。主 `main` 工作树不在本轮编辑范围内。交付前必须用 `git status --short --branch`、`git diff --check` 和 `git log -1 --oneline` 再确认；是否提交、推送或合入取决于实机验证结果。
 
 ## 已执行的测试和验证
 
-本次审计已执行：
+本轮 R2 已执行：
 
-- `git status --short --branch`：写文档前工作区干净。
-- `git diff`、`git diff --cached`：写文档前均为空。
-- `git log -10`：因 shallow clone 仅返回本地全部 7 条提交。
-- `rg` 搜索 `TODO`、`FIXME`、`HACK`、`NotImplemented` 和独立 `pass`：没有发现明确未实现函数；`pass` 均位于异常抑制、preview KeyboardInterrupt、DSX intentional no-op 或测试 stub。
-- 定向回归：同页语言导航、删除 TR、Linux udev 文档、自动退出启用和禁用路径，共 `4 passed`。
-- `uv run --project src pytest -q`：`127 passed`。
-- `git diff --check`：写文档前通过，交付前需要复跑。
+- 基线 `uv run --project src pytest -q`：`127 passed`。
+- wheelspin、ABS、DSX、body haptics 和 defaults 定向回归：`60 passed`。
+- R2 settings、翻译和 effects 定向回归：`32 passed`，之后又增加分享码测试，最终结果以交付前复跑为准。
+- `uv run --project src pytest -q`：最终软件回归 `155 passed`。
+- `uv run --project src python -m compileall -q src/modules src/lang`：通过。
+- Textual test app 实际挂载 `SettingsTab`，确认 `#experimental-settings` 默认 `collapsed=True`。
+- 隐藏的 CustomTkinter root 实际构建 `SettingsTab`，展开和再次折叠实验卡片均通过。
+- `_enumerate_dualsenses()` 检测到 1 个 PID `0x0CE6` 的 USB DualSense；未同时检测到 Bluetooth interface。
+- USB synthetic wheelspin 第 1 段成功写入 R2 frame `(6, (123, 42))`，持续约 1 秒后归零并关闭 handle。连接和输出链无异常，用户主观手感反馈仍待确认。
+- `git diff --check`：中期通过，只有 Git 的 LF/CRLF 提示；交付前需复跑。
 
 ## 尚未执行或失败的验证
 
 - 未构建 ZUV、Windows EXE 或 Linux ELF。
 - 未运行 GitHub Actions。
 - 未在本次任务连接 Forza Data Out 做实时遥测测试。
-- 未在本次任务进行 USB、Bluetooth 或 DSX 实机验证。
+- USB 已完成 synthetic frame 写入，但 wheelspin 手感仍待用户确认；Bluetooth 和 DSX 未执行实机验证。
 - 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
 - 仓库没有配置独立的 lint/type-check gate，本次未虚构或补充此类命令。
 
@@ -174,6 +171,7 @@ GT7 风格 ABS wall 的已确认方向：
 4. `src/modules/forzahorizon/effects.py`
 5. `src/modules/config/settings.py`
 6. `tests/test_enhanced_distribution.py`
-7. 与 R2 相关时再读 `src/modules/dualsense/adaptive_trigger.py`、`src/modules/dsx/dsx_wrapper.py` 和 `tests/dualsense/test_output_report.py`
+7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
+8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
 
-建议首先处理的具体任务：按 TDD 顺序实现动态 wheelspin，完成后再实现 GT7 风格 ABS wall。
+建议首先处理的具体任务：不要继续加算法功能。先按 USB wheelspin、USB ABS、Bluetooth、DSX 的顺序做分段实机验证，并把每段观察记录回本文件。

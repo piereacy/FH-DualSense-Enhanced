@@ -1,9 +1,10 @@
 import ast
+import asyncio
 import runpy
 from dataclasses import fields
 from pathlib import Path
 
-from modules.config import preferences
+from modules.config import preferences, profiles
 from modules.config.preferences import GLOBAL_FIELDS
 from modules.config.settings import Settings
 
@@ -36,6 +37,71 @@ BEHAVIOR_LABELS = {
     "Close the app when the game closes",
     "Move the app to the tray when minimized",
 }
+NORMAL_R2_FIELDS = {
+    "ABS (anti-lock brake) rumble": ("abs_amp", "abs_sensitivity"),
+    "Wheelspin buzz": ("wheelspin_amp", "wheelspin_sensitivity"),
+}
+EXPERIMENTAL_FIELDS = (
+    "abs_brake_threshold",
+    "abs_min_speed_kmh",
+    "abs_slip_ratio_threshold",
+    "abs_combined_slip_threshold",
+    "abs_combined_slip_weight",
+    "abs_slip_full_scale",
+    "abs_freq_min",
+    "abs_freq",
+    "abs_amp_min",
+    "abs_hold_ms",
+    "abs_wall_zones",
+    "wheelspin_slip_threshold",
+    "wheelspin_hysteresis",
+    "wheelspin_slip_full_scale",
+    "wheelspin_attack_ms",
+    "wheelspin_release_ms",
+    "wheelspin_g_damping",
+    "wheelspin_burnout_rotation_threshold",
+    "wheelspin_burnout_rotation_full_scale",
+    "wheelspin_tarmac_freq_min",
+    "wheelspin_tarmac_freq_max",
+    "wheelspin_water_freq_min",
+    "wheelspin_water_freq_max",
+    "wheelspin_dirt_freq_min",
+    "wheelspin_dirt_freq_max",
+    "wheelspin_gravel_freq_min",
+    "wheelspin_gravel_freq_max",
+)
+R2_LABELS = {
+    "Sensitivity",
+    "Experimental features",
+    "Not recommended for manual adjustment.",
+    "ABS advanced tuning",
+    "Wheelspin advanced tuning",
+    "Minimum brake input",
+    "Minimum speed (km/h)",
+    "Longitudinal slip threshold",
+    "Combined slip threshold",
+    "Combined slip influence",
+    "Slip at maximum feedback",
+    "Minimum frequency (Hz)",
+    "Maximum frequency (Hz)",
+    "Minimum strength",
+    "Feedback hold (ms)",
+    "Top wall zones",
+    "Slip hysteresis",
+    "Attack smoothing (ms)",
+    "Release smoothing (ms)",
+    "G-force damping",
+    "Burnout rotation threshold",
+    "Burnout rotation at maximum feedback",
+    "Tarmac minimum frequency (Hz)",
+    "Tarmac maximum frequency (Hz)",
+    "Water minimum frequency (Hz)",
+    "Water maximum frequency (Hz)",
+    "Dirt minimum frequency (Hz)",
+    "Dirt maximum frequency (Hz)",
+    "Gravel minimum frequency (Hz)",
+    "Gravel maximum frequency (Hz)",
+}
 
 
 def _sections(path, variable):
@@ -64,6 +130,13 @@ def _behavior_fields(path):
     section = next((items for title, items in sections if title == "Application behavior"), None)
     assert section is not None, f"Application behavior section missing from {path}"
     return tuple(item[0] for item in section)
+
+
+def _fields_by_section(path, variable):
+    return {
+        title: tuple(item[0] for item in items)
+        for title, items in _sections(path, variable)
+    }
 
 
 def test_gui_and_tui_expose_the_same_body_haptics_fields():
@@ -127,4 +200,117 @@ def test_every_non_english_catalog_translates_application_behavior_labels():
             continue
         strings = runpy.run_path(str(path))["STRINGS"]
         missing = BEHAVIOR_LABELS - strings.keys()
+        assert not missing, f"{path.name} is missing {sorted(missing)}"
+
+
+def test_gui_and_tui_keep_only_strength_and_sensitivity_in_normal_r2_sections():
+    for relative in ("src/modules/gui/settings_tab.py", "src/modules/tui/settings_tab.py"):
+        sections = _fields_by_section(ROOT / relative, "SETTING_SECTIONS")
+        for title, expected in NORMAL_R2_FIELDS.items():
+            assert sections[title] == expected
+
+
+def test_gui_and_tui_expose_identical_advanced_r2_fields():
+    gui = _fields_by_section(
+        ROOT / "src/modules/gui/settings_tab.py", "EXPERIMENTAL_SECTIONS"
+    )
+    tui = _fields_by_section(
+        ROOT / "src/modules/tui/settings_tab.py", "EXPERIMENTAL_SECTIONS"
+    )
+
+    assert gui == tui
+    assert tuple(field for fields_ in gui.values() for field in fields_) == EXPERIMENTAL_FIELDS
+
+
+def test_all_r2_tuning_fields_are_profile_scoped_settings():
+    setting_names = {field.name for field in fields(Settings)}
+    normal_fields = {field for values in NORMAL_R2_FIELDS.values() for field in values}
+    all_fields = normal_fields | set(EXPERIMENTAL_FIELDS)
+
+    assert all_fields <= setting_names
+    assert all_fields.isdisjoint(GLOBAL_FIELDS)
+
+
+def test_r2_tuning_fields_round_trip_in_a_named_profile(tmp_path, monkeypatch):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    settings = Settings()
+    preferences.load(settings)
+    settings.abs_sensitivity = 1.7
+    settings.abs_hold_ms = 88.0
+    settings.wheelspin_sensitivity = 1.4
+    settings.wheelspin_attack_ms = 35.0
+    settings.wheelspin_tarmac_freq_max = 175
+    assert profiles.save_profile("R2 Test", settings) == "R2 Test"
+
+    loaded = Settings()
+    preferences.load(loaded)
+
+    assert loaded.abs_sensitivity == 1.7
+    assert loaded.abs_hold_ms == 88.0
+    assert loaded.wheelspin_sensitivity == 1.4
+    assert loaded.wheelspin_attack_ms == 35.0
+    assert loaded.wheelspin_tarmac_freq_max == 175
+
+
+def test_r2_tuning_fields_round_trip_through_share_code(tmp_path, monkeypatch):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    settings = Settings()
+    preferences.load(settings)
+    settings.abs_sensitivity = 1.6
+    settings.abs_wall_zones = 4
+    settings.wheelspin_sensitivity = 1.3
+    settings.wheelspin_release_ms = 140.0
+    assert profiles.save_profile("R2 Share", settings) == "R2 Share"
+
+    code = profiles.export_profile("R2 Share")
+    imported = profiles.import_profile(code)
+    snapshot = profiles.load_profiles()["profiles"][imported]
+
+    assert code.startswith(profiles.SHARE_PREFIX)
+    assert imported == "R2 Share1"
+    assert snapshot["abs_sensitivity"] == 1.6
+    assert snapshot["abs_wall_zones"] == 4
+    assert snapshot["wheelspin_sensitivity"] == 1.3
+    assert snapshot["wheelspin_release_ms"] == 140.0
+
+
+def test_experimental_settings_are_collapsed_by_default_and_excluded_from_system_tabs():
+    gui = (ROOT / "src/modules/gui/settings_tab.py").read_text(encoding="utf-8")
+    gui_system = (ROOT / "src/modules/gui/system_tab.py").read_text(encoding="utf-8")
+    tui = (ROOT / "src/modules/tui/settings_tab.py").read_text(encoding="utf-8")
+    tui_system = (ROOT / "src/modules/tui/system_tab.py").read_text(encoding="utf-8")
+
+    assert "self._experimental_open = False" in gui
+    assert "collapsed=True" in tui
+    assert "SHOW_EXPERIMENTAL = False" in gui_system
+    assert "SHOW_EXPERIMENTAL = False" in tui_system
+
+
+def test_tui_experimental_settings_mount_collapsed():
+    from textual.app import App, ComposeResult
+    from textual.widgets import Collapsible
+
+    from modules.tui.settings_tab import SettingsTab
+
+    class SettingsHarness(App):
+        def compose(self) -> ComposeResult:
+            yield SettingsTab(Settings())
+
+    async def check():
+        app = SettingsHarness()
+        async with app.run_test():
+            experimental = app.query_one("#experimental-settings", Collapsible)
+            assert experimental.collapsed is True
+
+    asyncio.run(check())
+
+
+def test_every_non_english_catalog_translates_r2_settings_labels():
+    for path in sorted((ROOT / "src/lang").glob("*.py")):
+        if path.name in {"__init__.py", "en.py"}:
+            continue
+        strings = runpy.run_path(str(path))["STRINGS"]
+        missing = R2_LABELS - strings.keys()
         assert not missing, f"{path.name} is missing {sorted(missing)}"

@@ -201,6 +201,38 @@ STRINGS = {
     "Restart the app to apply the new language.":
         "重新啟動應用程式以套用新語言。",
 
+    # --- R2 實驗性扳機調校 ---
+    "Sensitivity": "靈敏度",
+    "Experimental features": "實驗性功能",
+    "Not recommended for manual adjustment.": "不建議自行調整。",
+    "ABS advanced tuning": "ABS 進階調校",
+    "Wheelspin advanced tuning": "輪胎打滑進階調校",
+    "Minimum brake input": "最低煞車輸入",
+    "Minimum speed (km/h)": "最低速度（km/h）",
+    "Longitudinal slip threshold": "縱向滑移門檻",
+    "Combined slip threshold": "綜合滑移門檻",
+    "Combined slip influence": "綜合滑移影響",
+    "Slip at maximum feedback": "達到最大回饋的滑移量",
+    "Minimum frequency (Hz)": "最低頻率（Hz）",
+    "Maximum frequency (Hz)": "最高頻率（Hz）",
+    "Minimum strength": "最低強度",
+    "Feedback hold (ms)": "回饋保持時間（ms）",
+    "Top wall zones": "頂部阻力牆區域數",
+    "Slip hysteresis": "滑移遲滯",
+    "Attack smoothing (ms)": "建立平滑時間（ms）",
+    "Release smoothing (ms)": "釋放平滑時間（ms）",
+    "G-force damping": "G 力衰減",
+    "Burnout rotation threshold": "燒胎轉速門檻",
+    "Burnout rotation at maximum feedback": "達到最大回饋的燒胎轉速",
+    "Tarmac minimum frequency (Hz)": "鋪裝路最低頻率（Hz）",
+    "Tarmac maximum frequency (Hz)": "鋪裝路最高頻率（Hz）",
+    "Water minimum frequency (Hz)": "積水最低頻率（Hz）",
+    "Water maximum frequency (Hz)": "積水最高頻率（Hz）",
+    "Dirt minimum frequency (Hz)": "泥土最低頻率（Hz）",
+    "Dirt maximum frequency (Hz)": "泥土最高頻率（Hz）",
+    "Gravel minimum frequency (Hz)": "碎石最低頻率（Hz）",
+    "Gravel maximum frequency (Hz)": "碎石最高頻率（Hz）",
+
     # --- external links ---
     "Sponsor": "贊助",
 }

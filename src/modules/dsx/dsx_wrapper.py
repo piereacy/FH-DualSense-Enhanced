@@ -92,7 +92,7 @@ def _frame_to_instr(frame, trigger):
     if mode == M_VIBRATE:                      # buzz: ABS, rev, wheelspin, idle
         return _instr(trigger, TM_VIBRATE, _u8(p[0])) if p[1] else _instr(trigger, TM_OFF)
 
-    if mode == M_VIBRATE_ZONES:                # gear-shift kick: 0 Hz sustained push
+    if mode == M_VIBRATE_ZONES:                # zoned ABS / gear-shift; DSX cannot keep the wall
         zones = _unpack_zones(p)
         if not any(zones):
             return _instr(trigger, TM_OFF)

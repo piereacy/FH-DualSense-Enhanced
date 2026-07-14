@@ -42,6 +42,7 @@ class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
     SHOW_RESET = False
     SHOW_ABOUT = False
+    SHOW_EXPERIMENTAL = False
     PAGE_TITLE = "System"
     PAGE_SUBTITLE = "Controller, updates, and app-level options."
 
