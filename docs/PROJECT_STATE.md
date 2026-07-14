@@ -2,215 +2,150 @@
 
 ## 状态快照
 
-- 最后更新：2026-07-14，Asia/Shanghai。
+- 最后更新：2026-07-15，Asia/Shanghai。
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
-- 当前开发分支：`feat/r2-trigger-dynamics`，隔离工作树为 `.worktrees/r2-trigger-dynamics`。
-- 当前发布基线：tag `R2` 指向 `1cc4520 fix: add manual stable release channel`。发布后的文档提交会位于 tag 之后；最新 HEAD 应使用 `git log -1 --oneline` 读取。
-- 版本：公开产品版本 `R2`，`src/pyproject.toml` 的内部 PEP 440 版本为 `2`。稳定 Release 标题为 `FH-DualSense-Enhanced R2`，滚动预发布为 `R2-preview`。
-- Git 历史：审计开始时本地是 shallow clone，只有 7 条已有提交，因此无法从本地恢复上游完整历史。
-- 当前阶段：Enhanced R2 已发布。稳定 Release 为 `FH-DualSense-Enhanced R2`，tag `R2` 指向 `1cc4520`，公开地址为 `https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R2`。`R2-preview` 与稳定 R2 的 bundle、Windows EXE、Linux ELF 和 Release jobs 均已通过 GitHub Actions。
+- 当前开发分支：`feat/r3-traction-redline`，隔离工作树为 `.worktrees/r3-traction-redline`。
+- 当前功能提交：`66595cb feat: route traction and move redline to grips`。设计和计划提交分别为 `462664a`、`49ff4a2`；文档提交后的准确 HEAD 以 `git log -1 --oneline` 为准。
+- 当前开发身份：内部 PEP 440 版本 `3`，运行时显示 `R3`。R3 尚未创建 tag 或 GitHub Release。
+- 当前稳定发布：Enhanced R2，tag `R2` 指向 `1cc4520`，公开地址为 `https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R2`。
+- 当前阶段：R3 抓地力路由和红线握把警告已经完成代码、自动测试和本地 Windows 测试产物，等待用户进行真实 Forza 手感验证。
 
 ## 当前开发重心
 
-1. Enhanced R2 已完成当前批准范围内的实现、自动测试与硬件验证；不再继续调整 wheelspin/ABS 默认常量。
-2. R2 发布流程已完成；当前只做发布后问题监测，不继续调整已经确认的 R2 算法、默认常量或资产命名。
-3. DSX 保留当前 adapter 和自动测试结果，不做实机调校、功能扩展或效果承诺，也不作为 Enhanced R2 发布门槛。
+1. 让用户在真实 Forza 中判断双侧红线脉冲能否从连续发动机握把底振中被明确感知。
+2. 验证通用抓地力按 Forza 踏板遥测路由：只踩刹车进入 L2，只踩油门进入 R2，同时踩下只进入 R2；ABS 继续作为独立 L2 高优先级 effect。
+3. USB 与 Bluetooth 必须使用相同红线触发条件、phase、hold 和归一化强度。当前代码只区分现有底层传输/合成路径，不定义蓝牙降级或强度较低。
+4. 本轮只生成本地 R3 测试产物，不创建 R3 tag，不发布 GitHub Release，不开发 DSX 握把适配。
 
 ## 最近完成的功能
 
-以下内容可由当前生产代码和测试确认：
+### 已由代码和自动测试确认
 
-- 遥测驱动握把触觉已经实现，核心位于 `src/modules/haptics/`，接入点位于 `src/modules/loop.py`。提交 `61cc16a` 增加了 USB 四声道音频、Bluetooth compatible rumble、混音和对应测试。
-- 静止 gating 已实现：真正静止怠速安静，原地轰油和烧胎保留反馈，路面材质只在滚动或车轮实际空转时激活。实现位于 `src/modules/haptics/mixer.py`，覆盖位于 `tests/haptics/test_mixer.py`。
-- USB 和 Bluetooth 的 trigger + rumble 原子输出、BT CRC、rumble release 和重连恢复已有测试，见 `src/modules/dualsense/main.py`、`tests/dualsense/test_output_report.py` 和 `tests/dualsense/test_reconnect_output.py`。
-- GUI/TUI 的 USB audio lifecycle、关闭游戏退出、最小化到托盘开关已经实现，见 `src/modules/haptics/lifecycle.py`、`src/modules/gui/main.py`、`src/modules/gui/settings_tab.py` 和 `tests/gui/test_window_behavior.py`。
-- 项目已改名为 `FH-DualSense-Enhanced`。R2 使用公开版本 `R2` 和内部版本 `2`，GUI/TUI、Windows VERSIONINFO、构建脚本与 Release workflow 已按此映射；历史 R1 `1.6.2.post1` 只保留在迁移说明和旧 release 兼容分支中。
-- 默认调校已写入 `Settings` 并由 fixture 锁定，见 `src/modules/config/settings.py`、`tests/fixtures/community_defaults_2323.json` 和 `tests/test_community_defaults.py`。`2323` 只是测试 fixture 名称，不是运行时 Profile。
-- About 与许可证归属已集中在 `src/modules/about.py`，Sponsor 只应出现在 About/License surface，对应测试为 `tests/test_about_and_release.py`。
-- 根 `README.md` 已集成中文、英语和日语三个同页 anchor，测试现已验证 `#readme-zh-cn`、`#readme-en` 和 `#readme-ja`，不再要求跳转独立语言页面。
-- 旧的 `docs/ReadmeTR.md` 已删除。`docs/ReadmeEN.md` 和 `docs/ReadmeJA.md` 暂时作为兼容文档保留，但根 README 不再链接过去。
-- `exit_on_game_close=False` 现在同时禁用进程消失和 telemetry-lost 退出，应用会在断流后继续等待。启用时仍保留默认约 60 秒的断流 fallback，覆盖位于 `tests/test_loop_haptics.py`。
-- Linux 文档已明确 launcher 不安装系统级 udev rule，并提供 `70-dualsense.rules` 的手动安装命令；根 README、兼容语言文档和 Release body 已同步。
-- Enhanced R2 动态 wheelspin 已实现于 `src/modules/forzahorizon/effects.py`：只使用油门下 driven wheel longitudinal slip，低速使用 raw rotation，加入 threshold/hysteresis、40 ms attack、125 ms release 的时间型 EWMA、四类材质频带和最多约 30% 的 G force damping。覆盖位于 `tests/forzahorizon/test_effects.py`。
-- GT7 风格 ABS wall 已实现：longitudinal slip 为主、combined slip 低权重辅助，速度只做 6 km/h gate，frequency/strength 随 slip 动态变化，默认保持 100 ms，并让顶部 3 个 zone 保持最大 wall。DSX fallback 由 `tests/dsx/test_client.py` 锁定。
-- GUI/TUI 现在只在普通区显示 ABS/wheelspin strength 与 sensitivity，其余 R2 参数位于默认折叠的“实验性功能”，带“不建议自行调节”警告。六个非英语 catalog 已同步，Profile 与分享码 round-trip 已测试。
+- `src/modules/forzahorizon/effects.py` 新增 `traction_buzz()`，每个 telemetry tick 只生成一份有状态抓地力 effect，再由 `Controller.update()` 路由到一个扳机键。
+- 抓地力路由使用 Forza Data Out 的 `brake`/`accel`，不读取 DualSense 物理 input report。路由表由 `tests/forzahorizon/test_effects.py` 覆盖。
+- 高速油门单独使用 driven wheels 的绝对 longitudinal slip；刹车参与时使用四轮最大绝对 longitudinal slip。低速只在油门参与时使用 driven-wheel raw rotation，纯刹车不会用 rotation 猜测抓地力。
+- 双踏板时通用抓地力只进入 R2 扳机键，L2 仍可同时输出 GT7 风格 ABS zoned wall。
+- R2 扳机键的 rev-limiter effect 已删除。当前 R2 扳机键优先级为 gear shift、idle、traction、end wall、resistance；L2 为 gear shift、ABS、traction、end wall、static wall、resistance。
+- `src/modules/haptics/mixer.py` 已实现双侧同步红线握把警告。默认触发条件是油门达到 deadzone 且 `rpm / max_rpm >= 0.93`，脉冲为 10 Hz、50% duty、强度 `96/255`，跌破阈值后 hold 120 ms。
+- 红线脉冲叠加到左右 `high` 通道，连续 `engine_hz`/`engine_amplitude` 保留。Body Haptics 总开关、master、`engine_haptics_intensity` 和 `enable_rev_limiter` 均能门控；运行时关闭效果会立即清除已有 hold。
+- `tests/haptics/test_mixer.py` 已覆盖立即 on、on/off phase、hold、双侧对称、阈值和油门门控、动态关闭以及 `to_compatible_rumble()` 对同一 normalized envelope 的映射。
+- `src/modules/config/preferences.py` 会迁移内部版本 `2` 的命名 Profile：仅当 `rev_limit_freq/rev_limit_amp` 仍等于旧默认值 `30/12` 时改为 `10/96`，自定义值保持不变。`Default` Profile 仍按 R3 代码默认值重建。
+- GUI/TUI 已使用 `Redline grip warning` 和 `Traction/grip feedback` 文案，共享效果从 R2 专属控制组移到 `Shared feedback`。六个非英语 catalog 已同步。
+- Body Haptics 提示已改为 USB 与 Bluetooth 使用相同触觉混合，只是传输路径不同；代码和 UI 不再声称 Bluetooth 不如 USB。
+- `src/pyproject.toml` 与 `src/uv.lock` 已切换到内部版本 `3`。发布契约测试将当前开发身份 R3 与 README 仍记录的稳定 R2 分开。
+
+### 继承且未改动的 R2 能力
+
+- GT7 风格 ABS wall、动态 EWMA/hysteresis、四类材质频带和 G force damping 继续保留。
+- USB/BT HID report layout、trigger flags、motor flags、BT CRC、pending rumble release 和 reconnect 输出未修改。
+- USB 四声道 audio、Bluetooth compatible rumble、静止/滚动/烧胎/路面 gating、碰撞和悬挂方向性未重构。
+- DSX adapter 和 zoned ABS fallback 未修改；DSX 仍不提供本项目握把触觉。
+- 稳定 R2 tag、Release、公开资产和 README 稳定版说明未修改。
 
 ## 正在进行的工作
 
-### 长期文档体系
-
-代码状态：长期文档已经建立。本轮正在把 R2 生产代码、测试和验证事实同步到架构与交接文档。
-
-- `AGENTS.md` 已从旧的英文项目地图更新为稳定的中文工作指引。
-- `docs/ARCHITECTURE.md` 已按当前代码记录真实架构和技术债。
-- `docs/PROJECT_STATE.md` 已记录当前版本、R2 边界和验证状态。
-
-### Enhanced R2 实现与验证
-
-代码状态：设计已记录在 `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`，实施清单位于 `docs/superpowers/plans/2026-07-14-r2-dynamic-trigger-feedback.md`。生产逻辑、设置和自动测试已经实现；当前进行到实机验证前审计。
-
-- `TriggerAnimations` 新增 `_AsymmetricEwma`、wheelspin latch、ABS hold deadline 和 telemetry-off reset，未建立第二套 controller。
-- `Controller.L2()` 的 first-match priority 未改变。真实遥测暴露 rev limiter 会遮蔽 wheelspin 后，`Controller.R2()` 已按用户确认调整为 `gear > idle > wheelspin > rev > wall > resistance`；3 个回归测试覆盖高速打滑、低速 raw rotation 和轮胎有抓地时仍保留 rev limiter。
-- native USB/BT 继续使用现有 adaptive-trigger frame；`src/modules/dualsense/main.py` 的 report layout、flags 和 BT CRC 未修改。
-- DSX 对 `M_VIBRATE_ZONES` 回退为 `TM_VIBRATE`，自动测试确认 frequency 保留，但 zoned wall 不存在。
-- `Settings` 新参数均未加入 `GLOBAL_FIELDS`。命名 Profile 和 `FHDS:` 分享码 round-trip 已覆盖。
-- GUI 隐藏构建和展开/折叠脚本已通过；Textual test app 已实际挂载默认折叠的 `Collapsible`。
-- 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证；Bluetooth 真实游戏遥测已确认油门驱动打滑触发 R2 扳机键、松油漂移不触发、低速 raw rotation 触发、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质 signature。前驱/后驱实机验证由用户明确取消，DSX 已移出当前范围。
-
-### Enhanced R2 发布
-
-代码状态：设计位于 `docs/superpowers/specs/2026-07-14-r2-release-design.md`，实施清单位于 `docs/superpowers/plans/2026-07-14-r2-release.md`。本地与远端门禁、`R2-preview` 和稳定 `R2` 公开发布均已完成。
-
-- `src/pyproject.toml` 使用内部版本 `2`，`preferences._release_version()` 将运行时公开显示映射为 `R2`。
-- Windows 与 Linux 本地构建脚本分别输出 `FH-DualSense-Enhanced-R2.exe` 和 `FH-DualSense-Enhanced-R2`；Windows VERSIONINFO 的 `FileVersion` 与 `ProductVersion` 均为 `R2`。
-- `.github/workflows/release.yml` 支持 `R2`、`release R2`、滚动 `R2-preview`，并保留历史 `vX.Y.Z` / `vX.Y.Z.postN` 兼容。
-- 根 README 的同页三语言、兼容 EN/JA 文档与发行包说明均已说明 R2 体系、上游 `1.6.2`、HorizonHaptics `1.3.0` 和历史 R1 迁移。
-- 固定资产名 `FH-DualSense-Enhanced.zuv.py`、`win_start.bat`、`linux_start.sh`、latest Release 更新和 `--prerelease` 频道继续保留；ZUV 去留留给 R3。
-- 仓库在本轮没有交付 main/tag 的 push Actions event；因此 workflow 新增了默认 `preview`、显式 `stable` 的手动频道。稳定 run `29338874379` 从 `1cc4520` 完整重建并成功发布，不是手工上传本地产物。
+- 代码和产物已经达到可测试状态，当前只等待用户在真实 Forza 中验证手感。
+- 用户反馈后，需要把 USB/Bluetooth 的实际结果补回本文件，并据此决定是否只调红线 envelope 或进入 R3 发布设计。
 
 ## 尚未完成的工作
 
-### 尚未完成
+### R3 必须由用户完成的实车验证
 
-- USB 的轻/重 ABS、Bluetooth 的强 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
-- 当前批准的 Enhanced R2 发布范围没有尚未完成项。
+- 普通高转但低于阈值时，不应出现红线握把脉冲。
+- 持续达到红线时，双侧断油式脉冲应能从连续发动机底振中被辨认。
+- 快速升挡穿越红线时，120 ms hold 不应表现为杂乱断续。
+- 抓地力与红线同时发生时，轮胎状态留在相应扳机键，发动机红线留在双侧握把。
+- USB 与 Bluetooth 各测试一轮；验收目标是逻辑、时序和归一化强度一致，不预设一方较弱。
 
-### 当前明确不做
+### 已记录但不属于本轮交付
 
-- 不开发或实机调校 DSX 适配。保留现有 `src/modules/dsx/dsx_wrapper.py` fallback 与 `tests/dsx/test_client.py` 回归，默认行为维持现状；除非用户以后重新提出，DSX 不阻塞 Enhanced R2。
+- R3 ZUV 的保留、替换或迁移方案按用户决定留到后续讨论。本轮继续构建现有 ZUV，不删除 R1/R2 的 latest-asset 兼容链。
+- R1/R2 GitHub Release body 的中文说明已经有设计提交 `2ea5ab0`，但远端 Release body 更新未在当前 R3 工作中执行。`AGENTS.md` 已加入“每个 Release body 必须有中文功能说明”的长期规则。
+- DSX 不做实机调校和握把适配，除非用户以后重新提出。
+- R3 不发布，不修改 `R2`/`R2-preview` tag 或资产。
 
-### 仍存在的代码注释不一致
+## 下一步建议执行顺序
 
-- `src/modules/config/settings.py` 的 serial 注释与 `src/modules/dualsense/main.py` 的 USB MAC backfill 和 USB 优先去重逻辑表面冲突，正确文案待硬件枚举结果再次确认。
-
-### 根据代码推测，尚未验证
-
-- `packaging/linux/build_elf.sh` 没有像 CI 一样向 `uvx` 显式加入 `numpy` 和 `sounddevice`。本地 Linux build 可能缺少 body haptics 依赖，但本次未在 Linux 执行，结论待确认。
-- 根 README 与两个独立语言 README 同时保留，后续修改容易造成内容漂移。目前未逐段建立自动同步机制。
-
-## 下一步建议顺序
-
-1. 观察 R2 用户反馈，只修复可复现问题，不在 R2 上继续扩张算法范围。
-2. R3 开始前单独设计 ZUV 的保留、替换或迁移方案，不能直接删除固定 ZUV 资产，否则会破坏 R1/R2 启动器的 latest-asset 链路。
-3. 若继续维护 Release workflow，优先调查仓库未产生 push event 的外部原因；在确认前保留已验证的手动 `stable` 恢复入口。
+1. 完成本地 ZUV 和 Windows EXE 构建检查。
+2. 用户先用默认值在真实 Forza 测试红线握把辨识度，再测试抓地力与红线并发。
+3. 若脉冲不明显，优先只调整 `rev_limit_amp`、`rev_limit_freq` 或 duty/波形，不改 USB/BT 分支，不把红线重新放回 R2 扳机键。
+4. 用户确认后补充真实硬件记录，再决定是否提交、推送和发布 R3。
+5. R3 发布前另行处理 Release 中文说明和 ZUV 生命周期，不把这两个议题混入当前手感验证。
 
 ## 当前已知 Bug
 
-当前自动化测试没有失败项。真实遥测曾发现 rev limiter 优先级高于 wheelspin，导致高转打滑时动态 wheelspin 被遮蔽；当前工作树已调整优先级、加入回归测试并通过真实 Bluetooth 游戏遥测复验。
-
-发布时观察到 GitHub 未为 main/tag push 创建 Actions run；远端 tag 本身正常。当前已通过带测试的 `workflow_dispatch` stable channel 完成发布。根因属于仓库/Actions 事件交付侧，待确认；现有恢复入口不可在未替代前删除。
-
-真实 USB 与 Bluetooth synthetic telemetry 已测试且未发现手感问题；Bluetooth 游戏实时遥测已完成四驱 wheelspin/松油漂移、低速 raw rotation、新优先级和 ABS wall 主路径确认。DSX 未测试且不在当前范围。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
-
-材质验证观察到 wheelspin 首次进入时可能出现单帧 `(30, 12)` rev-limiter 过渡，原因是时间型 EWMA 的第一次 update 只建立时间基准。稳定材质输出未受影响，用户未报告可感知异常；当前记录为观察项，不作为阻塞 Bug。
+- 自动测试没有已知失败项。
+- 红线握把脉冲是否足够从连续发动机底振中被真实感知尚未验证，这是当前唯一关键验收风险，不得写成已解决。
+- 旧 R2 的 `wheelspin_*` 字段名继续存在，但 UI 已显示 traction/grip。这是刻意的 Profile 兼容策略，不是运行时错误。
+- GitHub 过去没有为部分 main/tag push 交付 Actions event，R2 通过已验证的手动 `stable` workflow 恢复入口发布；外部根因仍待确认。
 
 ## 当前技术债
 
-- 遥测是无类型 `dict`，缺少结构化 schema。
-- GUI/TUI 设置定义重复维护。
-- R2 surface frequency band 在 GUI/TUI 中重复声明，依赖 AST parity test 防止漂移。
-- DSX 无 ACK，且没有 body haptics。
-- USB audio endpoint 依赖名称 heuristic，没有用户选择和 host API fallback。
-- ProcessWatcher 使用宽泛的 `forza` 子串。
-- 本地 Linux build 的 audio dependency 完整性待验证。
-- 根 README 与兼容 EN/JA 文档存在内容重复，后续修改仍有漂移风险。
-- 多处 hardware cleanup 使用宽泛 exception suppression，诊断能力有限。
+- 遥测仍是无类型 `dict`，字段名错误只能在运行时暴露。
+- GUI/TUI 设置和控制组重复声明，依赖 AST parity test 防止漂移。
+- `wheelspin_*` 内部字段名与 R3 traction/grip UI 术语不一致；直接重命名会破坏 Profile/share-code 兼容，需要独立迁移设计。
+- DSX 无 ACK 且没有 body haptics。
+- USB audio endpoint 依赖名称 heuristic，没有用户选择和多 host API fallback。
+- USB audio callback 有幅度平滑，而 Bluetooth 使用 HID compatible rumble；两者输入 frame 相同，但底层执行器/合成路径物理表现仍需实机确认。
+- 根 README 与 `docs/ReadmeEN.md`、`docs/ReadmeJA.md` 有重复内容，存在漂移风险。
+- 本地 Linux build 的 audio dependency 完整性仍未在 Linux 主机验证。
 
 ## 暂时不要修改的部分
 
-除非具体任务要求并配套测试，不要顺手重构：
-
-- `src/modules/dualsense/main.py` 中 USB/BT report layout、rumble flags、BT CRC 和 pending rumble release。
-- `src/modules/forzahorizon/udp_listener.py` 中 324 字节 offset 和 `recv_latest()` drain 语义。
-- `src/modules/loop.py` 中 state-change write gate、1 秒静音和 body haptics failure isolation。
-- `src/modules/haptics/mixer.py` 中静止、滚动、烧胎和路面材质 gating。R2 扳机改动不应破坏握把现有规则。
-- `src/modules/config/preferences.py` 中 Default Profile 重建、GLOBAL_FIELDS 和 atomic write。
-- `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名及第三方声明。
-- R2 触觉算法、默认参数、公开版本命名、稳定 tag 和已发布资产；只允许修复明确且可复现的问题。
+- `src/modules/dualsense/main.py` 的 USB/BT report layout、rumble flags、BT CRC、pending release 和左右映射。
+- `src/modules/forzahorizon/udp_listener.py` 的 324 字节 offsets 与 `recv_latest()` drain 语义。
+- `src/modules/loop.py` 的 state-change write gate、静音和 body haptics failure isolation。
+- `src/modules/haptics/mixer.py` 中已验证的静止、滚动、烧胎、路面、碰撞和悬挂 gating；红线只应作为独立叠加层调整。
+- `src/modules/config/preferences.py` 的 Default Profile 重建、GLOBAL_FIELDS、atomic write 和本轮精确 R2 默认值迁移。
+- `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名与第三方声明。
+- R2 tag、Release、稳定资产和已发布算法默认值。
 
 ## 最近涉及的关键文件
 
-- `src/modules/forzahorizon/effects.py`、`tests/forzahorizon/test_effects.py`：R2 动态 wheelspin、ABS wall、EWMA、hysteresis、hold 和 telemetry-off reset。
-- `src/modules/config/settings.py`、`tests/fixtures/community_defaults_2323.json`：R2 普通与实验参数默认值。
-- `src/modules/gui/settings_tab.py`、`src/modules/tui/settings_tab.py`、对应 `system_tab.py` 和 `src/lang/`：默认折叠实验区、警告与多语言。
-- `src/modules/dsx/dsx_wrapper.py`、`tests/dsx/test_client.py`：zoned ABS 到 DSX dynamic vibration 的明确退化。
-- `tests/test_haptic_settings.py`：UI parity、Profile/share-code round-trip、翻译和 Textual 挂载。
-- `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`、`docs/superpowers/plans/2026-07-14-r2-dynamic-trigger-feedback.md`：已批准设计和实施清单。
-- `README.md`、`docs/ReadmeEN.md`、`docs/ReadmeJA.md`：同页三语言和 Linux udev 手动安装说明。
-- `docs/ReadmeTR.md`：旧土耳其语文档已删除。
-- `tests/test_enhanced_distribution.py`：同页 anchor 和 Linux 文档契约。
-- `src/modules/loop.py`、`tests/test_loop_haptics.py`：`exit_on_game_close` 同时控制进程和断流退出。
-- `src/pyproject.toml`、`src/modules/config/preferences.py`、`.github/workflows/release.yml`：内部版本 `2`、公开 `R2` 映射和 R2/R2-preview 发布身份。
-- `packaging/windows/build_exe.bat`、`packaging/windows/fhds.spec`、`packaging/linux/build_elf.sh`：R2 产物命名与 Windows VERSIONINFO。
-- `docs/superpowers/specs/2026-07-14-r2-release-design.md`、`docs/superpowers/plans/2026-07-14-r2-release.md`：已批准的发布设计和实施清单。
-- `src/modules/haptics/audio.py`、`frame.py`、`mixer.py`、`manager.py`、`lifecycle.py`：R1 body haptics 主体。
-- `src/modules/dualsense/main.py`、`src/modules/loop.py`：trigger 与 rumble 原子输出和主循环接入。
-- `src/modules/config/settings.py`、`preferences.py`：社区默认值、Profile/global 边界和后台设置。
-- `src/modules/gui/main.py`、`settings_tab.py`、`system_tab.py`、`tray.py` 及对应 TUI 文件：UI、后台、更新和 USB lifecycle。
-- `packaging/`、`win_start.bat`、`linux_start.sh`：发行入口。
+- `src/modules/forzahorizon/effects.py`、`tests/forzahorizon/test_effects.py`：抓地力信号、路由、低速规则和扳机优先级。
+- `src/modules/haptics/mixer.py`、`tests/haptics/test_mixer.py`：红线 envelope、hold、门控和 USB/BT 共享 normalized frame。
+- `src/modules/config/settings.py`、`src/modules/config/preferences.py`、`tests/test_community_defaults.py`、`tests/fixtures/community_defaults_2323.json`：默认值与 Profile 迁移。
+- `src/modules/gui/settings_tab.py`、`src/modules/tui/settings_tab.py`、两套 `controls_tab.py`、`src/lang/`：R3 文案、控制分组和翻译。
+- `src/pyproject.toml`、`src/uv.lock`、`tests/test_enhanced_distribution.py`：R3 开发身份与 R2 稳定文档分离。
+- `docs/superpowers/specs/2026-07-15-r3-traction-redline-design.md`、`docs/superpowers/plans/2026-07-15-r3-traction-redline.md`：已批准设计和实施清单。
 
 ## 当前 Git 工作区状态
 
-当前主分支为 `main`。功能分支已快进合入，发布身份提交为 `d78a10b chore: prepare R2 release`，手动稳定频道修复为 `1cc4520 fix: add manual stable release channel`；tag `R2` 指向 `1cc4520`。本段发布后状态文档提交会位于 tag 之后。准确 HEAD 与工作区清洁状态仍应分别用 `git log -1 --oneline`、`git status --short` 读取；`packaging/*/build` 与 `packaging/*/dist` 为忽略的本地产物。
+- 当前分支为 `feat/r3-traction-redline`，业务实现提交为 `66595cb`。
+- 构建目录由 `.gitignore` 排除，不应提交 ZUV/EXE 临时产物。
+- 文档更新完成后必须再次运行 `git status --short --branch` 和 `git diff --check`；准确状态不要只依赖本段静态文字。
+- 当前 R3 分支尚未推送或发布。不要把本地内部版本 `3` 当成公开 R3 Release。
+- `packaging/zuv/dist` 和 `packaging/windows/dist` 是已忽略的本地产物目录；当前测试文件不会进入 Git commit。
 
-## 已执行的测试和验证
+## 已执行的测试和验证结果
 
-本轮 R2 已执行：
+- 新行为测试在实现前得到预期失败：首批 effects/mixer 为 `11 failed, 62 passed`；实现后定向测试为 `73 passed`。
+- 配置迁移和 UI 契约在实现前得到预期失败：`5 failed, 16 passed`；实现后与 effects/mixer 合并定向测试为 `94 passed`。
+- R3 版本契约在版本切换前为 `2 failed, 14 passed`；切换内部版本后 about/release 定向测试为 `22 passed`。
+- 增加运行时关闭 hold 回归后，相关 mixer/effects 定向测试为 `74 passed`。
+- 当前全量测试：`uv run --project src pytest -q` 为 `179 passed`。
+- `uv run --project src python -m compileall -q src/modules src/lang` 通过。
+- `git diff --check` 通过，仅有 Git 的 LF/CRLF 提示，没有 whitespace error。
+- update-enabled ZUV 构建通过：`packaging/zuv/dist/FH-DualSense-Enhanced.zuv.py`。`uvx zuv inspect` 显示 version `3`、entry `main.py`、volume `data`、update repo `piereacy/FH-DualSense-Enhanced`；文件 SHA-256 为 `5214AF3F587E099B7F4063703DA33DFB03DE0D11D7A48FAA2FABB2D4E4E8563F`。
+- Windows EXE 构建通过：`packaging/windows/dist/FH-DualSense-Enhanced-R3.exe`，大小 `37,786,288` bytes，SHA-256 为 `94439ED003FBC0B16C1C38B2A3200E586DE803C6AFE6F333CE3654B757D9BEB4`。
+- EXE 检查结果：`FileVersion=R3`、`ProductVersion=R3`、`ProductName=FH-DualSense-Enhanced`；associated icon 为 32x32，`--help` 退出码为 0。
+- 当前所有结果都是 synthetic telemetry/自动测试；R3 真实 Forza 手感尚未执行。
 
-- 基线 `uv run --project src pytest -q`：`127 passed`。
-- wheelspin、ABS、DSX、body haptics 和 defaults 定向回归：`60 passed`。
-- R2 settings、翻译和 effects 定向回归：`32 passed`，之后又增加分享码测试，最终结果以交付前复跑为准。
-- rev/wheelspin 优先级红—绿回归：新增 3 个测试，修复前复现 wheelspin 被 rev limiter 遮蔽，修复后均通过。
-- `uv run --project src pytest -q tests/forzahorizon/test_effects.py`：`22 passed`。
-- `uv run --project src pytest -q`：当前最终软件回归 `158 passed`。
-- `uv run --project src python -m compileall -q src/modules src/lang`：通过。
-- Textual test app 实际挂载 `SettingsTab`，确认 `#experimental-settings` 默认 `collapsed=True`。
-- 隐藏的 CustomTkinter root 实际构建 `SettingsTab`，展开和再次折叠实验卡片均通过。
-- `_enumerate_dualsenses()` 检测到 1 个 PID `0x0CE6` 的 USB DualSense；未同时检测到 Bluetooth interface。
-- USB synthetic wheelspin 第 1 段成功写入 R2 frame `(6, (123, 42))`，持续约 1 秒后归零并关闭 handle。连接、输出、归零和用户手感确认均已完成。
-- USB 用户确认：铺装路中等 `(123, 42)` 与高滑移 `(147, 62)` 均合适，强度层次可辨。
-- USB 用户确认：泥土 `(45, 63)`、碎石 `(19, 83)` 和积水 `(106, 21)` 均与铺装路明显区分，默认强度合适。
-- USB 用户确认：按实时 EWMA frame 更新时，wheelspin 建立速度和释放平滑符合预期。
-- USB 用户确认：轻度 ABS `M_VIBRATE_ZONES`、强度 2、22 Hz 与重度 ABS 强度 3、60 Hz 均合适；L2 下部 pulse 有层次，顶部 3 zone wall 稳定。
-- Bluetooth 枚举确认：仅出现 1 个 PID `0x0CE6`、bus type 2、serial `143a9a5c3583` 的 interface，没有 USB interface。
-- Bluetooth 用户确认：铺装路中等 wheelspin `(123, 42)` 与碎石 `(19, 83)` 均清晰且强度合适。
-- Bluetooth 用户确认：强 ABS `M_VIBRATE_ZONES` 的下部 60 Hz pulse 和顶部 3 zone wall 均正常，没有报告相对 USB 的明显损失。
-- Bluetooth 真实 Forza Data Out：用户确认高油门驱动轮打滑只触发 R2 扳机键，松油漂移不触发 R2 扳机键；监听日志同时暴露 rev limiter 会优先遮蔽 wheelspin，已据此修复。
-- 新优先级修复后的低速实车复验：`drive_train=2`、`speed=1.72 km/h`、`gas=255`、driven-wheel `rotation=33.0 rad/s`、`slip=5.00` 时输出 `WHEELSPIN (6, (31, 20))`；随后 `speed=3.5 km/h`、`rotation=35.7 rad/s` 再次触发。用户确认 R2 扳机键手感合适。
-- Bluetooth trigger-only ABS 实车复验：两次从约 170 km/h 直线重刹，L2 扳机键在 longitudinal slip 达到阈值后持续输出 `M_VIBRATE_ZONES`/`ABS_WALL`，动态强度随 slip 变化并一直覆盖到低速门槛附近；用户确认该测试已经完成。
-- Bluetooth 真实材质验证：铺装路面稳定为 `surface_rumble=0`、`90..180 Hz`，有效采样 `123/124`；唯一例外是首次进入时的一帧 rev transition。
-- Bluetooth 真实材质验证：积水由主导驱动轮的微小正 `wheel_in_puddle` 优先识别，稳定输出 `80..150 Hz`；进入水区前的泥土采样不计为积水失败。
-- Bluetooth 真实材质验证：泥土稳定为 `surface_rumble=0.120`、`30..70 Hz`，有效采样 `199/199`。
-- Bluetooth 真实材质验证：最终有效碎石区四轮稳定为 `surface_rumble=0.600`，动态输出覆盖 `12..30 Hz`；离开碎石表面时按当前主导轮数据切换到泥土或铺装频带，重新进入后恢复。用户完成四段且未报告手感异常。
-- 材质验证交付检查：`uv run --project src pytest -q` 为 `158 passed`；`uv run --project src python -m compileall -q src/modules src/lang` 与 `git diff --check` 均通过，只有 Git 的 LF/CRLF 策略提示。
-- R2 发布契约先红后绿：修改测试后旧 R1 身份产生 `5 failed, 11 passed`，实现后 `tests/test_enhanced_distribution.py` 为 `16 passed`。
-- R2 发布准备全量回归：`uv run --project src pytest -q` 为 `160 passed`；`compileall` 与 `git diff --check` 通过。
-- update-enabled ZUV 构建与 `uvx zuv inspect` 通过：内部版本 `2`、入口 `main.py`、持久化 volume `data`、更新源 `piereacy/FH-DualSense-Enhanced`，固定资产名为 `FH-DualSense-Enhanced.zuv.py`。
-- Windows EXE 本地构建通过：`FH-DualSense-Enhanced-R2.exe`，大小 37,782,007 bytes，SHA-256 `E920ED7E61144522680D65352E1D4063F5E0F82769A77D05EA272B102DC5BEC3`。
-- EXE VERSIONINFO 为 `FileVersion=R2`、`ProductVersion=R2`、`ProductName=FH-DualSense-Enhanced`；`--help` 退出码为 0。加载 `System.Drawing` 后成功读取 32x32 associated icon，handle 非空。
-- `R2-preview` run `29337377870`：prepare、bundle、Windows EXE、Linux ELF、Release 全部成功；云端 EXE 与 ZUV 下载后的 SHA-256 均匹配 GitHub asset digest，EXE `--help` 退出码为 0。
-- 稳定 R2 run `29338874379`：相同五个 jobs 全部成功，发布标题 `FH-DualSense-Enhanced R2`，非 draft、非 prerelease，共 7 个附加资产并带 GitHub 自动源码归档。
-- 稳定 ZUV 已完整下载并通过 digest 与 `uvx zuv inspect`；稳定 EXE 与 ELF 的公开 URL 均返回 HTTP `206`，1024-byte range 读取成功。GitHub `releases/latest` 已指向 R2。
+## 尚未执行或待完成的验证
 
-## 尚未执行或失败的验证
+- R3 真实 Forza USB 红线/抓地力测试。
+- R3 真实 Forza Bluetooth 红线/抓地力测试。
+- Linux 本地 R3 构建。
+- DSX 实机测试，明确不属于当前范围。
 
-- Windows 环境没有本地运行 Linux ELF；Linux 构建已由两次 Ubuntu GitHub Actions job 验证成功。
-- 已连接真实 Forza Data Out 并完成四驱低速 raw rotation、新优先级、真实 L2 扳机键 ABS wall 和四种实际材质。前驱/后驱实机验证由用户取消，不再列为失败或发布门槛。
-- USB 与 Bluetooth 已完成 synthetic wheelspin、关键 surface 和 ABS wall 手感验证；DSX 未执行，并已明确不作为当前任务或发布门槛。
-- 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
-- 仓库没有配置独立的 lint/type-check gate，本次未虚构或补充此类命令。
-
-## 下一次 Codex 会话起点
-
-优先阅读：
+## 下一次 Codex 会话开始时优先阅读
 
 1. `AGENTS.md`
-2. `docs/PROJECT_STATE.md`
+2. 本文件 `docs/PROJECT_STATE.md`
 3. `docs/ARCHITECTURE.md`
-4. `src/modules/forzahorizon/effects.py`
-5. `src/modules/config/settings.py`
-6. `tests/test_enhanced_distribution.py`
-7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
-8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
+4. `docs/superpowers/specs/2026-07-15-r3-traction-redline-design.md`
+5. `docs/superpowers/plans/2026-07-15-r3-traction-redline.md`
+6. `src/modules/forzahorizon/effects.py` 与 `tests/forzahorizon/test_effects.py`
+7. `src/modules/haptics/mixer.py` 与 `tests/haptics/test_mixer.py`
 
-建议首先处理的具体任务：先查看 R2 Release 与 issue 是否有可复现反馈；没有反馈时不要继续改 R2。若用户开始 R3，首先讨论 ZUV 迁移策略和 push event 未交付问题，不安排前驱/后驱或 DSX 实机验证，除非用户重新提出。
+下一次会话建议首先处理的具体任务：读取用户的真实 Forza 测试结果。如果红线脉冲可辨认且扳机路由正确，补充硬件验证记录并进入 R3 发布设计；如果不可辨认，只针对红线握把 envelope 调参，不改变抓地力路由和 USB/Bluetooth 一致性约束。
