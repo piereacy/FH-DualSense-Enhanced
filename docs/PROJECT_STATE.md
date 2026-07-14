@@ -12,9 +12,9 @@
 
 ## 当前开发重心
 
-1. USB synthetic telemetry 的 wheelspin、材质、EWMA 和 ABS wall 已由用户确认；下一步用 Bluetooth 重复关键路径。
-2. 在真实 Forza Data Out 中验证驱动轮判断、低速烧胎、实际材质切换和 ABS gating，并确认 DSX 只退化为动态 vibration。
-3. 根据实机手感只调默认常量，不改动既定 transport 边界；USB 默认值目前无需调整，全部 transport 验证稳定后再决定版本号、合入和发布。
+1. USB 与 Bluetooth synthetic telemetry 的关键 wheelspin、材质和 ABS wall 均由用户确认；下一步进入真实 Forza Data Out。
+2. 在真实驾驶中验证驱动轮判断、低速烧胎、实际材质切换和 ABS gating，之后再确认 DSX 只退化为 dynamic vibration。
+3. 根据实机手感只调默认常量，不改动既定 transport 边界；USB/BT 默认值目前无需调整，全部路径稳定后再决定版本号、合入和发布。
 
 ## 最近完成的功能
 
@@ -55,14 +55,14 @@
 - DSX 对 `M_VIBRATE_ZONES` 回退为 `TM_VIBRATE`，自动测试确认 frequency 保留，但 zoned wall 不存在。
 - `Settings` 新参数均未加入 `GLOBAL_FIELDS`。命名 Profile 和 `FHDS:` 分享码 round-trip 已覆盖。
 - GUI 隐藏构建和展开/折叠脚本已通过；Textual test app 已实际挂载默认折叠的 `Collapsible`。
-- 已完成：USB synthetic telemetry 下的核心手感验证。尚未完成：真实游戏遥测、Bluetooth/DSX 手感验证和跨 transport 调校。
+- 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证。尚未完成：真实游戏遥测、DSX 手感验证和跨 transport 调校。
 
 ## 尚未完成的工作
 
 ### 尚未完成
 
 - 在 Forza 实际驾驶中分段验证动态 wheelspin，尤其是前驱/后驱/四驱、松油漂移排除、低速烧胎和四种材质 signature。
-- Bluetooth 尚未验证 ABS 顶部 wall 和下部动态 pulse；USB 的轻/重 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
+- USB 的轻/重 ABS、Bluetooth 的强 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
 - 使用 DSX 实机确认其退化振动可接受，且 UI/文档没有暗示 DSX 拥有完整 zoned wall。
 - 根据实机结果调校默认参数；当前默认值是保守实现值，不能写成最终社区验证值。
 - R2 版本号、README、Release workflow、构建产物、合入和 Release 均未处理。
@@ -88,7 +88,7 @@
 
 当前自动化测试没有失败项。R2 尚未发现可由自动测试复现的 Bug。
 
-真实 USB synthetic telemetry 已测试且未发现手感问题；Bluetooth、DSX 和游戏实时遥测尚未测试，因此跨 transport 调校或设备特有问题仍待确认。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
+真实 USB 与 Bluetooth synthetic telemetry 已测试且未发现手感问题；DSX 和游戏实时遥测尚未测试，因此触发时机、跨 transport 调校或设备特有问题仍待确认。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
 
 ## 当前技术债
 
@@ -154,6 +154,9 @@
 - USB 用户确认：泥土 `(45, 63)`、碎石 `(19, 83)` 和积水 `(106, 21)` 均与铺装路明显区分，默认强度合适。
 - USB 用户确认：按实时 EWMA frame 更新时，wheelspin 建立速度和释放平滑符合预期。
 - USB 用户确认：轻度 ABS `M_VIBRATE_ZONES`、强度 2、22 Hz 与重度 ABS 强度 3、60 Hz 均合适；L2 下部 pulse 有层次，顶部 3 zone wall 稳定。
+- Bluetooth 枚举确认：仅出现 1 个 PID `0x0CE6`、bus type 2、serial `143a9a5c3583` 的 interface，没有 USB interface。
+- Bluetooth 用户确认：铺装路中等 wheelspin `(123, 42)` 与碎石 `(19, 83)` 均清晰且强度合适。
+- Bluetooth 用户确认：强 ABS `M_VIBRATE_ZONES` 的下部 60 Hz pulse 和顶部 3 zone wall 均正常，没有报告相对 USB 的明显损失。
 - `git diff --check`：中期通过，只有 Git 的 LF/CRLF 提示；交付前需复跑。
 
 ## 尚未执行或失败的验证
@@ -161,7 +164,7 @@
 - 未构建 ZUV、Windows EXE 或 Linux ELF。
 - 未运行 GitHub Actions。
 - 未在本次任务连接 Forza Data Out 做实时遥测测试。
-- USB 已完成 synthetic wheelspin、surface、EWMA 和 ABS wall 手感验证；Bluetooth、DSX 和真实 Forza Data Out 未执行。
+- USB 与 Bluetooth 已完成 synthetic wheelspin、关键 surface 和 ABS wall 手感验证；DSX 和真实 Forza Data Out 未执行。
 - 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
 - 仓库没有配置独立的 lint/type-check gate，本次未虚构或补充此类命令。
 
@@ -178,4 +181,4 @@
 7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
 8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
 
-建议首先处理的具体任务：不要继续加算法功能。让用户断开 USB 并确认 Bluetooth 已连接，然后重复关键 wheelspin 与 ABS 测试；之后再进入真实 Forza Data Out 和 DSX 验证。
+建议首先处理的具体任务：不要继续加算法功能。用 trigger-only live harness 监听真实 Forza Data Out，先验证铺装路加速打滑、松油漂移不进 R2、原地烧胎和 ABS；之后再验证 DSX fallback。
