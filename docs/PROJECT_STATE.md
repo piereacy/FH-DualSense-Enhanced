@@ -8,13 +8,13 @@
 - 当前开发基线：`128a7b9 chore: ignore local feature worktrees`。交付后的 HEAD 应使用 `git log -1 --oneline` 读取，避免文档因自身提交再次过期。
 - 版本：`1.6.2.post1`，Release workflow 命名为 `FH-DualSense-Enhanced 1.6.2 Enhanced R1`。
 - Git 历史：审计开始时本地是 shallow clone，只有 7 条已有提交，因此无法从本地恢复上游完整历史。
-- 当前阶段：Enhanced R1 已发布；Enhanced R2 的动态 wheelspin、GT7 风格 ABS wall 和实验性设置已在功能分支实现。USB/Bluetooth synthetic telemetry 手感已经确认，Bluetooth 真实 Forza Data Out 已确认“油门驱动打滑会触发 R2 扳机键、松油漂移不会触发”；低速 raw rotation、真实 ABS 手感和 DSX 尚待验证。功能分支尚未合入或发布。
+- 当前阶段：Enhanced R1 已发布；Enhanced R2 的动态 wheelspin、GT7 风格 ABS wall 和实验性设置已在功能分支实现。USB/Bluetooth synthetic telemetry 手感已经确认；Bluetooth 真实 Forza Data Out 已完成油门打滑、松油漂移排除、低速 raw rotation、新 wheelspin/rev 优先级和 L2 扳机键 ABS wall 验证。DSX、不同驱动形式和实际材质覆盖尚待验证，功能分支尚未合入或发布。
 
 ## 当前开发重心
 
-1. 复验真实 Forza Data Out 下的新优先级：`gear > idle > wheelspin > rev > wall > resistance`，确保 wheelspin 不再被 rev limiter 覆盖。
-2. 用“车头顶住墙、松开刹车和手刹、全油门”的方式验证低速 raw driven-wheel rotation；此前一次原地测试的 rotation/slip 均为 0，只验证到了 rev limiter，不能算低速 wheelspin 通过。
-3. 在真实驾驶中验证 L2 扳机键 ABS wall 的触发与手感，之后再确认 DSX 只退化为 dynamic vibration。全部路径稳定后再决定版本号、合入和发布。
+1. Bluetooth 真实 Forza Data Out 的主路径已经通过；继续补足前驱、后驱和实际 tarmac/water/dirt/gravel 材质覆盖。
+2. 确认 DSX 只退化为 dynamic vibration，UI 与文档不暗示 DSX 拥有完整 zoned wall。
+3. 根据剩余实机结果只调默认常量，不改动既定 transport 边界；全部路径稳定后再决定版本号、合入和发布。
 
 ## 最近完成的功能
 
@@ -55,13 +55,13 @@
 - DSX 对 `M_VIBRATE_ZONES` 回退为 `TM_VIBRATE`，自动测试确认 frequency 保留，但 zoned wall 不存在。
 - `Settings` 新参数均未加入 `GLOBAL_FIELDS`。命名 Profile 和 `FHDS:` 分享码 round-trip 已覆盖。
 - GUI 隐藏构建和展开/折叠脚本已通过；Textual test app 已实际挂载默认折叠的 `Collapsible`。
-- 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证；Bluetooth 真实游戏遥测已确认油门驱动打滑触发 R2 扳机键且松油漂移不触发。尚未完成：低速 raw rotation、真实 ABS 手感、DSX 手感验证和跨 transport 调校。
+- 已完成：USB 与 Bluetooth synthetic telemetry 下的核心手感验证；Bluetooth 真实游戏遥测已确认油门驱动打滑触发 R2 扳机键、松油漂移不触发、低速 raw rotation 触发、新优先级和真实 L2 扳机键 ABS wall。尚未完成：DSX 手感、前驱/后驱和实际材质覆盖。
 
 ## 尚未完成的工作
 
 ### 尚未完成
 
-- 在 Forza 实际驾驶中继续验证低速 raw rotation、前驱/后驱/四驱和四种材质 signature；油门驱动打滑与松油漂移排除已由用户确认。
+- 在 Forza 实际驾驶中继续验证前驱、后驱和四种材质 signature；本次真实遥测车辆为 `drive_train=2`，四驱低速 raw rotation、油门驱动打滑与松油漂移排除已经确认。
 - USB 的轻/重 ABS、Bluetooth 的强 ABS 与顶部 wall 已通过用户确认，100 ms hold 仍主要由自动测试覆盖。
 - 使用 DSX 实机确认其退化振动可接受，且 UI/文档没有暗示 DSX 拥有完整 zoned wall。
 - 根据实机结果调校默认参数；当前默认值是保守实现值，不能写成最终社区验证值。
@@ -78,15 +78,14 @@
 
 ## 下一步建议顺序
 
-1. 重新启动 trigger-only live harness，在真实 Forza Data Out 下复验 wheelspin 高于 rev limiter 的新优先级。
-2. 车头顶住墙，保持刹车和手刹松开后全油门；以遥测出现“车速接近 0 且驱动轮 rotation 超过阈值”为通过前提，再确认 R2 扳机键反馈。
-3. 以高于 30 km/h 的直线重刹验证真实 L2 扳机键 ABS wall；日志出现 ABS 事件不等同于手感已确认。
-4. 补充前驱/后驱/四驱和材质变化，再启用 DSX 验证 dynamic vibration fallback。
-5. 实机确认后复跑全量测试，更新 README、版本和 Release workflow，再决定合入与发布。
+1. 使用前驱和后驱车辆重复关键 wheelspin 边界，确认 `DRIVEN_WHEELS` 映射在真实遥测中正确。
+2. 在 tarmac、water、dirt、gravel 上记录真实材质 signature；不要仅凭 synthetic frame 推断游戏内材质识别正确。
+3. 启用 DSX 验证 dynamic vibration fallback，不期待完整 zoned wall。
+4. 实机确认后复跑全量测试，更新 README、版本和 Release workflow，再决定合入与发布。
 
 ## 当前已知 Bug
 
-当前自动化测试没有失败项。真实遥测曾发现 rev limiter 优先级高于 wheelspin，导致高转打滑时动态 wheelspin 被遮蔽；当前工作树已调整优先级并加入回归测试，尚待再次进行真实游戏确认。
+当前自动化测试没有失败项。真实遥测曾发现 rev limiter 优先级高于 wheelspin，导致高转打滑时动态 wheelspin 被遮蔽；当前工作树已调整优先级、加入回归测试并通过真实 Bluetooth 游戏遥测复验。
 
 真实 USB 与 Bluetooth synthetic telemetry 已测试且未发现手感问题；Bluetooth 游戏实时遥测只完成了 wheelspin/松油漂移边界的部分确认，DSX 尚未测试。compileall 第一次误扫描 `src/.venv` 时，第三方包并发写 `__pycache__` 出现 `FileNotFoundError`；改为只编译 `src/modules` 与 `src/lang` 后通过，该现象不属于业务代码失败。
 
@@ -160,15 +159,15 @@
 - Bluetooth 用户确认：铺装路中等 wheelspin `(123, 42)` 与碎石 `(19, 83)` 均清晰且强度合适。
 - Bluetooth 用户确认：强 ABS `M_VIBRATE_ZONES` 的下部 60 Hz pulse 和顶部 3 zone wall 均正常，没有报告相对 USB 的明显损失。
 - Bluetooth 真实 Forza Data Out：用户确认高油门驱动轮打滑只触发 R2 扳机键，松油漂移不触发 R2 扳机键；监听日志同时暴露 rev limiter 会优先遮蔽 wheelspin，已据此修复。
-- 低速原地测试日志显示 speed、driven-wheel rotation 和 slip 均为 0，输出 `(30, 12)` 来自 rev limiter；因此该次测试不能证明 raw rotation wheelspin 已通过。
-- 真实遥测日志观察到 ABS 事件，但用户尚未在 trigger-only harness 下确认 L2 扳机键手感，不能记为真实 ABS 验证通过。
+- 新优先级修复后的低速实车复验：`drive_train=2`、`speed=1.72 km/h`、`gas=255`、driven-wheel `rotation=33.0 rad/s`、`slip=5.00` 时输出 `WHEELSPIN (6, (31, 20))`；随后 `speed=3.5 km/h`、`rotation=35.7 rad/s` 再次触发。用户确认 R2 扳机键手感合适。
+- Bluetooth trigger-only ABS 实车复验：两次从约 170 km/h 直线重刹，L2 扳机键在 longitudinal slip 达到阈值后持续输出 `M_VIBRATE_ZONES`/`ABS_WALL`，动态强度随 slip 变化并一直覆盖到低速门槛附近；用户确认该测试已经完成。
 - `git diff --check`：中期通过，只有 Git 的 LF/CRLF 提示；交付前需复跑。
 
 ## 尚未执行或失败的验证
 
 - 未构建 ZUV、Windows EXE 或 Linux ELF。
 - 未运行 GitHub Actions。
-- 已连接真实 Forza Data Out，但低速 raw rotation、真实 L2 扳机键 ABS 手感、不同驱动形式和实际材质仍未完成。
+- 已连接真实 Forza Data Out 并完成四驱低速 raw rotation、新优先级和真实 L2 扳机键 ABS wall；前驱、后驱和实际材质仍未完成。
 - USB 与 Bluetooth 已完成 synthetic wheelspin、关键 surface 和 ABS wall 手感验证；DSX 未执行。
 - 未验证 Linux udev 安装流程和本地 ELF body haptics 依赖。
 - 仓库没有配置独立的 lint/type-check gate，本次未虚构或补充此类命令。
@@ -186,4 +185,4 @@
 7. `docs/superpowers/specs/2026-07-14-r2-dynamic-trigger-feedback-design.md`
 8. `tests/forzahorizon/test_effects.py`、`src/modules/dualsense/adaptive_trigger.py` 和 `src/modules/dsx/dsx_wrapper.py`
 
-建议首先处理的具体任务：不要继续加算法功能。用 trigger-only live harness 监听真实 Forza Data Out，先复验 wheelspin 高于 rev limiter 的优先级，再用“顶墙、松刹车与手刹、全油门”验证低速 raw rotation，最后验证真实 L2 扳机键 ABS；之后再验证 DSX fallback。
+建议首先处理的具体任务：不要继续加算法功能。用 trigger-only live harness 分别验证前驱、后驱和四种实际材质 signature；之后再验证 DSX fallback。
