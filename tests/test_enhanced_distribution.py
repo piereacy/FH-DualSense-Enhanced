@@ -235,6 +235,8 @@ def test_release_identity_uses_public_r2_and_internal_pep440_version():
     assert 'tag="${release}-preview"' in workflow
     assert 'title="FH-DualSense-Enhanced ${release} Preview"' in workflow
     assert 'title="FH-DualSense-Enhanced $tag"' in workflow
+    assert "RELEASE_CHANNEL: ${{ github.event.inputs.channel }}" in workflow
+    assert '"$RELEASE_CHANNEL" == "stable"' in workflow
     assert "refs/tags/v*" in workflow
     assert "v[0-9]+\\.[0-9]+\\.[0-9]+" in workflow
 

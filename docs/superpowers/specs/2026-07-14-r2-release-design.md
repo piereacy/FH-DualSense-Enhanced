@@ -61,6 +61,8 @@ R2 继续发布固定文件名 `FH-DualSense-Enhanced.zuv.py`，保留：
 5. `R2-preview` 的标题为 `FH-DualSense-Enhanced R2 Preview`，并继续供 ZUV `--prerelease` 查找；
 6. 稳定 R2 的标题只能是 `FH-DualSense-Enhanced R2`。
 
+`workflow_dispatch` 默认生成 preview，并提供显式 `stable` 频道作为 tag/main push 事件未被仓库交付时的恢复入口。该入口仍使用相同构建 job、稳定 tag 与 Release 资产，不允许绕过构建门禁。
+
 所有 job 继续生成 bundle、Windows EXE 和 Linux ELF。产物名称直接使用 workflow 得到的公开 tag，不能把内部 `2` 或旧 `v1.6.2.post1` 泄漏到文件名。
 
 Release body 必须把 R2 新功能放在首位，同时保留安装、ZUV、Standalone、Data Out、防火墙和 Linux udev 说明。

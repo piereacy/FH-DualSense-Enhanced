@@ -11,6 +11,15 @@ on:
     branches: [main, dev]
     tags: ["R*", "v*.*.*"]
   workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to publish
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - stable
 
 permissions:
   contents: write
@@ -31,6 +40,7 @@ jobs:
         id: parse
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_CHANNEL: ${{ github.event.inputs.channel }}
         run: |
           set -e
           tag=""; prerelease=""; title=""
@@ -54,6 +64,9 @@ jobs:
           elif [[ "$msg" =~ release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?) ]]; then
             # explicit legacy stable release commit
             tag="${BASH_REMATCH[1]}"; prerelease=false; title="$tag"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "$RELEASE_CHANNEL" == "stable" ]]; then
+            # explicit manual recovery path when repository push events are unavailable
+            tag="$release"; prerelease=false
           elif [[ "$msg" == *prerelease* || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # rolling prerelease for the current R-series version
             tag="${release}-preview"
