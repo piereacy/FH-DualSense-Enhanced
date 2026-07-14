@@ -225,3 +225,6 @@ user_preferences.json
 # fhds crash log
 crash.log
 .claude
+
+# Local isolated feature worktrees
+/.worktrees/
