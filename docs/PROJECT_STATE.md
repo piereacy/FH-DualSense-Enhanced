@@ -4,15 +4,15 @@
 
 - 最后更新：2026-07-15，Asia/Shanghai。
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
-- 当前分支：`feat/r3-traction-redline`，隔离工作树为 `.worktrees/r3-traction-redline`。
+- 当前分支：`main`。R3 开发曾在隔离工作树 `.worktrees/r3-traction-redline` 完成，代码已快进合入。
 - 当前开发身份：内部 PEP 440 版本 `3`，运行时、Windows 版本资源和公开候选名称均为 `R3`。
-- 当前公开稳定版：Enhanced R2，tag `R2`。Enhanced R3 已获得正式发布授权，等待最终提交、`main` 推送和 `R3` workflow。
-- 当前已提交规格基线：`97f2991 docs: design R3 release closeout`。Bluetooth HD haptics、默认值、测试和发布文档仍在当前工作区等待最终提交。
-- 当前阶段：Enhanced R3 发布收尾。Bluetooth HD haptics 已完成生产代码、自动测试、硬件协议探针、完整 EXE 构建和用户 Forza 体验确认；正在执行最终 Git 审计和正式发布。
+- 当前公开稳定版：Enhanced R3，tag `R3`，Release：`https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R3`。
+- R3 标签固定在 `61a99cc feat: finish R3 Bluetooth HD haptics`；不要为后续文档修改移动稳定标签。
+- 当前阶段：Enhanced R3 已正式发布。Bluetooth HD haptics 已完成生产代码、自动测试、硬件协议探针、完整 EXE 构建、用户 Forza 体验确认和 GitHub Actions 多平台发布。
 
 ## 当前开发重心
 
-当前重心是保持已经验证的 USB/Bluetooth 共享 PCM 和 `0x36` 路径不变，完成红线默认开关、中文公开说明、Release 资产和远端状态的最终一致性检查。用户已授权创建稳定 `R3`；只有最终 diff、全量测试和构建校验保持通过后才能推送标签。
+当前重心已经转为 Enhanced R3 发布后的三项改进：红线握把振动调校、ZUV/启动器自动更新改良、GUI/TUI 前端体验优化。三项均尚未开始实现，下一次会话应分别设计，不能在没有新规格时同时重构。
 
 ## 最近完成的功能
 
@@ -47,16 +47,16 @@
 
 ## 正在进行的工作
 
-- Bluetooth HD haptics 源码、测试、三语 README、Release body、老三样、第三方声明和最终默认值在当前工作区中，等待一次有意的 R3 实现提交。
-- 新 Windows EXE 与 update-enabled ZUV 已重新构建；正在核对 diff、提交范围、`main` 快进关系和唯一的 `R3` 发布触发路径。
-- 旧 Enhanced R3 候选工件以及先前发给用户的 Bluetooth 测试 EXE 均不是最终线上资产。
+- Enhanced R3 业务实现与正式发布均已完成。
+- 本文件作为发布后交接提交追加到 `main`，不会移动已经发布的 `R3` 标签。
+- 红线调校、自动更新改良和前端优化仅记录为后续工作，当前没有对应未提交业务代码。
 
 ## 尚未完成的工作
 
-1. 完成最终 diff 和提交范围审计，将功能分支快进合入 `main`。
-2. 推送 `origin/main` 和稳定标签 `R3`，监控 GitHub Actions 构建 ZUV、Windows EXE 和 Linux ELF。
-3. 核对线上 Release 中文正文、资产名称、哈希和下载冒烟。
-4. 本地 Linux ELF 构建和真实 Linux DualSense 验证尚未执行；线上 Ubuntu 构建将提供首个 R3 Linux 构建结果。
+1. 单独设计并调校红线握把振动，重点改善节奏和从连续背景中辨认的能力。
+2. 单独设计 ZUV/启动器自动更新改良，明确独立 EXE 不自更新、ZUV 更新源、失败回退和用户可见状态。
+3. 单独设计 GUI/TUI 前端优化，先处理信息层级、普通设置与实验性功能导航，再考虑视觉改版。
+4. 本地 Linux ELF 构建和真实 Linux DualSense 验证尚未执行；R3 的 GitHub Actions Ubuntu ELF 构建已成功。
 
 以下事项明确不属于 Enhanced R3：
 
@@ -100,7 +100,7 @@
 - `src/modules/config/preferences.py` 的 Default Profile 重建、GLOBAL_FIELDS、atomic write 和现有迁移分支。
 - `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名与第三方声明。
 - Enhanced R2 tag、Release、稳定资产和已发布算法默认值。
-- `R3` 已获发布确认，但不得跳过最终 diff、测试和构建检查，也不得移动已经发布的稳定标签来修正文档。
+- `R3` 已发布，后续修复不得覆盖或移动该稳定标签；新代码必须进入新的版本或明确的预发布频道。
 
 ## 最近涉及的关键文件
 
@@ -119,11 +119,11 @@
 
 ## 当前 Git 工作区状态
 
-- 当前分支为 `feat/r3-traction-redline`，已提交的发布收尾规格为 `97f2991`。
-- `main` 位于另一个工作树，当前本地 `main` 为 `2ea5ab0` 且相对 `origin/main` ahead 1；发布前应先审计该分支关系，不要盲目覆盖远端。
-- 当前功能分支尚未设置 upstream，也尚未推送、合并或发布。
+- `main` 与功能分支已经在 `61a99cc` 快进汇合并推送；稳定 `R3` 标签指向该提交。
+- 本发布后状态提交会使 `main` 前进，但不会改变 `R3` Release 的源码快照。
+- `feat/r3-traction-redline` 没有单独推送需求；R3 代码已经完整进入 `origin/main`。
 - `packaging/zuv/dist`、`packaging/windows/dist` 和 build 目录由 `.gitignore` 排除，不进入提交。
-- 当前工作树包含本轮 Bluetooth HD haptics 的未提交源码、测试和文档；以最终 `git status --short --branch` 与 `git diff` 为准。
+- 当前仅有本发布后 `docs/PROJECT_STATE.md` 交接更新待提交；提交并推送后主工作树应保持干净。
 
 ## 已执行的测试和验证结果
 
@@ -151,6 +151,10 @@
 - 本轮真实 Bluetooth 左握把 `0.45` 探针：加速度计候选 offset `23` 的标准差从约 `13.1` 增至约 `1931.2`，证明 haptics-only `0x36` 实际驱动了执行器；探针未运行 Forza，游戏内振动和 Steam Input 状态不适用。
 - 本轮完整 manager/renderer/HID 链压力验证：`0x36` 平均发送间隔 `10.668 ms`，最大 `11.204 ms`，单槽覆盖 `0`，连接保持且 `bt_haptics_failed=False`；探针未运行 Forza，游戏内振动和 Steam Input 状态不适用。
 - 用户运行包含 Bluetooth HD haptics 的完整 R3 EXE 进入 Forza 后确认“完全没问题”。本次反馈没有记录游戏内振动开关和 Steam Input 状态，因此这两个环境条件标记为待确认；不能据此声称所有电脑、固件和适配器都与 USB 完全一致。
+- GitHub Actions run `29426936667` 成功，`prepare`、ZUV bundle、Windows EXE、Ubuntu ELF 和 Release jobs 全部通过。tag push 事件没有自动生成运行，因此使用仓库既有 `workflow_dispatch channel=stable` 恢复入口；只创建了一份正式 R3 Release。
+- 线上 Release 为正式版，`isDraft=false`、`isPrerelease=false`，发布时间为 2026-07-15 23:14:19 Asia/Shanghai；中文正文包含默认红线开关、Bluetooth `0x36`、上游 `1.6.2`、HorizonHaptics `1.3.0` 和 vDS `0.3.0-rc7` 说明。
+- 线上资产共 7 个：Windows EXE、Linux ELF、ZUV、Windows/Linux 启动器、`LICENSE` 和 `THIRD_PARTY_NOTICES.md`。Windows EXE 为 `37,656,144` bytes，GitHub digest 为 `a181bd56884e995b5df577e55fbfac6028e8db57f9b8e84a4e338454482c4ecc`；Linux ELF digest 为 `8a0dd916dba51bcfe60d76fa0d880e42c0781890f9ab2204fa74372707f82baa`；ZUV digest 为 `6ea29fe386cc24a8bc1cece59a5dedb2bc878b90898b67e9cb182d5cc1971f8a`。
+- Windows EXE 下载 URL 经 302 跳转后返回 `200 OK`、`Content-Length: 37656144`。当前本机完整下载随后遇到连接重置，因此未再次执行线上 EXE 的本地哈希和 `--help`；本地同提交构建的 EXE 已完成版本和启动冒烟。
 
 ## 尚未执行或未通过的验证
 
@@ -159,8 +163,8 @@
 - Bluetooth 与 USB 的严格同场景强度量化对照未执行；当前结论是用户主观体验通过，不是两个 transport 的物理输出完全相等。
 - 本地 Linux ELF 构建：未执行。本机 `bash.exe` 来自 Windows `w64devkit`，不是可用于验证 Linux 产物的 Linux 环境。
 - 真实 Linux DualSense 硬件验证：未执行。
-- GitHub Actions Enhanced R3 Release workflow：未执行，等待最终提交和标签推送。
-- 线上 Release 资产名称、哈希、中文正文和下载冒烟：未执行，等待发布。
+- GitHub Actions 使用旧版 action 时出现 Node.js 20 弃用警告，但本次所有 job 均成功；后续应升级 action 版本以消除警告。
+- 线上 EXE 的完整本地重新下载与哈希复核因当前网络连接重置未完成；GitHub 已提供资产 digest，下载 URL 和 Content-Length 已验证。
 
 ## 下一次会话开始时优先阅读
 
@@ -173,4 +177,4 @@
 7. `docs/superpowers/plans/2026-07-15-r3-bluetooth-hd-haptics.md`
 8. `.github/workflows/release.yml`
 
-下一次会话建议首先处理的具体任务：若 R3 已发布，依次处理红线握把节奏、自动更新体验和前端信息架构；若发布流程仍在运行，先核对 Actions、Release 中文正文和全部资产。
+下一次会话建议首先处理的具体任务：先为红线握把振动建立独立调校规格并收集可重复的 Forza 场景，再依次处理自动更新体验和前端信息架构，不要把三项混成一次大改。
