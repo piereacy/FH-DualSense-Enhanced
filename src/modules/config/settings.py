@@ -62,13 +62,24 @@ class Settings:
     throttle_wall_engage_at: int = 250        # byte that triggers firmware wall. DO NOT CHANGE
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE
 
-    # MARK: Body haptics redline warning
-    # Bilateral fuel-cut pulse when rpm/max_rpm exceeds the ratio.
+    # MARK: R2 trigger redline warning
     enable_rev_limiter: bool = True
     rev_limit_ratio: float = 0.93             # fraction of max_rpm to fire at
-    rev_limit_freq: int = 10                  # bilateral grip pulse rate
-    rev_limit_amp: int = 96                   # high-channel pulse strength (0..255)
+    rev_limit_freq: int = 30                  # adaptive-trigger vibration frequency
+    rev_limit_amp: int = 12                   # adaptive-trigger vibration strength
     rev_limit_hold_ms: float = 120.0          # anti-stutter hold after falling below the ratio
+
+    # MARK: Body haptics redline warning
+    # Fuel-cut pulse with independent left/right grip routing.
+    enable_grip_redline_haptics: bool = True
+    grip_redline_left: bool = True
+    grip_redline_right: bool = False
+    grip_redline_ratio: float = 0.93
+    grip_redline_release_ratio: float = 0.90
+    grip_redline_freq: int = 10
+    grip_redline_amp: int = 192
+    grip_redline_low_ratio: float = 0.25
+    grip_redline_background_duck: float = 0.30
 
     # MARK: Shared trigger traction/grip feedback
     # Braking routes longitudinal grip to L2; accelerator or both pedals route
@@ -124,6 +135,10 @@ class Settings:
     slip_haptics_threshold: float = 0.8
     collision_haptics_jerk_threshold: float = 3.0
     collision_haptics_duration_ms: float = 150.0
+    collision_haptics_cooldown_ms: float = 250.0
+    collision_haptics_rebound_ratio: float = 0.45
+    collision_haptics_weak_side_ratio: float = 0.35
+    collision_background_duck: float = 0.20
     suspension_haptics_delta_threshold: float = 0.015
 
     # MARK: System - startup pulse

@@ -49,12 +49,21 @@ def test_named_profile_is_not_overwritten(tmp_path, monkeypatch):
     assert settings.brake_max_force == 4
 
 
-def test_r2_named_profile_old_redline_defaults_migrate_to_r3(tmp_path, monkeypatch):
+def _without_grip_redline_fields(snapshot):
+    return {
+        key: value
+        for key, value in snapshot.items()
+        if not key.startswith("grip_redline_")
+        and key != "enable_grip_redline_haptics"
+    }
+
+
+def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(preferences, "_DATA", tmp_path)
     monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
-    custom = dict(EXPECTED)
-    custom["rev_limit_freq"] = 30
-    custom["rev_limit_amp"] = 12
+    custom = _without_grip_redline_fields(EXPECTED)
     preferences.PATH.write_text(json.dumps({
         "version": "2",
         "active_profile": "Custom",
@@ -66,16 +75,22 @@ def test_r2_named_profile_old_redline_defaults_migrate_to_r3(tmp_path, monkeypat
     preferences.load(settings)
 
     raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
-    assert settings.rev_limit_freq == 10
-    assert settings.rev_limit_amp == 96
-    assert raw["profiles"]["Custom"]["rev_limit_freq"] == 10
-    assert raw["profiles"]["Custom"]["rev_limit_amp"] == 96
+    assert settings.rev_limit_freq == 30
+    assert settings.rev_limit_amp == 12
+    assert settings.grip_redline_freq == 10
+    assert settings.grip_redline_amp == 192
+    assert settings.grip_redline_left is True
+    assert settings.grip_redline_right is False
+    assert raw["profiles"]["Custom"]["rev_limit_freq"] == 30
+    assert raw["profiles"]["Custom"]["rev_limit_amp"] == 12
+    assert raw["profiles"]["Custom"]["grip_redline_freq"] == 10
+    assert raw["profiles"]["Custom"]["grip_redline_amp"] == 192
 
 
 def test_r2_named_profile_custom_redline_values_are_preserved(tmp_path, monkeypatch):
     monkeypatch.setattr(preferences, "_DATA", tmp_path)
     monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
-    custom = dict(EXPECTED)
+    custom = _without_grip_redline_fields(EXPECTED)
     custom["rev_limit_freq"] = 7
     custom["rev_limit_amp"] = 144
     preferences.PATH.write_text(json.dumps({
@@ -90,3 +105,68 @@ def test_r2_named_profile_custom_redline_values_are_preserved(tmp_path, monkeypa
 
     assert settings.rev_limit_freq == 7
     assert settings.rev_limit_amp == 144
+    assert settings.grip_redline_freq == 10
+    assert settings.grip_redline_amp == 192
+
+
+def test_r3_prerelease_defaults_split_into_trigger_and_new_grip_defaults(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    custom = _without_grip_redline_fields(EXPECTED)
+    custom["rev_limit_freq"] = 10
+    custom["rev_limit_amp"] = 96
+    preferences.PATH.write_text(json.dumps({
+        "version": "3",
+        "active_profile": "Custom",
+        "profiles": {"Custom": custom},
+        "globals": {},
+    }), encoding="utf-8")
+
+    settings = Settings()
+    preferences.load(settings)
+
+    raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+    snapshot = raw["profiles"]["Custom"]
+    assert settings.rev_limit_freq == 30
+    assert settings.rev_limit_amp == 12
+    assert settings.grip_redline_freq == 10
+    assert settings.grip_redline_amp == 192
+    assert snapshot["rev_limit_freq"] == 30
+    assert snapshot["rev_limit_amp"] == 12
+    assert snapshot["grip_redline_freq"] == 10
+    assert snapshot["grip_redline_amp"] == 192
+
+
+def test_r3_prerelease_custom_values_are_preserved_and_copied_once(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    custom = _without_grip_redline_fields(EXPECTED)
+    custom["enable_rev_limiter"] = False
+    custom["rev_limit_freq"] = 7
+    custom["rev_limit_amp"] = 144
+    preferences.PATH.write_text(json.dumps({
+        "version": "3",
+        "active_profile": "Custom",
+        "profiles": {"Custom": custom},
+        "globals": {},
+    }), encoding="utf-8")
+
+    first = Settings()
+    preferences.load(first)
+    second = Settings()
+    preferences.load(second)
+
+    raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+    snapshot = raw["profiles"]["Custom"]
+    assert second.enable_rev_limiter is False
+    assert second.enable_grip_redline_haptics is False
+    assert second.rev_limit_freq == 7
+    assert second.rev_limit_amp == 144
+    assert second.grip_redline_freq == 7
+    assert second.grip_redline_amp == 144
+    assert snapshot["rev_limit_freq"] == 7
+    assert snapshot["grip_redline_freq"] == 7

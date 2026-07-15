@@ -175,25 +175,59 @@ def _ensure_active(raw: dict, s) -> dict:
     return raw
 
 
-def _migrate_r2_redline_defaults(raw: dict) -> None:
-    """Move untouched R2 trigger-buzz defaults to the R3 grip-pulse scale.
+_GRIP_REDLINE_FIELDS = (
+    "enable_grip_redline_haptics",
+    "grip_redline_left",
+    "grip_redline_right",
+    "grip_redline_ratio",
+    "grip_redline_release_ratio",
+    "grip_redline_freq",
+    "grip_redline_amp",
+    "grip_redline_low_ratio",
+    "grip_redline_background_duck",
+)
 
-    Only named profiles explicitly written by internal version 2 qualify.
-    Default is rebuilt from current class defaults during load, and any value
-    the user changed remains untouched.
+
+def _migrate_r3_redline_split(raw: dict, s) -> None:
+    """Split the prerelease grip pulse back out of the R2 trigger fields.
+
+    R2 profiles keep their trigger tuning and receive fresh grip defaults.
+    Local version-3 previews used rev_limit_* for the grip pulse, so their
+    values are copied once when the new grip marker field is absent.
     """
-    if not re.match(r"^2(?:\.|$)", str(raw.get("version", ""))):
-        return
     profiles = raw.get("profiles")
     if not isinstance(profiles, dict):
         return
+    version = str(raw.get("version", ""))
+    defaults = type(s)()
     for name, snapshot in profiles.items():
         if name == DEFAULT_PROFILE_NAME or not isinstance(snapshot, dict):
             continue
-        if snapshot.get("rev_limit_freq") == 30:
-            snapshot["rev_limit_freq"] = 10
-        if snapshot.get("rev_limit_amp") == 12:
-            snapshot["rev_limit_amp"] = 96
+        if "enable_grip_redline_haptics" in snapshot:
+            for field in _GRIP_REDLINE_FIELDS:
+                snapshot.setdefault(field, getattr(defaults, field))
+            continue
+
+        if re.match(r"^3(?:\.|$)", version):
+            trigger_freq = snapshot.get("rev_limit_freq", defaults.rev_limit_freq)
+            trigger_amp = snapshot.get("rev_limit_amp", defaults.rev_limit_amp)
+            snapshot["enable_grip_redline_haptics"] = bool(
+                snapshot.get("enable_rev_limiter", defaults.enable_rev_limiter)
+            )
+            snapshot["grip_redline_ratio"] = snapshot.get(
+                "rev_limit_ratio", defaults.grip_redline_ratio
+            )
+            if trigger_freq == 10 and trigger_amp == 96:
+                snapshot["rev_limit_freq"] = defaults.rev_limit_freq
+                snapshot["rev_limit_amp"] = defaults.rev_limit_amp
+                snapshot["grip_redline_freq"] = defaults.grip_redline_freq
+                snapshot["grip_redline_amp"] = defaults.grip_redline_amp
+            else:
+                snapshot["grip_redline_freq"] = trigger_freq
+                snapshot["grip_redline_amp"] = trigger_amp
+
+        for field in _GRIP_REDLINE_FIELDS:
+            snapshot.setdefault(field, getattr(defaults, field))
 
 
 def load(s) -> None:
@@ -204,7 +238,7 @@ def load(s) -> None:
     """
     raw = _read_raw()
     raw = _ensure_active(raw, s)
-    _migrate_r2_redline_defaults(raw)
+    _migrate_r3_redline_split(raw, s)
     # Reset Default on every launch so updates ship new tuning automatically;
     # named profiles and globals are preserved.
     raw["profiles"][DEFAULT_PROFILE_NAME] = _profile_fields(type(s)())
