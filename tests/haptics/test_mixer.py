@@ -118,12 +118,14 @@ def test_redline_grip_warning_starts_immediately_on_left_by_default(settings):
 
     frame = _redline_frame(settings, mixer, now=1.0)
 
-    raw_event = settings.grip_redline_amp / 255.0 * settings.grip_redline_gain
-    event = min(1.0, raw_event)
+    base = settings.grip_redline_amp / 255.0
+    event = min(1.0, 1.0 - (1.0 - base) ** settings.grip_redline_gain
+                + settings.grip_redline_attack_strength * 0.25)
     assert frame.left_high == pytest.approx(event)
     assert frame.left_low == pytest.approx(min(
         1.0,
-        raw_event * settings.grip_redline_low_ratio,
+        event * settings.grip_redline_low_ratio
+        + settings.grip_redline_attack_strength * 0.55,
     ))
     assert frame.right_high == 0.0
     assert frame.right_low == 0.0
@@ -154,12 +156,13 @@ def test_redline_grip_warning_routes_to_selected_sides(
         assert frame.left_high == pytest.approx(frame.right_high)
 
 
-def test_redline_grip_warning_uses_ten_hz_half_duty_fuel_cut_pulse(settings):
+def test_redline_grip_warning_uses_configurable_fuel_cut_pulse_width(settings):
     mixer = HapticMixer()
+    settings.grip_redline_attack_strength = 0.0
 
     onset = _redline_frame(settings, mixer, now=1.0)
-    still_on = _redline_frame(settings, mixer, now=1.049)
-    off_half = _redline_frame(settings, mixer, now=1.050)
+    still_on = _redline_frame(settings, mixer, now=1.069)
+    off_half = _redline_frame(settings, mixer, now=1.070)
     next_cycle = _redline_frame(settings, mixer, now=1.100)
 
     assert onset.left_high > 0.0
@@ -168,17 +171,23 @@ def test_redline_grip_warning_uses_ten_hz_half_duty_fuel_cut_pulse(settings):
     assert next_cycle.left_high == pytest.approx(onset.left_high)
 
 
-def test_redline_grip_gain_multiplies_unsaturated_signal_by_one_point_five(settings):
+def test_redline_grip_gain_uses_perceptual_curve_without_early_saturation(settings):
     settings.body_haptics_intensity = 0.5
     settings.engine_haptics_intensity = 0.5
+    settings.grip_redline_amp = 100
+    settings.grip_redline_attack_strength = 0.0
     settings.grip_redline_gain = 1.0
     baseline = _redline_frame(settings, HapticMixer(), now=1.0)
 
     settings.grip_redline_gain = 1.5
     boosted = _redline_frame(settings, HapticMixer(), now=1.0)
 
-    assert boosted.left_high == pytest.approx(baseline.left_high * 1.5)
-    assert boosted.left_low == pytest.approx(baseline.left_low * 1.5)
+    base = settings.grip_redline_amp / 255.0
+    expected = (1.0 - (1.0 - base) ** 1.5) * 0.5 * 0.5
+    assert boosted.left_high == pytest.approx(expected)
+    assert boosted.left_high > baseline.left_high
+    assert boosted.left_high < baseline.left_high * 1.5
+    assert boosted.left_low > baseline.left_low
 
 
 def test_redline_grip_gain_is_safely_clamped_at_final_output(settings):
@@ -344,14 +353,16 @@ def test_usb_and_bluetooth_share_redline_event_with_side_projection(
     settings, left, right, motor
 ):
     settings.grip_redline_amp = 100
+    settings.grip_redline_attack_strength = 0.0
     settings.grip_redline_left = left
     settings.grip_redline_right = right
     mixer = HapticMixer()
     on = _redline_frame(settings, mixer, now=1.0)
-    off = _redline_frame(settings, mixer, now=1.051)
+    off = _redline_frame(settings, mixer, now=1.071)
     on_rumble = to_compatible_rumble(on)
     off_rumble = to_compatible_rumble(off)
-    event = settings.grip_redline_amp / 255.0 * settings.grip_redline_gain
+    base = settings.grip_redline_amp / 255.0
+    event = 1.0 - (1.0 - base) ** settings.grip_redline_gain
 
     if motor == "low":
         assert on.left_high == pytest.approx(event)
@@ -884,10 +895,9 @@ def test_redline_resumes_after_collision_priority_window(settings):
         now=1.201,
     )
 
-    assert resumed.left_high == pytest.approx(min(
-        1.0,
-        settings.grip_redline_amp / 255.0 * settings.grip_redline_gain,
-    ))
+    base = settings.grip_redline_amp / 255.0
+    expected = 1.0 - (1.0 - base) ** settings.grip_redline_gain
+    assert resumed.left_high == pytest.approx(expected)
     assert resumed.right_high == 0.0
 
 

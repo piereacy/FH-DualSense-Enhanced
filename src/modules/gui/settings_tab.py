@@ -38,6 +38,11 @@ SETTING_SECTIONS = [
         ("throttle_max_force", "Hard-press stiffness", 0, 255, ""),
         ("throttle_curve", "Stiffness curve shape", 0.1, 20.0, ""),
     ]),
+    ("R2 optional dynamic resistance", [
+        ("boost_resistance_threshold", "Boost activation threshold", 0.0, 10.0, ""),
+        ("boost_resistance_force", "Boost extra resistance", 0, 255, ""),
+        ("gforce_resistance_force", "G-force extra resistance", 0, 255, ""),
+    ]),
     ("ABS (anti-lock brake) rumble", [
         ("abs_amp", "Rumble strength", 0, 255, ""),
         ("abs_sensitivity", "Sensitivity", 0.1, 3.0, ""),
@@ -52,6 +57,17 @@ SETTING_SECTIONS = [
         ("grip_redline_ratio", "Grip trigger near redline at", 0.0, 1.0, ""),
         ("grip_redline_freq", "Grip pulse rate (Hz)", 1, 20, ""),
         ("grip_redline_amp", "Grip pulse strength", 0, 255, ""),
+        ("grip_redline_duty_cycle", "Grip pulse width", 0.20, 0.85, ""),
+        ("grip_redline_attack_strength", "Grip entry impact", 0.0, 1.0, ""),
+    ]),
+    ("Optional trigger events", [
+        ("collision_trigger_freq", "Collision trigger frequency (Hz)", 0, 255, ""),
+        ("collision_trigger_amp", "Collision trigger strength", 0, 255, ""),
+        ("collision_trigger_duration_ms", "Collision trigger duration (ms)", 0.0, 500.0, ""),
+        ("trigger_surface_freq", "Road texture frequency (Hz)", 0, 255, ""),
+        ("trigger_surface_amp", "Road texture strength", 0, 255, ""),
+        ("trigger_rumble_strip_freq", "Rumble strip frequency (Hz)", 0, 255, ""),
+        ("trigger_rumble_strip_amp", "Rumble strip strength", 0, 255, ""),
     ]),
     ("Traction/grip feedback", [
         ("wheelspin_amp", "Grip feedback strength", 0, 255, ""),
@@ -119,6 +135,14 @@ EXPERIMENTAL_SECTIONS = [
         ("grip_redline_gain", "Grip signal gain", 0.0, 2.0, ""),
         ("grip_redline_low_ratio", "Low-frequency pulse ratio", 0.0, 1.0, ""),
         ("grip_redline_background_duck", "Redline background level", 0.0, 1.0, ""),
+        ("grip_redline_attack_duration_ms", "Grip entry impact duration (ms)", 0.0, 500.0, ""),
+    ]),
+    ("G-force resistance advanced tuning", [
+        ("gforce_lateral_weight", "Lateral G weight", 0.0, 2.0, ""),
+        ("gforce_longitudinal_weight", "Longitudinal G weight", 0.0, 2.0, ""),
+        ("gforce_full_scale", "G force at maximum resistance", 0.1, 5.0, ""),
+        ("gforce_attack_ms", "G-force attack smoothing (ms)", 1.0, 500.0, ""),
+        ("gforce_release_ms", "G-force release smoothing (ms)", 1.0, 1000.0, ""),
     ]),
     ("Collision haptics advanced tuning", [
         ("collision_haptics_jerk_threshold", "Collision jerk threshold", 0.0, 50.0, ""),

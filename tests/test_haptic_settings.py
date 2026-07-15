@@ -37,7 +37,12 @@ BEHAVIOR_LABELS = {
     "Close the app when the game closes",
     "Move the app to the tray when minimized",
 }
-NORMAL_R3_FIELDS = {
+NORMAL_R4_FIELDS = {
+    "R2 optional dynamic resistance": (
+        "boost_resistance_threshold",
+        "boost_resistance_force",
+        "gforce_resistance_force",
+    ),
     "ABS (anti-lock brake) rumble": ("abs_amp", "abs_sensitivity"),
     "R2 trigger redline vibration": (
         "rev_limit_ratio",
@@ -49,6 +54,17 @@ NORMAL_R3_FIELDS = {
         "grip_redline_ratio",
         "grip_redline_freq",
         "grip_redline_amp",
+        "grip_redline_duty_cycle",
+        "grip_redline_attack_strength",
+    ),
+    "Optional trigger events": (
+        "collision_trigger_freq",
+        "collision_trigger_amp",
+        "collision_trigger_duration_ms",
+        "trigger_surface_freq",
+        "trigger_surface_amp",
+        "trigger_rumble_strip_freq",
+        "trigger_rumble_strip_amp",
     ),
     "Grip gear-shift thump": (
         "grip_gear_shift_strength",
@@ -88,6 +104,12 @@ EXPERIMENTAL_FIELDS = (
     "grip_redline_gain",
     "grip_redline_low_ratio",
     "grip_redline_background_duck",
+    "grip_redline_attack_duration_ms",
+    "gforce_lateral_weight",
+    "gforce_longitudinal_weight",
+    "gforce_full_scale",
+    "gforce_attack_ms",
+    "gforce_release_ms",
     "collision_haptics_jerk_threshold",
     "collision_haptics_duration_ms",
     "collision_haptics_cooldown_ms",
@@ -95,7 +117,7 @@ EXPERIMENTAL_FIELDS = (
     "collision_haptics_weak_side_ratio",
     "collision_background_duck",
 )
-R3_LABELS = {
+R4_LABELS = {
     "Sensitivity",
     "Shared feedback",
     "Grip feedback",
@@ -112,6 +134,8 @@ R3_LABELS = {
     "Grip trigger near redline at",
     "Grip pulse rate (Hz)",
     "Grip pulse strength",
+    "Grip pulse width",
+    "Grip entry impact",
     "Traction/grip feedback",
     "Grip feedback strength",
     "Experimental features",
@@ -148,6 +172,29 @@ R3_LABELS = {
     "Grip signal gain",
     "Low-frequency pulse ratio",
     "Redline background level",
+    "Grip entry impact duration (ms)",
+    "R2 optional dynamic resistance",
+    "Boost activation threshold",
+    "Boost extra resistance",
+    "G-force extra resistance",
+    "G-force resistance advanced tuning",
+    "Lateral G weight",
+    "Longitudinal G weight",
+    "G force at maximum resistance",
+    "G-force attack smoothing (ms)",
+    "G-force release smoothing (ms)",
+    "Optional trigger events",
+    "Collision trigger frequency (Hz)",
+    "Collision trigger strength",
+    "Collision trigger duration (ms)",
+    "Road texture frequency (Hz)",
+    "Road texture strength",
+    "Rumble strip frequency (Hz)",
+    "Rumble strip strength",
+    "Collision trigger jolt",
+    "Idle road texture",
+    "Turbo boost resistance",
+    "G-force resistance",
     "Collision haptics advanced tuning",
     "Collision jerk threshold",
     "Collision duration (ms)",
@@ -158,6 +205,42 @@ R3_LABELS = {
     "R2 trigger gear-shift thump",
     "Grip thump strength",
     "Grip thump length (ms)",
+}
+
+LIGHTING_FIELDS = (
+    "enable_tachometer_lightbar",
+    "tachometer_start_ratio",
+    "tachometer_flash_ratio",
+    "tachometer_flash_rate_hz",
+    "tachometer_brightness",
+    "tachometer_start_red",
+    "tachometer_start_green",
+    "tachometer_start_blue",
+    "tachometer_redline_red",
+    "tachometer_redline_green",
+    "tachometer_redline_blue",
+    "enable_gear_player_leds",
+)
+LIGHTING_LABELS = {
+    "Controller lighting",
+    "Optional visual feedback with independent switches.",
+    "Tachometer lightbar",
+    "Enable tachometer lightbar",
+    "Uses controller lighting only; it does not change trigger or grip feedback.",
+    "Lightbar starts at RPM ratio",
+    "Lightbar flashes at RPM ratio",
+    "Flash rate (Hz)",
+    "Lightbar brightness",
+    "Lightbar colors",
+    "Start color red",
+    "Start color green",
+    "Start color blue",
+    "Redline color red",
+    "Redline color green",
+    "Redline color blue",
+    "Gear player LEDs",
+    "Show gear on player LEDs",
+    "Gears 1 to 5+ use the five white player indicator LEDs.",
 }
 
 
@@ -260,14 +343,14 @@ def test_every_non_english_catalog_translates_application_behavior_labels():
         assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
-def test_gui_and_tui_keep_only_strength_and_sensitivity_in_normal_r2_sections():
+def test_gui_and_tui_expose_identical_normal_r4_tuning_sections():
     for relative in ("src/modules/gui/settings_tab.py", "src/modules/tui/settings_tab.py"):
         sections = _fields_by_section(ROOT / relative, "SETTING_SECTIONS")
-        for title, expected in NORMAL_R3_FIELDS.items():
+        for title, expected in NORMAL_R4_FIELDS.items():
             assert sections[title] == expected
 
 
-def test_gui_and_tui_expose_identical_advanced_r2_fields():
+def test_gui_and_tui_expose_identical_advanced_r4_fields():
     gui = _fields_by_section(
         ROOT / "src/modules/gui/settings_tab.py", "EXPERIMENTAL_SECTIONS"
     )
@@ -279,9 +362,9 @@ def test_gui_and_tui_expose_identical_advanced_r2_fields():
     assert tuple(field for fields_ in gui.values() for field in fields_) == EXPERIMENTAL_FIELDS
 
 
-def test_all_r2_tuning_fields_are_profile_scoped_settings():
+def test_all_r4_tuning_fields_are_profile_scoped_settings():
     setting_names = {field.name for field in fields(Settings)}
-    normal_fields = {field for values in NORMAL_R3_FIELDS.values() for field in values}
+    normal_fields = {field for values in NORMAL_R4_FIELDS.values() for field in values}
     all_fields = normal_fields | set(EXPERIMENTAL_FIELDS)
 
     assert all_fields <= setting_names
@@ -376,12 +459,35 @@ def test_tui_experimental_settings_mount_collapsed():
     asyncio.run(check())
 
 
-def test_every_non_english_catalog_translates_r3_settings_labels():
+def test_every_non_english_catalog_translates_r4_settings_labels():
     for path in sorted((ROOT / "src/lang").glob("*.py")):
         if path.name in {"__init__.py", "en.py"}:
             continue
         strings = runpy.run_path(str(path))["STRINGS"]
-        missing = R3_LABELS - strings.keys()
+        missing = R4_LABELS - strings.keys()
+        assert not missing, f"{path.name} is missing {sorted(missing)}"
+
+
+def test_gui_and_tui_expose_identical_profile_scoped_lighting_fields():
+    gui = _fields_by_section(
+        ROOT / "src/modules/gui/lighting_tab.py", "LIGHTING_SECTIONS"
+    )
+    tui = _fields_by_section(
+        ROOT / "src/modules/tui/lighting_tab.py", "LIGHTING_SECTIONS"
+    )
+    flattened = tuple(field for values in gui.values() for field in values)
+
+    assert gui == tui
+    assert flattened == LIGHTING_FIELDS
+    assert set(flattened).isdisjoint(GLOBAL_FIELDS)
+
+
+def test_every_non_english_catalog_translates_lighting_labels():
+    for path in sorted((ROOT / "src/lang").glob("*.py")):
+        if path.name in {"__init__.py", "en.py"}:
+            continue
+        strings = runpy.run_path(str(path))["STRINGS"]
+        missing = LIGHTING_LABELS - strings.keys()
         assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
@@ -397,6 +503,20 @@ def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
     assert groups["R2 - Throttle"]["enable_rev_limiter"] == (
         "R2 trigger redline vibration"
     )
+    assert groups["L2 - Brake"]["enable_collision_trigger_l2"] == (
+        "Collision trigger jolt"
+    )
+    assert groups["L2 - Brake"]["enable_trigger_surface_l2"] == "Idle road texture"
+    assert groups["R2 - Throttle"]["enable_boost_resistance"] == (
+        "Turbo boost resistance"
+    )
+    assert groups["R2 - Throttle"]["enable_gforce_resistance"] == (
+        "G-force resistance"
+    )
+    assert groups["R2 - Throttle"]["enable_collision_trigger_r2"] == (
+        "Collision trigger jolt"
+    )
+    assert groups["R2 - Throttle"]["enable_trigger_surface_r2"] == "Idle road texture"
     assert "enable_wheelspin_buzz" not in groups["R2 - Throttle"]
     assert groups["Shared feedback"] == {
         "enable_wheelspin_buzz": "Traction/grip feedback",

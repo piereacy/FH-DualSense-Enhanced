@@ -22,6 +22,7 @@ from modules.gui.variants import current_variant
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
+from .lighting_tab import LightingTab
 from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
 from .system_tab import SystemTab
@@ -113,6 +114,8 @@ class TriggerTUI(App):
                 yield ProfilesTab(self.settings)
             with TabPane(t("Settings"), id="tab-settings"):
                 yield SettingsTab(self.settings)
+            with TabPane(t("Controller lighting"), id="tab-lighting"):
+                yield LightingTab(self.settings)
             with TabPane(t("System"), id="tab-system"):
                 yield SystemTab(self.settings)
             with TabPane(t("Language"), id="tab-lang"):

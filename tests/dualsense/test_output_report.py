@@ -6,6 +6,7 @@ import pytest
 
 from modules.dualsense.adaptive_trigger import rigid, vibrate
 from modules.dualsense.main import BT, RUMBLE_FLAGS, TRIG_FLAGS, USB, DualSense, _BT_CRC_SEED
+from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from modules.haptics.frame import CompatibleRumble
 
 
@@ -97,6 +98,35 @@ def test_bluetooth_trigger_only_layout_and_crc_are_unchanged():
     assert report[23:26] == bytes((LEFT[0], 20, 30))
     expected_crc = zlib.crc32(memoryview(report)[:74], _BT_CRC_SEED)
     assert struct.unpack_from("<I", report, 74)[0] == expected_crc
+
+
+@pytest.mark.parametrize("layout", [USB, BT], ids=["usb", "bluetooth"])
+def test_optional_visual_state_claims_only_lighting_fields(layout):
+    controller = DualSense(enable_startup_pulse=False)
+    controller.lay = layout
+    visual = ControllerVisualState(lightbar=(57, 197, 187), player_leds=0x15)
+
+    report = controller._build(LEFT, RIGHT, visual=visual)
+
+    assert report[layout["flags"]] == TRIG_FLAGS
+    assert report[layout["vf1"]] == 0x14
+    assert report[layout["vf2"]] == 0x02
+    assert report[layout["lb_setup"]] == 0x02
+    assert report[layout["player_leds"]] == 0x35
+    assert tuple(report[layout["lb_r"]:layout["lb_b"] + 1]) == (57, 197, 187)
+    if layout["bt"]:
+        expected_crc = zlib.crc32(memoryview(report)[:74], _BT_CRC_SEED)
+        assert struct.unpack_from("<I", report, 74)[0] == expected_crc
+
+
+def test_visual_state_normalizes_out_of_range_values():
+    visual = ControllerVisualState(
+        lightbar=(-5, 300, 100.4),
+        player_leds=0xFF,
+    ).normalized()
+
+    assert visual.lightbar == (0, 255, 100)
+    assert visual.player_leds == 0x1F
 
 
 @pytest.mark.parametrize("layout", [USB, BT], ids=["usb", "bluetooth"])
@@ -245,7 +275,12 @@ def test_new_rumble_claim_cancels_an_obsolete_pending_release():
     replacement = CompatibleRumble(low_frequency=0.75, high_frequency=0.125)
     controller.set(LEFT, RIGHT, replacement)
 
-    assert controller._take_pending_output() == (LEFT, RIGHT, replacement)
+    assert controller._take_pending_output() == (
+        LEFT,
+        RIGHT,
+        replacement,
+        NO_VISUAL_CONTROL,
+    )
     assert controller._take_pending_output() is None
 
 

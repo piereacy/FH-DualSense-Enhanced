@@ -10,6 +10,7 @@ import time
 from modules.dualsense.adaptive_trigger import (
     RAW_MAX, off, rigid, vibrate, vibrate_zones, rigid_zones,
 )
+from .collision import CollisionDetector
 
 # Below this car speed (km/h) I trust raw wheel rotation instead of slip_ratio
 # (slip_ratio degenerates near zero speed). Above it, slip_ratio is canonical.
@@ -111,6 +112,9 @@ class TriggerAnimations:
         self._wheelspin_ewma = _AsymmetricEwma()
         self._abs_until = 0.0
         self._abs_level = 0.0
+        self._g_force_ewma = _AsymmetricEwma()
+        self._collision_until = 0.0
+        self._collision_intensity = 0.0
 
     def reset_transients(self):
         self._prev_gear = None
@@ -120,6 +124,23 @@ class TriggerAnimations:
         self._wheelspin_ewma.reset()
         self._abs_until = 0.0
         self._abs_level = 0.0
+        self._g_force_ewma.reset()
+        self._collision_until = 0.0
+        self._collision_intensity = 0.0
+
+    def arm_collision(self, signal, settings, now):
+        if signal is None:
+            return
+        self._collision_intensity = _clamp01(signal.intensity)
+        self._collision_until = now + max(
+            0.0, float(settings.collision_trigger_duration_ms) / 1000.0
+        )
+
+    def collision_burst(self, settings, now):
+        if now >= self._collision_until or self._collision_intensity <= 0.0:
+            return None
+        amplitude = settings.collision_trigger_amp * self._collision_intensity
+        return vibrate(settings.collision_trigger_freq, amplitude)
 
     def arm_shift(self, t, s, now):
         gear = t["gear"]
@@ -169,6 +190,14 @@ class TriggerAnimations:
         loud = (now / s.idle_period_s) % 1.0 < 0.5
         amp = s.idle_amp_high if loud else s.idle_amp_low
         return vibrate(s.idle_freq, amp)
+
+    def surface_buzz(self, t, s):
+        if any(t[f"wheel_on_rumble_strip_{wheel}"] for wheel in ALL_WHEELS):
+            return vibrate(s.trigger_rumble_strip_freq, s.trigger_rumble_strip_amp)
+        rumble = max(abs(t[f"surface_rumble_{wheel}"]) for wheel in ALL_WHEELS)
+        if rumble <= 0.0:
+            return None
+        return vibrate(s.trigger_surface_freq, s.trigger_surface_amp * min(1.0, rumble))
 
     def _reset_traction(self):
         self._wheelspin_active = False
@@ -337,13 +366,39 @@ class TriggerAnimations:
                       s.brake_max_force, s.brake_curve, s.brake_wall_engage_at)
         if handbrake:
             force += s.handbrake_bonus
-        return rigid(force)
+        return rigid(force) if force > 0.0 else off()
 
-    def throttle_ramp(self, t, s):
-        if not s.enable_throttle_resistance:
-            return off()
-        return rigid(_ramp(t["accel"], s.accel_deadzone, s.throttle_baseline_force,
-                           s.throttle_max_force, s.throttle_curve, s.throttle_wall_engage_at))
+    def throttle_ramp(self, t, s, now):
+        force = 0.0
+        if s.enable_throttle_resistance:
+            force += _ramp(
+                t["accel"], s.accel_deadzone, s.throttle_baseline_force,
+                s.throttle_max_force, s.throttle_curve, s.throttle_wall_engage_at,
+            )
+        if (s.enable_boost_resistance
+                and t["boost"] >= s.boost_resistance_threshold):
+            boost_span = max(0.1, abs(float(t["boost"])))
+            boost_level = _clamp01(
+                (boost_span - s.boost_resistance_threshold)
+                / max(0.5, s.boost_resistance_threshold)
+            )
+            force += s.boost_resistance_force * (0.35 + 0.65 * boost_level)
+        if s.enable_gforce_resistance:
+            accel = math.sqrt(
+                max(0.0, s.gforce_lateral_weight) * t["accel_x"] ** 2
+                + max(0.0, s.gforce_longitudinal_weight) * t["accel_z"] ** 2
+            )
+            g_force = accel / 9.80665
+            level = self._g_force_ewma.update(
+                _clamp01(g_force / max(0.1, s.gforce_full_scale)),
+                now,
+                s.gforce_attack_ms,
+                s.gforce_release_ms,
+            )
+            force += s.gforce_resistance_force * level
+        else:
+            self._g_force_ewma.reset()
+        return rigid(force) if force > 0.0 else off()
 
 
 # --- Controller -----------------------------------------------------------
@@ -373,17 +428,21 @@ class Controller:
 
     def __init__(self, settings):
         self.anim = TriggerAnimations()
+        self._collision_detector = CollisionDetector()
         self.wall = build_wall(settings.wall_zones)
         self._l2_in_wall = False
         self._r2_in_wall = False
 
-    def update(self, t, s):
+    def update(self, t, s, collision_signal=None):
         if not t["on"]:
             self.anim.reset_transients()
             self._l2_in_wall = False
             self._r2_in_wall = False
             return off(), off()
         now = time.monotonic()
+        if collision_signal is None:
+            collision_signal = self._collision_detector.update(t, s, now)
+        self.anim.arm_collision(collision_signal, s, now)
         if s.enable_gear_shift or s.enable_gear_shift_brake:
             self.anim.arm_shift(t, s, now)
         route, traction = self.anim.traction_buzz(t, s, now)
@@ -394,6 +453,11 @@ class Controller:
 
     def L2(self, t, s, now, traction=_TRACTION_UNSET):
         brake = t["brake"]
+
+        if s.enable_collision_trigger_l2:
+            collision = self.anim.collision_burst(s, now)
+            if collision is not None:
+                return collision
 
         if traction is _TRACTION_UNSET:
             route, effect = self.anim.traction_buzz(t, s, now)
@@ -425,10 +489,22 @@ class Controller:
             return build_brake_walls(s.brake_static_wall_at, s.brake_static_wall_force, s.wall_zones)
 
         # 6. Brake resistance - default rigid ramp
-        return self.anim.brake_resistance(t, s)
+        base = self.anim.brake_resistance(t, s)
+        if base != off():
+            return base
+        if s.enable_trigger_surface_l2 and brake < max(1, s.brake_deadzone):
+            surface = self.anim.surface_buzz(t, s)
+            if surface is not None:
+                return surface
+        return off()
 
     def R2(self, t, s, now, traction=_TRACTION_UNSET):
         accel = t["accel"]
+
+        if s.enable_collision_trigger_r2:
+            collision = self.anim.collision_burst(s, now)
+            if collision is not None:
+                return collision
 
         if traction is _TRACTION_UNSET:
             route, effect = self.anim.traction_buzz(t, s, now)
@@ -460,5 +536,12 @@ class Controller:
         if self._r2_in_wall:
             return self.wall
 
-        # 6. Throttle resistance - default rigid ramp
-        return self.anim.throttle_ramp(t, s)
+        # 6. Optional G/boost and normal throttle resistance
+        base = self.anim.throttle_ramp(t, s, now)
+        if base != off():
+            return base
+        if s.enable_trigger_surface_r2 and accel < max(1, s.accel_deadzone):
+            surface = self.anim.surface_buzz(t, s)
+            if surface is not None:
+                return surface
+        return off()

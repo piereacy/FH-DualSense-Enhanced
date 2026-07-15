@@ -18,12 +18,15 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
     OFF = dualsense.adaptive_trigger.off()
     controller = forzahorizon.Controller(s)
     haptic_mixer = HapticMixer()
+    collision_detector = forzahorizon.CollisionDetector()
+    lighting = forzahorizon.LightingController()
     if usb_audio is None:
         haptic_manager = HapticManager(ds, s)
     else:
         haptic_manager = HapticManager(ds, s, audio=usb_audio)
     prev = None
     last_pkt = time.monotonic()
+    now = last_pkt
     last_log = 0.0
     pkt_count = 0
     idle_silenced = False
@@ -62,10 +65,10 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                     except Exception as e:
                         log.debug("haptic silence failed: %s", e)
                         rumble = None
-                    state = (OFF, OFF, rumble)
+                    state = (OFF, OFF, rumble, lighting.update({"on": False}, s, now))
                     if state != prev:
                         try:
-                            ds.set(*state)
+                            ds.set(state[0], state[1], state[2], visual=state[3])
                             prev = state
                         except Exception as e:
                             log.debug("ds.set idle failed: %s", e)
@@ -101,13 +104,14 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
 
             # Never let controller logic block later telemetry frames.
             try:
-                left, right = controller.update(t, s)
+                collision_signal = collision_detector.update(t, s, now)
+                left, right = controller.update(t, s, collision_signal)
             except Exception as e:
                 log.warning("controller.update failed: %s", e)
                 continue
 
             try:
-                haptic_frame = haptic_mixer.update(t, s, now)
+                haptic_frame = haptic_mixer.update(t, s, now, collision_signal)
             except Exception as e:
                 log.warning("haptic mixer failed: %s", e)
                 haptic_frame = SILENT_FRAME
@@ -117,10 +121,11 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                 log.debug("haptic route failed: %s", e)
                 rumble = None
 
-            state = (left, right, rumble)
+            visual = lighting.update(t, s, now)
+            state = (left, right, rumble, visual)
             if state != prev:
                 try:
-                    ds.set(*state)
+                    ds.set(left, right, rumble, visual=visual)
                     prev = state
                 except Exception as e:
                     # HID reconnect logic owns recovery after a failed write.
@@ -150,10 +155,14 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
         except Exception as e:
             log.debug("haptic shutdown silence failed: %s", e)
             stop_rumble = None
-        stop_state = (OFF, OFF, stop_rumble)
+        # Reuse the last loop timestamp. Besides avoiding one unnecessary clock
+        # read, this keeps shutdown deterministic for tests and for telemetry
+        # replays that inject their own monotonic clock.
+        stop_visual = lighting.update({"on": False}, s, now)
+        stop_state = (OFF, OFF, stop_rumble, stop_visual)
         if stop_state != prev:
             try:
-                ds.set(*stop_state)
+                ds.set(OFF, OFF, stop_rumble, visual=stop_visual)
             except Exception as e:
                 log.debug("ds.set shutdown failed: %s", e)
         try:

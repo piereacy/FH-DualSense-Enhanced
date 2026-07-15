@@ -18,12 +18,16 @@ def test_fresh_settings_match_community_defaults():
     assert actual == EXPECTED
 
 
-def test_r3_grip_effects_use_safe_defaults():
+def test_r4_grip_effects_use_safe_defaults():
     settings = Settings()
 
     assert settings.enable_rev_limiter is False
     assert settings.enable_grip_redline_haptics is True
+    assert settings.grip_redline_amp == 220
     assert settings.grip_redline_gain == 1.5
+    assert settings.grip_redline_duty_cycle == 0.7
+    assert settings.grip_redline_low_ratio == 0.45
+    assert settings.grip_redline_attack_strength == 0.65
     assert settings.enable_grip_gear_shift_haptics is False
     assert settings.grip_gear_shift_strength == 0.8
     assert settings.grip_gear_shift_duration_ms == 100.0
@@ -89,7 +93,7 @@ def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
     assert settings.rev_limit_freq == 30
     assert settings.rev_limit_amp == 12
     assert settings.grip_redline_freq == 10
-    assert settings.grip_redline_amp == 192
+    assert settings.grip_redline_amp == 220
     assert settings.grip_redline_gain == 1.5
     assert settings.enable_grip_redline_haptics is True
     assert settings.grip_redline_left is True
@@ -100,7 +104,7 @@ def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
     assert raw["profiles"]["Custom"]["rev_limit_freq"] == 30
     assert raw["profiles"]["Custom"]["rev_limit_amp"] == 12
     assert raw["profiles"]["Custom"]["grip_redline_freq"] == 10
-    assert raw["profiles"]["Custom"]["grip_redline_amp"] == 192
+    assert raw["profiles"]["Custom"]["grip_redline_amp"] == 220
     assert raw["profiles"]["Custom"]["grip_redline_gain"] == 1.5
     assert raw["profiles"]["Custom"]["enable_grip_gear_shift_haptics"] is False
 
@@ -124,7 +128,7 @@ def test_r2_named_profile_custom_redline_values_are_preserved(tmp_path, monkeypa
     assert settings.rev_limit_freq == 7
     assert settings.rev_limit_amp == 144
     assert settings.grip_redline_freq == 10
-    assert settings.grip_redline_amp == 192
+    assert settings.grip_redline_amp == 220
 
 
 def test_r3_prerelease_defaults_split_into_trigger_and_new_grip_defaults(
@@ -150,11 +154,11 @@ def test_r3_prerelease_defaults_split_into_trigger_and_new_grip_defaults(
     assert settings.rev_limit_freq == 30
     assert settings.rev_limit_amp == 12
     assert settings.grip_redline_freq == 10
-    assert settings.grip_redline_amp == 192
+    assert settings.grip_redline_amp == 220
     assert snapshot["rev_limit_freq"] == 30
     assert snapshot["rev_limit_amp"] == 12
     assert snapshot["grip_redline_freq"] == 10
-    assert snapshot["grip_redline_amp"] == 192
+    assert snapshot["grip_redline_amp"] == 220
 
 
 def test_r3_prerelease_custom_values_are_preserved_and_copied_once(

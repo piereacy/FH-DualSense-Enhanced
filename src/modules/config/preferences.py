@@ -185,7 +185,10 @@ _GRIP_REDLINE_FIELDS = (
     "grip_redline_freq",
     "grip_redline_amp",
     "grip_redline_gain",
+    "grip_redline_duty_cycle",
     "grip_redline_low_ratio",
+    "grip_redline_attack_strength",
+    "grip_redline_attack_duration_ms",
     "grip_redline_background_duck",
 )
 

@@ -68,9 +68,9 @@ class DSXClient:
         self._connected = False
         log.info("DSX client closed (%d packets sent)", self._sent)
 
-    def set(self, left, right, rumble=None):
+    def set(self, left, right, rumble=None, *, visual=None):
         # Keep the native writer's call shape. DSX owns body-haptics output.
-        del rumble
+        del rumble, visual
         self._send(tm.frames_to_packet(left, right))
 
     # DSX owns the device and manages its own reconnect/controller selection, so

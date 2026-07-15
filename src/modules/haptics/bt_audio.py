@@ -7,7 +7,7 @@ import time
 from ..dualsense.bt_haptics import (
     BT_HAPTICS_FRAMES,
     BT_HAPTICS_SAMPLE_RATE,
-    quantize_haptics,
+    BluetoothPcmQuantizer,
 )
 from .frame import HapticFrame, SILENT_FRAME
 from .pcm import HapticPcmRenderer
@@ -39,7 +39,12 @@ class BluetoothAudioHaptics:
             self._renderer = HapticPcmRenderer(
                 numpy_module=self._np,
                 sample_rate=BT_HAPTICS_SAMPLE_RATE,
+                soft_clip=True,
             )
+        self._quantizer = (
+            BluetoothPcmQuantizer(numpy_module=self._np)
+            if self._np is not None else None
+        )
         self._monotonic = monotonic
         self._sleep = sleeper
         self._frame = SILENT_FRAME
@@ -104,7 +109,7 @@ class BluetoothAudioHaptics:
                 with self._frame_lock:
                     frame = self._frame
                 pcm = self._renderer.render(frame, BT_HAPTICS_FRAMES)
-                payload = quantize_haptics(pcm, numpy_module=self._np)
+                payload = self._quantizer.quantize(pcm)
                 if not self._controller.queue_bt_haptics(payload):
                     if getattr(self._controller, "transport", None) == "bluetooth":
                         self._failed = True
@@ -152,3 +157,5 @@ class BluetoothAudioHaptics:
                 pass
         if self._renderer is not None:
             self._renderer.reset()
+        if self._quantizer is not None:
+            self._quantizer.reset()

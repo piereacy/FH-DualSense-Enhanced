@@ -62,6 +62,18 @@ class Settings:
     throttle_wall_engage_at: int = 250        # byte that triggers firmware wall. DO NOT CHANGE
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE
 
+    # MARK: R4 optional throttle dynamics
+    enable_boost_resistance: bool = False
+    boost_resistance_threshold: float = 0.5
+    boost_resistance_force: int = 18
+    enable_gforce_resistance: bool = False
+    gforce_lateral_weight: float = 0.25
+    gforce_longitudinal_weight: float = 1.0
+    gforce_full_scale: float = 1.5
+    gforce_resistance_force: int = 28
+    gforce_attack_ms: float = 70.0
+    gforce_release_ms: float = 180.0
+
     # MARK: R2 trigger redline warning
     enable_rev_limiter: bool = False
     rev_limit_ratio: float = 0.93             # fraction of max_rpm to fire at
@@ -77,9 +89,12 @@ class Settings:
     grip_redline_ratio: float = 0.93
     grip_redline_release_ratio: float = 0.90
     grip_redline_freq: int = 10
-    grip_redline_amp: int = 192
+    grip_redline_amp: int = 220
     grip_redline_gain: float = 1.5
-    grip_redline_low_ratio: float = 0.25
+    grip_redline_duty_cycle: float = 0.70
+    grip_redline_low_ratio: float = 0.45
+    grip_redline_attack_strength: float = 0.65
+    grip_redline_attack_duration_ms: float = 120.0
     grip_redline_background_duck: float = 0.30
 
     # MARK: Shared trigger traction/grip feedback
@@ -130,6 +145,19 @@ class Settings:
     grip_gear_shift_strength: float = 0.8
     grip_gear_shift_duration_ms: float = 100.0
 
+    # MARK: R4 optional trigger events and idle road texture
+    enable_collision_trigger_l2: bool = False
+    enable_collision_trigger_r2: bool = False
+    collision_trigger_freq: int = 2
+    collision_trigger_amp: int = 220
+    collision_trigger_duration_ms: float = 90.0
+    enable_trigger_surface_l2: bool = False
+    enable_trigger_surface_r2: bool = False
+    trigger_surface_freq: int = 10
+    trigger_surface_amp: int = 18
+    trigger_rumble_strip_freq: int = 25
+    trigger_rumble_strip_amp: int = 110
+
     # MARK: Body haptics
     # USB and Bluetooth consume the same normalized HapticFrame. Only their
     # existing transport/synthesis paths differ.
@@ -147,6 +175,20 @@ class Settings:
     collision_haptics_weak_side_ratio: float = 0.35
     collision_background_duck: float = 0.20
     suspension_haptics_delta_threshold: float = 0.015
+
+    # MARK: R4 optional controller lighting
+    enable_tachometer_lightbar: bool = False
+    tachometer_start_ratio: float = 0.70
+    tachometer_flash_ratio: float = 0.93
+    tachometer_flash_rate_hz: float = 10.0
+    tachometer_brightness: float = 0.70
+    tachometer_start_red: int = 57
+    tachometer_start_green: int = 197
+    tachometer_start_blue: int = 187
+    tachometer_redline_red: int = 255
+    tachometer_redline_green: int = 38
+    tachometer_redline_blue: int = 80
+    enable_gear_player_leds: bool = False
 
     # MARK: System - startup pulse
     enable_startup_pulse: bool = True

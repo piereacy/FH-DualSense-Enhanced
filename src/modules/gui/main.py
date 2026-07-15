@@ -42,6 +42,7 @@ from .tray import TrayController
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
+from .lighting_tab import LightingTab
 from .overview_tab import OverviewTab
 from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
@@ -55,11 +56,15 @@ HAPTIC_AMP_ON = 200
 HAPTIC_AMP_OFF = 120
 HAPTIC_DURATION_S = 0.10
 
-NAV_ITEMS = ("Overview", "Driving", "Haptics", "Profiles", "System", "Language", "Logs")
+NAV_ITEMS = (
+    "Overview", "Driving", "Haptics", "Lighting", "Profiles",
+    "System", "Language", "Logs",
+)
 NAV_LABELS = {
     "Overview": "Overview",
     "Driving": "Driving feedback",
     "Haptics": "Grip haptics",
+    "Lighting": "Controller lighting",
     "Profiles": "Profiles",
     "System": "System and updates",
     "Language": "Language",
@@ -338,6 +343,7 @@ class TriggerGUI:
         self.controls_tab = ControlsTab(self._content, self)
         self.profiles_tab = ProfilesTab(self._content, self)
         self.settings_tab = SettingsTab(self._content, self)
+        self.lighting_tab = LightingTab(self._content, self)
         self.system_tab = SystemTab(self._content, self)
         self.lang_tab = LangTab(self._content, self)
         self.logs_tab = LogsTab(self._content, self)
@@ -345,6 +351,7 @@ class TriggerGUI:
             "Overview": self.overview_tab,
             "Driving": self.controls_tab,
             "Haptics": self.settings_tab,
+            "Lighting": self.lighting_tab,
             "Profiles": self.profiles_tab,
             "System":   self.system_tab,
             "Language": self.lang_tab,

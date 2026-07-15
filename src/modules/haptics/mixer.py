@@ -10,6 +10,7 @@ from modules.forzahorizon.effects import (
     DRIVEN_WHEELS,
     LOW_SPEED_KMH,
 )
+from modules.forzahorizon.collision import CollisionDetector
 
 from .frame import HapticFrame, SILENT_FRAME, clamp01
 
@@ -98,15 +99,13 @@ class HapticMixer:
 
     def reset(self) -> None:
         self._rolling = False
-        self._prev_accel: tuple[float, float] | None = None
+        self._collision_detector = CollisionDetector()
         self._prev_suspension: tuple[float, float, float, float] | None = None
         self._prev_gear: int | None = None
         self._collision_started = 0.0
         self._collision_until = 0.0
         self._collision_left = 0.0
         self._collision_right = 0.0
-        self._collision_armed = True
-        self._collision_cooldown_until = 0.0
         self._shift_until = 0.0
         self._redline_started_at: float | None = None
         self._redline_active = False
@@ -118,7 +117,13 @@ class HapticMixer:
             self._rolling = speed_kmh >= _ROLLING_ENTER_KMH
         return self._rolling
 
-    def update(self, telemetry: Mapping[str, object], settings, now: float) -> HapticFrame:
+    def update(
+        self,
+        telemetry: Mapping[str, object],
+        settings,
+        now: float,
+        collision_signal=None,
+    ) -> HapticFrame:
         if not getattr(settings, "enable_body_haptics", False) or not telemetry.get("on", False):
             if self._redline_active:
                 reason = "body-toggle" if not getattr(
@@ -252,16 +257,31 @@ class HapticMixer:
             pulse_hz = max(1.0, _setting(settings, "grip_redline_freq", 10.0))
             period = 1.0 / pulse_hz
             phase = (now - self._redline_started_at) % period
-            if phase < period * 0.5:
+            duty = min(0.85, max(0.20, _setting(
+                settings, "grip_redline_duty_cycle", 0.70
+            )))
+            if phase < period * duty:
+                base = clamp01(_setting(settings, "grip_redline_amp", 220.0) / 255.0)
+                gain = min(3.0, _setting(settings, "grip_redline_gain", 1.5))
+                # Perceptual gain keeps the whole slider useful instead of
+                # multiplying past 1.0 and immediately hitting clamp01.
                 redline_amplitude = (
-                    _setting(settings, "grip_redline_amp", 192.0)
-                    / 255.0
-                    * _setting(settings, "grip_redline_gain", 1.5)
-                    * engine_scale
+                    (1.0 - (1.0 - base) ** gain) * engine_scale
+                    if gain > 0.0 else 0.0
                 )
+                elapsed = max(0.0, now - self._redline_started_at)
+                attack_duration = max(
+                    0.001,
+                    _setting(settings, "grip_redline_attack_duration_ms", 120.0)
+                    / 1000.0,
+                )
+                attack = clamp01(1.0 - elapsed / attack_duration) * clamp01(
+                    _setting(settings, "grip_redline_attack_strength", 0.65)
+                )
+                redline_amplitude = clamp01(redline_amplitude + attack * 0.25)
                 redline_low = redline_amplitude * clamp01(
                     _setting(settings, "grip_redline_low_ratio", 0.25)
-                )
+                ) + attack * 0.55
                 if redline_left:
                     redline_event.left_low = redline_low
                     redline_event.left_high = redline_amplitude
@@ -357,64 +377,33 @@ class HapticMixer:
                 transient.right_low += impact_scale
         self._prev_suspension = suspension
 
-        accel_x = _number(telemetry.get("accel_x"))
-        accel_z = _number(telemetry.get("accel_z"))
-        jerk = 0.0
-        jerk_intensity = 0.0
-        if self._prev_accel is not None:
-            jerk = math.hypot(accel_x - self._prev_accel[0], accel_z - self._prev_accel[1])
-            jerk_threshold = _setting(settings, "collision_haptics_jerk_threshold", 3.0)
-            if jerk > jerk_threshold:
-                jerk_intensity = clamp01((jerk - jerk_threshold) / 27.0)
-        else:
-            jerk_threshold = _setting(settings, "collision_haptics_jerk_threshold", 3.0)
-        self._prev_accel = (accel_x, accel_z)
-
-        smashable = max(0.0, _number(telemetry.get("smashable_vel_diff")))
-        smash_intensity = clamp01(smashable / 15.0) if smashable > 3.0 else 0.0
-        jerk_active = jerk > jerk_threshold
-        smash_active = smashable > 3.0
-        if (
-            not jerk_active
-            and not smash_active
-            and now >= self._collision_cooldown_until
-        ):
-            self._collision_armed = True
-
-        collision_intensity = max(jerk_intensity, smash_intensity)
-        if self._collision_armed and collision_intensity > 0.0:
+        if collision_signal is None:
+            collision_signal = self._collision_detector.update(
+                telemetry, settings, now
+            )
+        if collision_signal is not None:
             duration = _setting(settings, "collision_haptics_duration_ms", 150.0) / 1000.0
             self._collision_started = now
             self._collision_until = now + duration
-            self._collision_cooldown_until = now + (
-                _setting(settings, "collision_haptics_cooldown_ms", 250.0) / 1000.0
-            )
-            self._collision_armed = False
-            scaled = collision_intensity * impact_scale
+            scaled = collision_signal.intensity * impact_scale
             weak_side = clamp01(
                 _setting(settings, "collision_haptics_weak_side_ratio", 0.35)
             )
-            if accel_x > 5.0:
-                direction = "left"
+            if collision_signal.direction == "left":
                 self._collision_left, self._collision_right = scaled, scaled * weak_side
-            elif accel_x < -5.0:
-                direction = "right"
+            elif collision_signal.direction == "right":
                 self._collision_left, self._collision_right = scaled * weak_side, scaled
             else:
-                direction = "center"
                 self._collision_left = self._collision_right = scaled
 
-            source = "both" if jerk_active and smash_active else (
-                "jerk" if jerk_active else "smashable"
-            )
             log.info(
                 "Collision armed source=%s jerk=%.3f smashable=%.3f "
                 "intensity=%.3f direction=%s",
-                source,
-                jerk,
-                smashable,
-                collision_intensity,
-                direction,
+                collision_signal.source,
+                collision_signal.jerk,
+                collision_signal.smashable,
+                collision_signal.intensity,
+                collision_signal.direction,
             )
 
         collision_active = now < self._collision_until

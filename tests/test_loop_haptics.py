@@ -1,6 +1,7 @@
 from modules import loop
 from modules.config.settings import Settings
 from modules.dualsense.adaptive_trigger import off, rigid, vibrate
+from modules.dualsense.output_state import ControllerVisualState
 from modules.haptics.frame import (
     CompatibleRumble,
     HapticFrame,
@@ -44,7 +45,7 @@ class _DualSense:
     def __init__(self):
         self.calls = []
 
-    def set(self, *args):
+    def set(self, *args, visual=None):
         self.calls.append(args)
 
 
@@ -55,17 +56,27 @@ class _LiveDisableDualSense(_DualSense):
         super().__init__()
         self.settings = settings
 
-    def set(self, *args):
-        super().set(*args)
+    def set(self, *args, visual=None):
+        super().set(*args, visual=visual)
         if len(self.calls) == 1:
             self.settings.enable_body_haptics = False
+
+
+class _VisualDualSense(_DualSense):
+    def __init__(self):
+        super().__init__()
+        self.visuals = []
+
+    def set(self, *args, visual=None):
+        self.visuals.append(visual)
+        super().set(*args, visual=visual)
 
 
 class _TriggerController:
     def __init__(self, settings):
         self.settings = settings
 
-    def update(self, telemetry, settings):
+    def update(self, telemetry, settings, collision_signal=None):
         return LEFT, RIGHT
 
 
@@ -77,7 +88,7 @@ class _Mixer:
         self.reset_calls = 0
         type(self).instances.append(self)
 
-    def update(self, telemetry, settings, now):
+    def update(self, telemetry, settings, now, collision_signal=None):
         self.calls.append((telemetry, now))
         return FRAME
 
@@ -263,3 +274,21 @@ def test_loop_injects_shared_usb_audio_into_haptic_manager(monkeypatch):
     )
 
     assert _Manager.instances[0].audio is shared_audio
+
+
+def test_loop_forwards_atomic_visual_state_and_blanks_it_on_shutdown(monkeypatch):
+    _install(monkeypatch)
+    active = ControllerVisualState(lightbar=(57, 197, 187), player_leds=0x04)
+    blank = ControllerVisualState(lightbar=(0, 0, 0), player_leds=0)
+
+    class _Lighting:
+        def update(self, telemetry, settings, now):
+            return active if telemetry.get("on") else blank
+
+    monkeypatch.setattr(loop.forzahorizon, "LightingController", _Lighting)
+    controller = _VisualDualSense()
+    listener = _Listener([(b"packet", ("127.0.0.1", 5300))])
+
+    loop.run(controller, listener, _settings(), stop_event=_StopEvent(1))
+
+    assert controller.visuals == [active, blank]

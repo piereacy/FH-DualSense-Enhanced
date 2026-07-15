@@ -19,6 +19,7 @@ else:
 from . import hidhide
 from .adaptive_trigger import M_RIGID, off
 from .bt_haptics import BluetoothHapticsPacketBuilder
+from .output_state import ControllerVisualState, NO_VISUAL_CONTROL
 
 if TYPE_CHECKING:
     from ..haptics.frame import CompatibleRumble
@@ -35,9 +36,13 @@ TRIG_FLAGS = 0x04 | 0x08
 # MARK: Layout maps — byte offsets per transport
 # vf1 = valid_flag1, psav = power_save_control
 USB = {"rid": 0x02, "flags": 1, "vf1": 2, "motor_r": 3, "motor_l": 4,
-       "psav": 10, "r": 11, "l": 22, "size": 64, "bt": False}
+       "psav": 10, "r": 11, "l": 22, "vf2": 39, "lb_setup": 42,
+       "player_leds": 44, "lb_r": 45, "lb_g": 46, "lb_b": 47,
+       "size": 64, "bt": False}
 BT  = {"rid": 0x31, "flags": 2, "vf1": 3, "motor_r": 4, "motor_l": 5,
-       "psav": 11, "r": 12, "l": 23, "size": 78, "bt": True}
+       "psav": 11, "r": 12, "l": 23, "vf2": 40, "lb_setup": 43,
+       "player_leds": 45, "lb_r": 46, "lb_g": 47, "lb_b": 48,
+       "size": 78, "bt": True}
 
 # Precomputed CRC of the BT report-header byte 0xA2. zlib.crc32(data, value)
 # resumes from `value`, so this lets us CRC straight off the buffer without
@@ -212,6 +217,7 @@ class DualSense:
         self._lock = threading.Lock()
         self._left = self._right = off()
         self._rumble: CompatibleRumble | None = None
+        self._visual = NO_VISUAL_CONTROL
         self._pending_rumble_release = None
         self._bt_haptics_pending: bytes | None = None
         self._bt_haptics_dropped = 0
@@ -289,19 +295,29 @@ class DualSense:
             self._thread.join(timeout=2.0)
         self._disconnect()
 
-    def set(self, left, right, rumble: CompatibleRumble | None = None):
+    def set(
+        self,
+        left,
+        right,
+        rumble: CompatibleRumble | None = None,
+        *,
+        visual: ControllerVisualState | None = None,
+    ):
+        visual = (visual or NO_VISUAL_CONTROL).normalized()
         with self._lock:
             if rumble is None and self._dirty and self._is_rumble_release(self._rumble):
                 self._pending_rumble_release = (
                     self._left,
                     self._right,
                     self._rumble,
+                    self._visual,
                 )
             elif rumble is not None:
                 self._pending_rumble_release = None
             self._left = left
             self._right = right
             self._rumble = rumble
+            self._visual = visual
             self._dirty = True
         self._wake.set()
 
@@ -337,7 +353,7 @@ class DualSense:
                 return frame
             if not self._dirty:
                 return None
-            frame = self._left, self._right, self._rumble
+            frame = self._left, self._right, self._rumble, self._visual
             self._dirty = False
             return frame
 
@@ -567,9 +583,9 @@ class DualSense:
             # --- Write the latest queued frame, if any ---
             pending = self._take_pending_output()
             if pending is not None:
-                left, right, rumble = pending
+                left, right, rumble, visual = pending
                 try:
-                    n = self.dev.write(self._build(left, right, rumble))
+                    n = self.dev.write(self._build(left, right, rumble, visual=visual))
                 except Exception as e:
                     if not persistent:
                         self._disconnect(f"write failed: {e}")
@@ -614,7 +630,14 @@ class DualSense:
             crc = zlib.crc32(memoryview(buf)[:74], _BT_CRC_SEED)
             struct.pack_into("<I", buf, 74, crc)
 
-    def _build(self, left, right, rumble: CompatibleRumble | None = None):
+    def _build(
+        self,
+        left,
+        right,
+        rumble: CompatibleRumble | None = None,
+        *,
+        visual: ControllerVisualState | None = None,
+    ):
         L = self.lay
         buf = self._new_report()
         flags = TRIG_FLAGS
@@ -628,6 +651,15 @@ class DualSense:
             # params elements are already clamped to 0-255 by triggers.py;
             # bytearray slice-assignment accepts a tuple of ints directly.
             buf[pos + 1:pos + 1 + len(params)] = params[:10]
+        visual = (visual or NO_VISUAL_CONTROL).normalized()
+        if visual.lightbar is not None:
+            buf[L["vf1"]] |= 0x04
+            buf[L["vf2"]] |= 0x02
+            buf[L["lb_setup"]] = 0x02
+            buf[L["lb_r"]], buf[L["lb_g"]], buf[L["lb_b"]] = visual.lightbar
+        if visual.player_leds is not None:
+            buf[L["vf1"]] |= 0x10
+            buf[L["player_leds"]] = visual.player_leds | 0x20
         self._finalize_bt_crc(buf)
         return buf  # hidapi accepts bytearray — skip the bytes() copy.
 
@@ -635,7 +667,10 @@ class DualSense:
         with self._lock:
             left = self._left
             right = self._right
-        return self._bt_haptics_builder.build(samples, left=left, right=right)
+            visual = self._visual
+        return self._bt_haptics_builder.build(
+            samples, left=left, right=right, visual=visual
+        )
 
     def _mark_bt_haptics_failed(self, reason: str) -> None:
         self._bt_haptics_failed = True
