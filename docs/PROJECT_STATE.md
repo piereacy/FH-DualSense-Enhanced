@@ -8,7 +8,7 @@
 - 当前功能提交：`66595cb feat: route traction and move redline to grips`。设计和计划提交分别为 `462664a`、`49ff4a2`；文档提交后的准确 HEAD 以 `git log -1 --oneline` 为准。
 - 当前开发身份：内部 PEP 440 版本 `3`，运行时显示 `R3`。R3 尚未创建 tag 或 GitHub Release。
 - 当前稳定发布：Enhanced R2，tag `R2` 指向 `1cc4520`，公开地址为 `https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R2`。
-- 当前阶段：R3 抓地力路由已经通过实车手感验证；现有红线和碰撞握把反馈未通过辨识度验收。增强设计的核心行为已经确认，详细规格待用户审阅，代码尚未实现。
+- 当前阶段：R3 抓地力路由已经通过实车手感验证；现有红线和碰撞握把反馈未通过辨识度验收。增强规格和实施计划已经完成，业务代码尚未修改。
 
 ## 当前开发重心
 
@@ -45,7 +45,8 @@
 
 ## 正在进行的工作
 
-- `docs/superpowers/specs/2026-07-15-r3-redline-collision-contrast-design.md` 已记录用户确认的核心行为和待审阅的详细规格，代码尚未实现。
+- `docs/superpowers/specs/2026-07-15-r3-redline-collision-contrast-design.md` 已通过用户审阅，代码尚未实现。
+- `docs/superpowers/plans/2026-07-15-r3-redline-collision-contrast.md` 已拆分配置、扳机、Bluetooth projection、mixer、碰撞、UI 和构建任务。
 - 已确认默认握把红线路由为仅左握把：左侧开启，右侧关闭；用户仍可独立勾选任一侧或两侧。
 - 下一步必须先编写实施计划，再按测试优先顺序修改 effects、mixer、配置迁移和 GUI/TUI。
 
@@ -69,9 +70,9 @@
 
 ## 下一步建议执行顺序
 
-1. 用户审阅红线/碰撞增强规格。
-2. 编写逐文件实施计划，先恢复扳机红线和拆分配置，再重构握把 mixer 层次。
-3. 按失败测试、实现、定向回归、全量回归的顺序完成代码。
+1. 按新实施计划先恢复扳机红线和拆分配置，再增加 Bluetooth priority-event projection。
+2. 按失败测试、实现、定向回归的顺序重构握把 mixer 和碰撞事件。
+3. 同步 GUI/TUI、语言、架构文档并运行全量回归。
 4. 构建新的 ZUV 和 Windows EXE，先看事件日志，再进行 USB/Bluetooth 实车验证。
 5. 用户确认后补充硬件记录，再决定是否进入 R3 发布设计。
 
@@ -114,6 +115,7 @@
 - `src/pyproject.toml`、`src/uv.lock`、`tests/test_enhanced_distribution.py`：R3 开发身份与 R2 稳定文档分离。
 - `docs/superpowers/specs/2026-07-15-r3-traction-redline-design.md`、`docs/superpowers/plans/2026-07-15-r3-traction-redline.md`：已批准设计和实施清单。
 - `docs/superpowers/specs/2026-07-15-r3-redline-collision-contrast-design.md`：最新批准设计，覆盖旧设计中的扳机红线删除、双侧默认和加法混音决定；代码尚未实现。
+- `docs/superpowers/plans/2026-07-15-r3-redline-collision-contrast.md`：最新逐文件实施计划；开始业务修改时从 Task 1 执行。
 
 ## 当前 Git 工作区状态
 
@@ -151,9 +153,10 @@
 2. 本文件 `docs/PROJECT_STATE.md`
 3. `docs/ARCHITECTURE.md`
 4. `docs/superpowers/specs/2026-07-15-r3-redline-collision-contrast-design.md`
-5. `docs/superpowers/specs/2026-07-15-r3-traction-redline-design.md`
-6. `docs/superpowers/plans/2026-07-15-r3-traction-redline.md`
-7. `src/modules/forzahorizon/effects.py` 与 `tests/forzahorizon/test_effects.py`
-8. `src/modules/haptics/mixer.py` 与 `tests/haptics/test_mixer.py`
+5. `docs/superpowers/plans/2026-07-15-r3-redline-collision-contrast.md`
+6. `docs/superpowers/specs/2026-07-15-r3-traction-redline-design.md`
+7. `docs/superpowers/plans/2026-07-15-r3-traction-redline.md`
+8. `src/modules/forzahorizon/effects.py` 与 `tests/forzahorizon/test_effects.py`
+9. `src/modules/haptics/mixer.py` 与 `tests/haptics/test_mixer.py`
 
-下一次会话建议首先处理的具体任务：在用户审阅最新规格后编写实施计划。不要直接继续旧计划中“删除扳机红线、双侧握把固定输出、仅加法叠加”的步骤。
+下一次会话建议首先处理的具体任务：从最新实施计划 Task 1 开始，先写配置默认值和迁移失败测试。不要直接继续旧计划中“删除扳机红线、双侧握把固定输出、仅加法叠加”的步骤。
