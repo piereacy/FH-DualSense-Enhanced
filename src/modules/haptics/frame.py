@@ -19,6 +19,8 @@ class HapticFrame:
     right_high: float = 0.0
     engine_hz: float = 0.0
     engine_amplitude: float = 0.0
+    compatible_low_frequency: float | None = None
+    compatible_high_frequency: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +33,17 @@ SILENT_FRAME = HapticFrame()
 
 
 def to_compatible_rumble(frame: HapticFrame) -> CompatibleRumble:
+    fallback_low = max(frame.left_low, frame.right_low) + 0.5 * frame.engine_amplitude
+    fallback_high = max(frame.left_high, frame.right_high)
     return CompatibleRumble(
-        low_frequency=clamp01(max(frame.left_low, frame.right_low) + 0.5 * frame.engine_amplitude),
-        high_frequency=clamp01(max(frame.left_high, frame.right_high)),
+        low_frequency=clamp01(
+            fallback_low
+            if frame.compatible_low_frequency is None
+            else frame.compatible_low_frequency
+        ),
+        high_frequency=clamp01(
+            fallback_high
+            if frame.compatible_high_frequency is None
+            else frame.compatible_high_frequency
+        ),
     )

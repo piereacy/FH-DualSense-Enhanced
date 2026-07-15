@@ -76,6 +76,22 @@ def test_bluetooth_returns_compatible_rumble_without_creating_audio():
     assert factory.instances == []
 
 
+def test_bluetooth_uses_explicit_priority_event_motor_projection():
+    factory = _AudioFactory()
+    manager = HapticManager(_Controller("bluetooth"), _settings(), audio_factory=factory)
+    frame = HapticFrame(
+        left_high=0.8,
+        compatible_low_frequency=0.8,
+        compatible_high_frequency=0.0,
+    )
+
+    assert manager.route(frame) == CompatibleRumble(
+        low_frequency=0.8,
+        high_frequency=0.0,
+    )
+    assert factory.instances == []
+
+
 def test_disabling_bluetooth_releases_rumble_exactly_once():
     settings = _settings()
     manager = HapticManager(_Controller("bluetooth"), settings)
