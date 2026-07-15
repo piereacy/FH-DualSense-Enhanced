@@ -1,55 +1,20 @@
-"""System tab: global / launch-time settings, with the ZUV update toggle at
-the top.
-
-The ZUV loader runs *before* this app starts, so toggling the update check here
-only affects the next launch. The mechanism is a sentinel file
-(.zuv-update-disabled) the loader checks in its cache_root; when present, the
-update check is skipped. ZUV exports cache_root via the ZUV_CACHE_ROOT env var.
-"""
+"""System tab: controller selection and ZUV-independent built-in updates."""
 import asyncio
 import logging
-import os
 import threading
-from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Label, RadioButton, RadioSet, Switch
+from textual.widgets import Button, Label, ProgressBar, RadioButton, RadioSet, Switch
 
 from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
+from modules.update import UpdatePhase
 
 from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 
 log = logging.getLogger("fhds")
-
-SENTINEL = ".zuv-update-disabled"
-
-
-def sentinel_path() -> Path | None:
-    """Path to the sentinel file, or None when not running inside a ZUV bundle."""
-    root = os.environ.get("ZUV_CACHE_ROOT")
-    return Path(root) / SENTINEL if root else None
-
-
-def apply_sentinel(enabled: bool) -> None:
-    """Reconcile the on-disk sentinel with the desired setting.
-    enabled=True  -> updates wanted -> remove sentinel.
-    enabled=False -> updates off    -> create sentinel.
-    No-op when running outside a ZUV bundle (no ZUV_CACHE_ROOT)."""
-    path = sentinel_path()
-    if path is None:
-        return
-    try:
-        if enabled:
-            path.unlink(missing_ok=True)
-        else:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.touch(exist_ok=True)
-    except OSError as e:
-        log.warning("Could not update %s: %s", SENTINEL, e)
-
 
 class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
@@ -82,25 +47,38 @@ class SystemTab(SettingsTab):
             classes="hint",
         )
 
-        if sentinel_path() is not None:
-            yield Label(t("Updates"), classes="section")
-            with Horizontal(classes="row"):
-                yield Switch(value=self.settings.check_for_updates, id="check_for_updates")
-                yield Label(t("Check for updates at launch"))
-            yield Label(
-                t("When off, ZUV will not prompt for updates on startup. "
-                  "Toggle on and restart the app to check for a new release."),
-                classes="hint",
-            )
+        yield Label(t("Updates"), classes="section")
+        with Horizontal(classes="row"):
+            yield Switch(value=self.settings.check_for_updates, id="check_for_updates")
+            yield Label(t("Automatically check for updates"))
+        with Horizontal(classes="row"):
+            yield Switch(value=self.settings.auto_download_updates, id="auto_download_updates")
+            yield Label(t("Download updates in the background"))
+        yield Label(t("Update status: idle"), id="update-status", classes="hint")
+        yield ProgressBar(total=100, show_eta=False, id="update-progress")
+        with Horizontal(id="update-buttons"):
+            yield Button(t("Check now"), id="update-check")
+            yield Button(t("Download update"), id="update-action", disabled=True)
 
         yield from super().compose()
 
     def on_mount(self) -> None:
-        # Reconcile sentinel with stored setting in case the cache was wiped or
-        # the prefs file was edited externally.
-        if sentinel_path() is not None:
-            apply_sentinel(self.settings.check_for_updates)
         self._sync_controller_visibility()
+        self._update_timer = self.set_interval(0.5, self._refresh_update_status)
+
+    def _refresh_update_status(self) -> None:
+        snapshot = self.app._update_service.snapshot()
+        self.query_one("#update-status", Label).update(t(snapshot.message or "Update status: idle"))
+        self.query_one("#update-progress", ProgressBar).update(progress=snapshot.progress * 100)
+        action = self.query_one("#update-action", Button)
+        if snapshot.phase is UpdatePhase.AVAILABLE:
+            action.label = t("Download update")
+            action.disabled = False
+        elif snapshot.phase is UpdatePhase.READY:
+            action.label = t("Restart and install")
+            action.disabled = False
+        else:
+            action.disabled = True
 
     def _sync_controller_visibility(self) -> None:
         """Controller picking is meaningless while DSX owns the device, so swap the
@@ -209,11 +187,22 @@ class SystemTab(SettingsTab):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "controller-rescan":
             await self._rerender_controller()
+        elif event.button.id == "update-check":
+            self.app._update_service.check_now()
+        elif event.button.id == "update-action":
+            snapshot = self.app._update_service.snapshot()
+            if snapshot.phase is UpdatePhase.AVAILABLE:
+                self.app._update_service.download()
+            elif snapshot.phase is UpdatePhase.READY:
+                try:
+                    self.app._update_service.install_on_exit()
+                except Exception as exc:
+                    log.warning("Could not start update install: %s", exc)
+                    return
+                self.app.exit()
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         super().on_switch_changed(event)
-        if event.switch.id == "check_for_updates":
-            apply_sentinel(event.value)
-        elif event.switch.id == "use_dsx":
+        if event.switch.id == "use_dsx":
             self._sync_controller_visibility()
             log.info("DSX %s", "enabled" if event.value else "disabled")

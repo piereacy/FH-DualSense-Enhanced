@@ -164,7 +164,8 @@ class Settings:
     controller_lock_serial: str = ""
 
     # MARK: System - updates
-    check_for_updates: bool = False           # ZUV loader checks GitHub for a new release at launch
+    check_for_updates: bool = True            # built-in updater checks GitHub in the background
+    auto_download_updates: bool = False       # download only; installation still requires confirmation
 
     # MARK: System - DSX
     # When on, triggers go to DualSenseX over UDP instead of HID. Lets DSX (Steam)

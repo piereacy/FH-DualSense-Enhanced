@@ -55,12 +55,16 @@ def test_runtime_chrome_does_not_link_to_original_release_updates():
     assert original_releases not in _source("src/modules/tui/main.py")
 
 
-def test_standalone_modes_do_not_show_zuv_update_controls():
+def test_standalone_modes_show_builtin_update_controls_without_zuv_gate():
     gui = _source("src/modules/gui/system_tab.py")
     tui = _source("src/modules/tui/system_tab.py")
 
-    assert "if sentinel_path() is not None:" in gui
-    assert "if sentinel_path() is not None:" in tui
+    assert "sentinel_path" not in gui
+    assert "sentinel_path" not in tui
+    assert "UpdatePhase" in gui
+    assert "UpdatePhase" in tui
+    assert "Automatically check for updates" in gui
+    assert "Automatically check for updates" in tui
     assert "ZUV not found:" not in gui
     assert "ZUV not found:" not in tui
 

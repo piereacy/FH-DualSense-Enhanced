@@ -1,14 +1,13 @@
-"""System tab: extends SettingsTab with controller selection + update toggle."""
+"""System tab: controller selection, built-in updates, and app settings."""
 import logging
-import os
 import threading
-from pathlib import Path
 
 import customtkinter as ctk
 
 from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
+from modules.update import UpdatePhase
 
 from . import theme as T
 from . import widgets as W
@@ -16,34 +15,12 @@ from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 
 log = logging.getLogger("fhds")
 
-SENTINEL = ".zuv-update-disabled"
-
-
-def sentinel_path() -> Path | None:
-    root = os.environ.get("ZUV_CACHE_ROOT")
-    return Path(root) / SENTINEL if root else None
-
-
-def apply_sentinel(enabled: bool) -> None:
-    path = sentinel_path()
-    if path is None:
-        return
-    try:
-        if enabled:
-            path.unlink(missing_ok=True)
-        else:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.touch(exist_ok=True)
-    except OSError as e:
-        log.warning("Could not update %s: %s", SENTINEL, e)
-
-
 class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
     SHOW_RESET = False
     SHOW_ABOUT = False
     SHOW_EXPERIMENTAL = False
-    PAGE_TITLE = "System"
+    PAGE_TITLE = "System and updates"
     PAGE_SUBTITLE = "Controller, updates, and app-level options."
 
     def __init__(self, parent, app):
@@ -52,19 +29,22 @@ class SystemTab(SettingsTab):
         self._radio_holder: "W.FastScroll | None" = None
         self._radio_buttons: list[ctk.CTkRadioButton] = []
         self._update_switch: ctk.CTkSwitch | None = None
+        self._auto_download_switch: ctk.CTkSwitch | None = None
+        self._update_status: ctk.CTkLabel | None = None
+        self._update_progress: ctk.CTkProgressBar | None = None
+        self._update_action: ctk.CTkButton | None = None
+        self._release_button: ctk.CTkButton | None = None
         self._controller_card: "W.Card | None" = None
         self._dsx_note: "W.Hint | None" = None
         self._updates_card: "W.Card | None" = None
         super().__init__(parent, app)
-        if sentinel_path() is not None:
-            apply_sentinel(self.settings.check_for_updates)
         threading.Thread(target=self._enumerate_async, daemon=True).start()
+        self.app.root.after(250, self._refresh_update_status)
 
     def _build(self):
         self._build_controller_card()
         self._build_dsx_note()
-        if sentinel_path() is not None:
-            self._build_updates_card()
+        self._build_updates_card()
         # Standard sections from SYSTEM_SECTIONS
         super()._build()
         # Run after every card exists so the DSX/controller swap can reference them.
@@ -129,17 +109,42 @@ class SystemTab(SettingsTab):
         W.H2(card, t("Updates")).pack(anchor="w", padx=T.PAD_MD,
                                       pady=(T.PAD_MD, T.PAD_SM))
         self._update_switch = ctk.CTkSwitch(card,
-                                            text=t("Check for updates at launch"),
+                                            text=t("Automatically check for updates"),
                                             command=self._on_update_toggle)
         if self.settings.check_for_updates:
             self._update_switch.select()
         self._update_switch.pack(anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_XS))
+        self._auto_download_switch = ctk.CTkSwitch(
+            card,
+            text=t("Download updates in the background"),
+            command=self._on_auto_download_toggle,
+        )
+        if self.settings.auto_download_updates:
+            self._auto_download_switch.select()
+        self._auto_download_switch.pack(anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_SM))
         W.Hint(
             card,
-            t("When off, ZUV will not prompt for updates on startup. "
-              "Toggle on and restart the app to check for a new release."),
+            t("The standalone EXE can update itself. Background download never restarts the app without confirmation."),
             wrap=self.app.px(640),
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
+
+        self._update_status = W.Body(card, t("Update status: idle"))
+        self._update_status.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
+        self._update_progress = ctk.CTkProgressBar(card, height=8)
+        self._update_progress.set(0)
+        self._update_progress.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
+
+        actions = ctk.CTkFrame(card, fg_color="transparent")
+        actions.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+        W.SecondaryButton(
+            actions, t("Check now"), self._on_check_update, width=120
+        ).pack(side="left", padx=(0, T.PAD_SM))
+        self._update_action = W.PrimaryButton(
+            actions, t("Download update"), self._on_update_action, width=150
+        )
+        self._release_button = W.GhostButton(
+            actions, t("View release"), self._open_update_release, width=120
+        )
 
     # MARK: controller list -------------------------------------------------
 
@@ -242,7 +247,58 @@ class SystemTab(SettingsTab):
             self.settings.check_for_updates = value
             preferences.save(self.settings)
             log.info("check_for_updates = %s", value)
-        apply_sentinel(value)
+
+    def _on_auto_download_toggle(self):
+        if self._auto_download_switch is None:
+            return
+        value = bool(self._auto_download_switch.get())
+        if self.settings.auto_download_updates != value:
+            self.settings.auto_download_updates = value
+            preferences.save(self.settings)
+            log.info("auto_download_updates = %s", value)
+
+    def _on_check_update(self):
+        self.app._update_service.check_now()
+
+    def _on_update_action(self):
+        snapshot = self.app._update_service.snapshot()
+        if snapshot.phase is UpdatePhase.AVAILABLE:
+            self.app._update_service.download()
+        elif snapshot.phase is UpdatePhase.READY:
+            try:
+                self.app._update_service.install_on_exit()
+            except Exception as exc:
+                log.warning("Could not start update install: %s", exc)
+                self.app.toast(t("Could not start update: {error}").format(error=exc))
+                return
+            self.app._quit()
+
+    def _open_update_release(self):
+        release = self.app._update_service.snapshot().release
+        if release is not None and release.html_url:
+            self.app._open_url(release.html_url)
+
+    def _refresh_update_status(self):
+        if self.app._tearing_down:
+            return
+        snapshot = self.app._update_service.snapshot()
+        if self._update_status is not None:
+            self._update_status.configure(text=t(snapshot.message or "Update status: idle"))
+        if self._update_progress is not None:
+            self._update_progress.set(snapshot.progress)
+        if self._update_action is not None:
+            self._update_action.pack_forget()
+            if snapshot.phase is UpdatePhase.AVAILABLE:
+                self._update_action.configure(text=t("Download update"), state="normal")
+                self._update_action.pack(side="left", padx=(0, T.PAD_SM))
+            elif snapshot.phase is UpdatePhase.READY:
+                self._update_action.configure(text=t("Restart and install"), state="normal")
+                self._update_action.pack(side="left", padx=(0, T.PAD_SM))
+        if self._release_button is not None:
+            self._release_button.pack_forget()
+            if snapshot.release is not None:
+                self._release_button.pack(side="left")
+        self.app.root.after(250, self._refresh_update_status)
 
     def _refresh_widgets(self):
         super()._refresh_widgets()
@@ -253,6 +309,13 @@ class SystemTab(SettingsTab):
                     self._update_switch.select()
                 else:
                     self._update_switch.deselect()
+        if self._auto_download_switch is not None:
+            want_download = bool(self.settings.auto_download_updates)
+            if bool(self._auto_download_switch.get()) != want_download:
+                if want_download:
+                    self._auto_download_switch.select()
+                else:
+                    self._auto_download_switch.deselect()
         if self._lock_var is not None:
             self._lock_var.set(self.settings.controller_lock_serial or "")
             self._render_radio_buttons()

@@ -15,6 +15,9 @@ from modules.config import preferences, profiles
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.config.preferences import _release_version
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.update import UpdateService
+from modules.update.install import cleanup_previous_update
+from modules.gui.variants import current_variant
 
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
@@ -92,6 +95,10 @@ class TriggerTUI(App):
         self._tearing_down = False
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
+        self._update_service = UpdateService(
+            settings, variant=current_variant().key
+        )
+        cleanup_previous_update()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -133,6 +140,7 @@ class TriggerTUI(App):
         self.refresh_profile()
         # MARK: keep handle so on_unmount can stop the poller before backend teardown
         self._status_timer = self.set_interval(1.0, self.refresh_status)
+        self._update_service.start_background()
         log.info("Starting controller and telemetry listener...")
         self.call_after_refresh(self._start_backend)
 
@@ -148,6 +156,7 @@ class TriggerTUI(App):
             if isinstance(h, _LogHandler):
                 root.removeHandler(h)
         self._stop.set()
+        self._update_service.stop()
         if self._thread:
             self._thread.join(timeout=2.0)
         self._usb_audio_lifecycle.close()

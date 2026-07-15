@@ -186,7 +186,7 @@ class SettingsTab(ctk.CTkFrame):
     SHOW_RESET = True
     SHOW_ABOUT = True
     SHOW_EXPERIMENTAL = True
-    PAGE_TITLE = "Settings"
+    PAGE_TITLE = "Grip haptics and tuning"
     PAGE_SUBTITLE = "All changes save instantly."
 
     def __init__(self, parent, app):

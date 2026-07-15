@@ -1,36 +1,36 @@
-"""Design tokens for the GUI: colors, spacing, icon glyphs, font sizes.
+"""R4 Miku-inspired GUI design tokens.
 
-Discord-dark inspired palette. Single source of truth - never hardcode
-colors elsewhere; import from here.
+This is a color-language reference only. No character art, branded font, or
+third-party visual asset is bundled. Never hardcode page colors elsewhere.
 """
 
 # Background tiers ---------------------------------------------------------
-BG_DEEP   = ("#fafafa", "#1e1f22")  # sidebar
-BG_MAIN   = ("#ffffff", "#313338")  # content area
-BG_PANEL  = ("#f2f3f5", "#2b2d31")  # cards
-BG_INPUT  = ("#ffffff", "#1e1f22")  # inputs / lists / log box
-BG_HOVER  = ("#e5e7eb", "#35373c")
-BG_ACTIVE = ("#d1d5db", "#404249")
+BG_DEEP   = ("#e8fbf9", "#101a1d")
+BG_MAIN   = ("#f7fffe", "#142327")
+BG_PANEL  = ("#edf9f8", "#193037")
+BG_INPUT  = ("#ffffff", "#0d181b")
+BG_HOVER  = ("#d9f4f1", "#214047")
+BG_ACTIVE = ("#c1eee9", "#28525a")
 
 # Borders
-BORDER = ("#e5e7eb", "#1e1f22")
+BORDER = ("#bfe6e2", "#285159")
 
 # Text
-TEXT       = ("#060607", "#f2f3f5")
-TEXT_MUTED = ("#4e5058", "#b5bac1")
-TEXT_FAINT = ("#6d6f78", "#80848e")
+TEXT       = ("#102b2d", "#eafdfc")
+TEXT_MUTED = ("#3f6668", "#a9cfcd")
+TEXT_FAINT = ("#67898a", "#739b9b")
 
-# Accent (Discord blurple)
-ACCENT       = "#5865f2"
-ACCENT_HOVER = "#4752c4"
-ACCENT_SOFT  = ("#5865f2", "#7983f5")
+# Accent (Miku teal)
+ACCENT       = "#39c5bb"
+ACCENT_HOVER = "#2da99f"
+ACCENT_SOFT  = ("#20a99f", "#86e8e1")
 
 # Semantic
-GREEN  = ("#1f8a3a", "#23a55a")
-YELLOW = ("#b45309", "#f0b132")
-RED    = ("#b91c1c", "#f23f43")
-PINK   = "#ff5fa2"
-BLUE   = ("#1e90ff", "#1e90ff")  # dodgerblue — DSX status
+GREEN  = ("#168a67", "#45d39e")
+YELLOW = ("#a36900", "#ffcc66")
+RED    = ("#b62b4a", "#ff6685")
+PINK   = "#ff6aa9"
+BLUE   = ("#228fc5", "#63c7f2")
 
 # Spacing tokens
 PAD_XS = 4
@@ -39,7 +39,7 @@ PAD_MD = 16
 PAD_LG = 24
 
 # Sizes
-SIDEBAR_W = 188
+SIDEBAR_W = 204
 HEADER_H  = 44
 
 # Font sizes
@@ -51,6 +51,10 @@ FS_TINY = 10
 
 # Icon glyphs
 ICON = {
+    "Overview": "\u25c8",
+    "Driving": "\U0001f3ce",
+    "Haptics": "\u224b",
+    "Lighting": "\u2726",
     "Controls": "\U0001F3AE",  # gamepad
     "Profiles": "\U0001F4CB",  # clipboard
     "Settings": "\u2699",        # gear

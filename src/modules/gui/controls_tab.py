@@ -49,7 +49,7 @@ class ControlsTab(ctk.CTkFrame):
         app.register_refresh(self._refresh_widgets)
 
     def _build(self):
-        W.PageHeader(self, t("Controls"),
+        W.PageHeader(self, t("Driving feedback"),
                      t("Toggle individual trigger effects. Changes save instantly.")
                      ).pack(fill="x", pady=(0, T.PAD_MD))
 

@@ -33,6 +33,8 @@ from modules.config import preferences, profiles
 from modules.config.preferences import _release_version
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.update import UpdateService
+from modules.update.install import cleanup_previous_update
 
 from . import theme as T
 from . import widgets as W
@@ -40,9 +42,11 @@ from .tray import TrayController
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
+from .overview_tab import OverviewTab
 from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
 from .system_tab import SystemTab
+from .variants import current_variant
 
 log = logging.getLogger("fhds")
 
@@ -51,7 +55,16 @@ HAPTIC_AMP_ON = 200
 HAPTIC_AMP_OFF = 120
 HAPTIC_DURATION_S = 0.10
 
-NAV_ITEMS = ("Controls", "Profiles", "Settings", "System", "Language", "Logs")
+NAV_ITEMS = ("Overview", "Driving", "Haptics", "Profiles", "System", "Language", "Logs")
+NAV_LABELS = {
+    "Overview": "Overview",
+    "Driving": "Driving feedback",
+    "Haptics": "Grip haptics",
+    "Profiles": "Profiles",
+    "System": "System and updates",
+    "Language": "Language",
+    "Logs": "Logs",
+}
 
 
 class _QueueLogHandler(logging.Handler):
@@ -71,6 +84,7 @@ class _QueueLogHandler(logging.Handler):
 class TriggerGUI:
     def __init__(self, settings):
         self.settings = settings
+        self.variant = current_variant()
         set_language(settings.language)
 
         # Runtime state
@@ -85,6 +99,10 @@ class TriggerGUI:
         self._log_queue: queue.Queue = queue.Queue(maxsize=4000)
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
+        self._update_service = UpdateService(
+            settings, variant=self.variant.key
+        )
+        cleanup_previous_update()
 
         # Theme + DPI
         ctk.set_appearance_mode("dark")
@@ -97,7 +115,7 @@ class TriggerGUI:
 
         # Window
         self.root = ctk.CTk()
-        self.root.title(APP_NAME)
+        self.root.title(f"{APP_NAME} · {self.variant.label}")
         self._set_window_icon()
         self._center_window()
         self._tray = TrayController(self.root, on_show=self._show_window, on_quit=self._quit)
@@ -222,7 +240,7 @@ class TriggerGUI:
             dpi = 1.0
         sw_u = sw / dpi
         sh_u = sh / dpi
-        base_w, base_h = 960, 660
+        base_w, base_h = self.variant.window_width, 700
         w_u = int(min(base_w, sw_u * 0.85))
         h_u = int(min(base_h, sh_u * 0.85))
         w_phys = int(w_u * dpi)
@@ -266,30 +284,57 @@ class TriggerGUI:
         body = ctk.CTkFrame(self.root, corner_radius=0, fg_color="transparent")
         body.pack(side="top", fill="both", expand=True)
 
-        sidebar = ctk.CTkFrame(body, width=T.SIDEBAR_W, corner_radius=0,
-                               fg_color=T.BG_DEEP)
-        sidebar.pack(side="left", fill="y")
-        sidebar.pack_propagate(False)
-
-        nav_box = ctk.CTkFrame(sidebar, fg_color="transparent")
-        nav_box.pack(side="top", fill="x", pady=(T.PAD_MD, 0))
+        if self.variant.navigation == "top":
+            nav_host = ctk.CTkFrame(
+                body, height=54, corner_radius=0, fg_color=T.BG_DEEP
+            )
+            nav_host.pack(side="top", fill="x")
+            nav_host.pack_propagate(False)
+            nav_box = ctk.CTkFrame(nav_host, fg_color="transparent")
+            nav_box.pack(fill="both", expand=True, padx=T.PAD_MD, pady=T.PAD_SM)
+            nav_side = "left"
+        else:
+            nav_host = ctk.CTkFrame(
+                body,
+                width=self.variant.sidebar_width,
+                corner_radius=0,
+                fg_color=T.BG_DEEP,
+            )
+            nav_host.pack(side="left", fill="y")
+            nav_host.pack_propagate(False)
+            nav_box = ctk.CTkFrame(nav_host, fg_color="transparent")
+            nav_box.pack(side="top", fill="x", pady=(T.PAD_MD, 0))
+            nav_side = "top"
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
         for key in NAV_ITEMS:
+            label = t(NAV_LABELS[key])
+            if self.variant.compact_nav:
+                text = f"{T.ICON[key]}  {label}"
+                anchor = "center"
+                width = self.variant.sidebar_width - 12
+            else:
+                text = f"  {T.ICON[key]}   {label}"
+                anchor = "w" if nav_side == "top" else "center"
+                width = 0
             btn = ctk.CTkButton(
-                nav_box, text=f"  {T.ICON[key]}   {t(key)}", anchor="w",
+                nav_box, text=text, anchor=anchor, width=width,
                 height=36, corner_radius=6,
                 fg_color="transparent", hover_color=T.BG_HOVER,
                 text_color=T.TEXT_MUTED,
                 font=ctk.CTkFont(size=T.FS_BODY),
                 command=lambda k=key: self._select_nav(k),
             )
-            btn.pack(side="top", fill="x", padx=T.PAD_SM, pady=2)
+            if nav_side == "top":
+                btn.pack(side="top", fill="x", padx=T.PAD_XS, pady=2)
+            else:
+                btn.pack(side="left", fill="x", expand=True, padx=T.PAD_XS, pady=2)
             self._nav_buttons[key] = btn
 
         self._content = ctk.CTkFrame(body, corner_radius=0, fg_color=T.BG_MAIN)
         self._content.pack(side="left", fill="both", expand=True)
 
+        self.overview_tab = OverviewTab(self._content, self)
         self.controls_tab = ControlsTab(self._content, self)
         self.profiles_tab = ProfilesTab(self._content, self)
         self.settings_tab = SettingsTab(self._content, self)
@@ -297,15 +342,16 @@ class TriggerGUI:
         self.lang_tab = LangTab(self._content, self)
         self.logs_tab = LogsTab(self._content, self)
         self._tab_frames = {
-            "Controls": self.controls_tab,
+            "Overview": self.overview_tab,
+            "Driving": self.controls_tab,
+            "Haptics": self.settings_tab,
             "Profiles": self.profiles_tab,
-            "Settings": self.settings_tab,
             "System":   self.system_tab,
             "Language": self.lang_tab,
             "Logs":     self.logs_tab,
         }
         self._active_nav: str | None = None
-        self._select_nav("Controls")
+        self._select_nav("Overview")
 
     def _select_nav(self, key: str):
         if key == self._active_nav:
@@ -324,6 +370,7 @@ class TriggerGUI:
 
     def run(self):
         self.root.after(0, self._start_backend)
+        self._update_service.start_background()
         self.root.after(100, self._tick_usb_audio)
         self.root.after(1000, self._tick_status)
         self.root.after(100, self._drain_logs)
@@ -384,6 +431,7 @@ class TriggerGUI:
             if isinstance(h, _QueueLogHandler):
                 root.removeHandler(h)
         self._stop.set()
+        self._update_service.stop()
         if self._thread:
             self._thread.join(timeout=2.0)
         self._usb_audio_lifecycle.close()

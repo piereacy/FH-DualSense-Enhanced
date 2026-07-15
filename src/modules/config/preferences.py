@@ -41,6 +41,7 @@ GLOBAL_FIELDS = frozenset({
     "minimize_to_tray",
     "game_poll_interval_s",
     "check_for_updates",
+    "auto_download_updates",
     "language",
     "controller_lock_serial",
     "use_dsx",

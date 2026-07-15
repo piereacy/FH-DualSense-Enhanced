@@ -1,0 +1,107 @@
+"""At-a-glance status and shortcuts shared by all R4 GUI shells."""
+from __future__ import annotations
+
+import customtkinter as ctk
+
+from lang import t
+from modules.config import profiles
+
+from . import theme as T
+from . import widgets as W
+
+
+class OverviewTab(ctk.CTkFrame):
+    def __init__(self, parent, app):
+        super().__init__(parent, fg_color="transparent")
+        self.app = app
+        self.settings = app.settings
+        self._build()
+        app.register_refresh(self.refresh)
+
+    def _build(self):
+        W.PageHeader(
+            self, t("Overview"),
+            t("Controller, telemetry, profile, and update status at a glance."),
+        ).pack(fill="x", pady=(0, T.PAD_MD))
+
+        status = ctk.CTkFrame(self, fg_color="transparent")
+        status.pack(fill="x")
+        for col in range(3):
+            status.grid_columnconfigure(col, weight=1, uniform="overview")
+
+        _, self.controller_value, self.controller_hint = self._status_card(
+            status, 0, t("DualSense"), t("Waiting"), t("USB or Bluetooth")
+        )
+        _, self.telemetry_value, self.telemetry_hint = self._status_card(
+            status, 1, t("Forza telemetry"), t("Waiting for packets"), t("UDP data out")
+        )
+        _, self.profile_value, _ = self._status_card(
+            status, 2, t("Active profile"), "-", t("Changes save instantly")
+        )
+
+        quick = W.Card(self)
+        quick.pack(fill="x", pady=(T.PAD_MD, 0))
+        W.H2(quick, t("Quick access")).pack(
+            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
+        )
+        row = ctk.CTkFrame(quick, fg_color="transparent")
+        row.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+        W.PrimaryButton(
+            row, text=t("Driving feedback"), command=lambda: self.app._select_nav("Driving")
+        ).pack(side="left", padx=(0, T.PAD_SM))
+        W.SecondaryButton(
+            row, text=t("Grip haptics"), command=lambda: self.app._select_nav("Haptics")
+        ).pack(side="left", padx=(0, T.PAD_SM))
+        W.SecondaryButton(
+            row, text=t("System and updates"), command=lambda: self.app._select_nav("System")
+        ).pack(side="left")
+
+        note = W.Card(self)
+        note.pack(fill="x", pady=(T.PAD_MD, 0))
+        W.H2(note, t("R4 workspace")).pack(
+            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
+        )
+        W.Hint(
+            note,
+            t("Every interface variant uses the same settings, haptic engine, and controller backend."),
+            wrap=self.app.px(760),
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+
+    @staticmethod
+    def _status_card(parent, column, title, value, hint):
+        card = W.Card(parent)
+        card.grid(row=0, column=column, sticky="nsew",
+                  padx=(0 if column == 0 else T.PAD_SM // 2,
+                        0 if column == 2 else T.PAD_SM // 2))
+        W.Hint(card, title).pack(anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_XS))
+        value_label = ctk.CTkLabel(
+            card, text=value, anchor="w", text_color=T.TEXT,
+            font=ctk.CTkFont(size=T.FS_H1, weight="bold"),
+        )
+        value_label.pack(fill="x", padx=T.PAD_MD)
+        hint_label = W.Hint(card, hint)
+        hint_label.pack(anchor="w", padx=T.PAD_MD, pady=(T.PAD_XS, T.PAD_MD))
+        return card, value_label, hint_label
+
+    def refresh(self):
+        ds = getattr(self.app, "_ds", None)
+        if ds is not None and ds.connected:
+            self.controller_value.configure(text=t("Connected"))
+            self.controller_hint.configure(
+                text=t("Transport: {transport}").format(
+                    transport=(ds.transport or "?").upper()
+                )
+            )
+        else:
+            self.controller_value.configure(text=t("Waiting"))
+            self.controller_hint.configure(text=t("USB or Bluetooth"))
+
+        listener = getattr(self.app, "_listener", None)
+        if listener is not None and not getattr(listener, "lost", False):
+            self.telemetry_value.configure(text=t("Listening"))
+        else:
+            self.telemetry_value.configure(text=t("Waiting for packets"))
+        self.telemetry_hint.configure(
+            text=t("UDP port {port}").format(port=self.settings.udp_port)
+        )
+        self.profile_value.configure(text=profiles.active_name())
