@@ -27,6 +27,7 @@
 - GUI/TUI 字段顺序一致，TUI Controls 分组标题现也经过翻译层。德语、日语、俄语、土耳其语、简体中文和繁体中文均已补齐新文案。
 - 临时夹具名 `community_defaults_2323.json` 已改为正式 `community_defaults.json`。
 - 根 `README.md` 的同页中/英/日说明、`docs/ReadmeEN.md`、`docs/ReadmeJA.md` 和 `.github/workflows/release.yml` 已更新为 Enhanced R3。Release body 包含中文功能说明、英文安装信息、上游 `1.6.2` 和 HorizonHaptics `1.3.0` 参考版本。
+- GitHub 上既有 `v1.6.2.post1`（Enhanced R1）、`R2` 和 `R2-preview` Release body 已补充中文功能与安装说明，并保留原英文正文、资产、tag 和 prerelease 状态。
 - 新建 `docs/DECISIONS.md`，记录原生振动接管延期、握把换挡独立默认关闭和红线 1.5 信号增益决策。
 
 ## 已继承且未破坏的能力
