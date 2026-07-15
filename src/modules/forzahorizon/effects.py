@@ -106,6 +106,7 @@ class TriggerAnimations:
     def __init__(self):
         self._prev_gear = None
         self._shift_until = 0.0
+        self._rev_until = 0.0
         self._wheelspin_active = False
         self._wheelspin_ewma = _AsymmetricEwma()
         self._abs_until = 0.0
@@ -114,6 +115,7 @@ class TriggerAnimations:
     def reset_transients(self):
         self._prev_gear = None
         self._shift_until = 0.0
+        self._rev_until = 0.0
         self._wheelspin_active = False
         self._wheelspin_ewma.reset()
         self._abs_until = 0.0
@@ -132,6 +134,29 @@ class TriggerAnimations:
         if pedal >= (wall_engage_at + RAW_MAX) // 2:
             return vibrate_zones(_amp_to_strength(s.gear_shift_amp), 0, s.wall_zones)
         return vibrate(s.gear_shift_freq, s.gear_shift_amp)
+
+    def rev_buzz(self, t, s, now):
+        """Return the R2 trigger rev-limiter vibration while throttle is held."""
+        throttle_active = t["accel"] >= max(1, s.accel_deadzone)
+        if not s.enable_rev_limiter or not throttle_active:
+            self._rev_until = 0.0
+            return None
+
+        handbrake_full_throttle = (
+            t["accel"] >= RAW_MAX * 0.8
+            and t["handbrake"] > 16
+            and t["speed"] < 1
+        )
+        if handbrake_full_throttle:
+            return vibrate(s.rev_limit_freq, s.rev_limit_amp)
+
+        max_rpm = t["max_rpm"]
+        rpm_ratio = t["rpm"] / max_rpm if max_rpm > 0 else 0.0
+        if rpm_ratio > s.rev_limit_ratio:
+            self._rev_until = now + max(0.0, s.rev_limit_hold_ms) / 1000.0
+        if now < self._rev_until:
+            return vibrate(s.rev_limit_freq, s.rev_limit_amp)
+        return None
 
     def idle_buzz(self, t, s, now):
         # Software-oscillated idle: alternate vibrate amp every half-period for a chug feel.
@@ -341,8 +366,9 @@ class Controller:
         1. Gear shift thump    - one-shot burst on every shift, brief
         2. Idle buzz           - stationary with light throttle
         3. Traction feedback   - accelerator/both-pedal longitudinal grip
-        4. Firmware end wall   - hard wall near 100% travel (hysteresis)
-        5. Throttle resistance - default rigid ramp 0..max_force
+        4. Rev limiter buzz    - high RPM while throttle remains active
+        5. Firmware end wall   - hard wall near 100% travel (hysteresis)
+        6. Throttle resistance - default rigid ramp 0..max_force
     """
 
     def __init__(self, settings):
@@ -423,11 +449,16 @@ class Controller:
         if traction is not None:
             return traction
 
-        # 4. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
+        # 4. Rev limiter buzz - engine state stays below tire-state feedback
+        rev = self.anim.rev_buzz(t, s, now)
+        if rev is not None:
+            return rev
+
+        # 5. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
         self._r2_in_wall = _wall_state(accel, self._r2_in_wall,
                                        s.throttle_wall_engage_at, s.throttle_wall_release_at)
         if self._r2_in_wall:
             return self.wall
 
-        # 5. Throttle resistance - default rigid ramp
+        # 6. Throttle resistance - default rigid ramp
         return self.anim.throttle_ramp(t, s)

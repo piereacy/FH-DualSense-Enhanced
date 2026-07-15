@@ -338,13 +338,91 @@ def test_r2_trigger_traction_still_uses_low_speed_raw_rotation():
     assert frame[0] == M_VIBRATE
 
 
-def test_r2_trigger_never_uses_rev_limiter_when_driven_wheels_have_grip():
+def test_rev_buzz_uses_trigger_frequency_strength_and_hold():
+    settings = Settings()
+    animation = TriggerAnimations()
+    high = _telemetry(rpm=9000.0, max_rpm=9000.0)
+    below = _telemetry(rpm=1000.0, max_rpm=9000.0)
+
+    frame = animation.rev_buzz(high, settings, 1.0)
+
+    assert frame[0] == M_VIBRATE
+    assert frame[1][:2] == (settings.rev_limit_freq, settings.rev_limit_amp)
+    assert animation.rev_buzz(below, settings, 1.119) == frame
+    assert animation.rev_buzz(below, settings, 1.121) is None
+
+
+def test_rev_buzz_requires_continuous_throttle_and_clears_hold_on_release():
+    settings = Settings()
+    animation = TriggerAnimations()
+    high = _telemetry(rpm=9000.0, max_rpm=9000.0)
+
+    assert animation.rev_buzz(high, settings, 1.0)[0] == M_VIBRATE
+    assert animation.rev_buzz({**high, "accel": 0}, settings, 1.01) is None
+    assert animation._rev_until == 0.0
+
+
+def test_rev_buzz_honors_switch_and_requires_positive_throttle_at_default_deadzone():
+    settings = Settings()
+    high = _telemetry(rpm=9000.0, max_rpm=9000.0, accel=0)
+    animation = TriggerAnimations()
+
+    assert animation.rev_buzz(high, settings, 1.0) is None
+
+    settings.enable_rev_limiter = False
+    assert animation.rev_buzz({**high, "accel": 255}, settings, 1.1) is None
+
+
+def test_rev_buzz_keeps_handbrake_full_throttle_special_case():
+    settings = Settings()
+    telemetry = _telemetry(
+        speed=0.0,
+        accel=204,
+        handbrake=255,
+        rpm=1000.0,
+        max_rpm=9000.0,
+    )
+
+    frame = TriggerAnimations().rev_buzz(telemetry, settings, 1.0)
+
+    assert frame[0] == M_VIBRATE
+    assert frame[1][:2] == (settings.rev_limit_freq, settings.rev_limit_amp)
+
+
+def test_reset_transients_clears_rev_hold():
+    settings = Settings()
+    animation = TriggerAnimations()
+    animation.rev_buzz(_telemetry(rpm=9000.0, max_rpm=9000.0), settings, 1.0)
+
+    animation.reset_transients()
+
+    assert animation._rev_until == 0.0
+
+
+def test_r2_trigger_uses_rev_limiter_when_traction_is_clear():
     settings = Settings()
     telemetry = _telemetry(rpm=9000.0, max_rpm=9000.0)
 
     frame = Controller(settings).R2(telemetry, settings, 1.0)
 
-    assert frame[0] != M_VIBRATE
+    assert frame[0] == M_VIBRATE
+    assert frame[1][:2] == (settings.rev_limit_freq, settings.rev_limit_amp)
+
+
+def test_r2_traction_keeps_priority_over_rev_limiter():
+    settings = Settings()
+    controller = Controller(settings)
+    telemetry = _telemetry(
+        rpm=9000.0,
+        max_rpm=9000.0,
+        tire_slip_ratio_rr=2.0,
+    )
+
+    controller.R2(telemetry, settings, 1.0)
+    frame = controller.R2(telemetry, settings, 1.04)
+
+    assert frame[0] == M_VIBRATE
+    assert frame[1][0] != settings.rev_limit_freq
 
 
 def test_abs_requires_brake_and_minimum_speed():
