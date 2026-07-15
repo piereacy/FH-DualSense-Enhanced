@@ -2,169 +2,138 @@
 
 ## 状态快照
 
-- 最后更新：2026-07-15，Asia/Shanghai。
+- 最后更新：2026-07-16，Asia/Shanghai。
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
-- 当前分支：`main`。R3 开发曾在隔离工作树 `.worktrees/r3-traction-redline` 完成，代码已快进合入。
-- 当前开发身份：内部 PEP 440 版本 `3`，运行时、Windows 版本资源和公开候选名称均为 `R3`。
-- 当前公开稳定版：Enhanced R3，tag `R3`，Release：`https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R3`。
-- R3 标签固定在 `61a99cc feat: finish R3 Bluetooth HD haptics`；不要为后续文档修改移动稳定标签。
-- 当前阶段：Enhanced R3 已正式发布。Bluetooth HD haptics 已完成生产代码、自动测试、硬件协议探针、完整 EXE 构建、用户 Forza 体验确认和 GitHub Actions 多平台发布。
+- 当前工作树：`work/hamza/.worktrees/r4-ui-updater-haptics`。
+- 当前分支：`feat/r4-ui-updater-haptics`。
+- 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `4`，公开候选名称 `Enhanced R4`。
+- 当前公开稳定版仍是 Enhanced R3，tag `R3` 固定在 `61a99cc feat: finish R3 Bluetooth HD haptics`。Enhanced R4 尚未发布，不得移动或覆盖 R3 tag。
+- 当前阶段：Enhanced R4 的三套前端、内置更新器、触觉扩展、灯效和 Bluetooth 细节改进已进入生产代码；全量回归、三个 Windows EXE 构建、哈希/版本资源检查和逐案启动冒烟均已完成，等待用户审阅本地候选。
 
 ## 当前开发重心
 
-当前重心已经转为 Enhanced R3 发布后的三项改进：红线握把振动调校、ZUV/启动器自动更新改良、GUI/TUI 前端体验优化。三项均尚未开始实现，下一次会话应分别设计，不能在没有新规格时同时重构。
+Enhanced R4 本地候选已经完成。当前重心是把三套 EXE 交给用户对比界面并在真实 Forza 中审阅红线、可选扳机层、灯效与 Bluetooth 细节；只有获得新的明确指令后才发布 R4。
 
 ## 最近完成的功能
 
-以下内容已有生产代码和自动测试证明：
+以下项目已经有生产代码和自动测试，但不等同于完成真实手柄手感验证：
 
-- 新增 `src/modules/haptics/pcm.py`：USB 与 Bluetooth 共用 65 Hz low、190 Hz composite high、动态 engine saw、相位和 `0.35` block smoothing。
-- `src/modules/haptics/audio.py` 改为由共享 `HapticPcmRenderer` 生成左右 PCM，USB 仍输出 48 kHz、512-frame、四声道中的 channel 3/4。
-- 新增 `src/modules/dualsense/bt_haptics.py`：构建 398 字节 report `0x36`，包含 63 字节 L2/R2 state、64 字节左右交错 int8 haptics、独立序列和 Bluetooth CRC；不声明 speaker block。
-- 新增 `src/modules/haptics/bt_audio.py`：以 3 kHz、32-frame、约 10.667 ms 周期生成 Bluetooth PCM，并通过 `DualSense` 单槽队列交给原 HID I/O thread 串行发送。
-- `HapticManager` 现在以 Bluetooth HD haptics 为首选；当前连接拒绝 `0x36` 时才回退到 compatible rumble，重连后重新尝试。禁用、切换和断开会发送静音采样。
-- Windows 定时器已改为 `time.sleep()` 高精度 waitable timer，并修复 HID wake event 的 clear/check 顺序。旧 `Event.wait()` 实测约 65 Hz、1.5 秒覆盖 48 块；当前实测平均 `10.668 ms`、最大 `11.204 ms`、零覆盖。
-- `src/modules/config/settings.py` 把隐藏的握把换挡冲击改成独立 Profile 功能：`enable_grip_gear_shift_haptics=False`、`grip_gear_shift_strength=0.8`、`grip_gear_shift_duration_ms=100.0`。
-- `src/modules/haptics/mixer.py` 只在开关启用、速度高于 `3 km/h`、正挡发生变化时产生双侧 low 冲击。关闭开关会立即清除 active deadline，但继续更新挡位基线，重新开启不会补发旧事件。
-- 握把换挡不再读取 R2 扳机键的 `enable_gear_shift`、`enable_gear_shift_brake`、`gear_shift_amp` 或 `gear_shift_duration_ms`。
-- R3 最终默认关闭 R2 扳机键红线、开启握把红线并只选择左握把；握把侧在基础幅度之后应用 `grip_redline_gain=1.5`，最终仍由 master、duck 和 `clamp01()` 限幅。该值表示信号倍率，不表示感知强度严格增加 50%。
-- `src/modules/config/preferences.py` 保留命名 Profile 的显式红线值，并为缺失字段的 Enhanced R2/早期 Enhanced R3 Profile 执行幂等迁移。Default Profile 每次启动使用新默认值。
-- GUI/TUI Controls 新增普通 `Grip feedback` 分组；普通 Settings 新增握把换挡强度和持续时间。原扳机分组明确命名为 `R2 trigger gear-shift thump`；只有 `Grip signal gain` 位于实验性设置。
-- GUI/TUI 字段顺序一致，TUI Controls 分组标题现也经过翻译层。德语、日语、俄语、土耳其语、简体中文和繁体中文均已补齐新文案。
-- 临时夹具名 `community_defaults_2323.json` 已改为正式 `community_defaults.json`。
-- 根 `README.md` 的同页中/英/日说明、`docs/ReadmeEN.md`、`docs/ReadmeJA.md` 和 `.github/workflows/release.yml` 已更新为 Enhanced R3。Release body 包含中文功能说明、英文安装信息、上游 `1.6.2` 和 HorizonHaptics `1.3.0` 参考版本。
-- GitHub 上既有 `v1.6.2.post1`（Enhanced R1）、`R2` 和 `R2-preview` Release body 已补充中文功能与安装说明，并保留原英文正文、资产、tag 和 prerelease 状态。
-- 新建 `docs/DECISIONS.md`，记录原生振动接管延期、握把换挡独立默认关闭和红线 1.5 信号增益决策。
+### 三种共享前端
 
-## 已继承且未破坏的能力
+- `src/modules/gui/variants.py` 定义 Miku Console、Miku Stage、Miku Studio；三者共用同一批 Tab、`Settings`、后端线程和 Profile 格式。
+- `src/modules/gui/theme.py` 集中定义以 `#39C5BB` 为主色的 Miku 青绿色令牌，没有打包角色图、字体或第三方商标素材。
+- Console 使用完整左侧文字导航；Stage 使用顶部导航；Studio 使用紧凑导航轨、短标签和 Tooltip。
+- `src/modules/gui/overview_tab.py` 提供手柄、遥测、Profile、更新器四张状态卡；新增 `LightingTab` 和独立“系统与更新”入口。
+- `packaging/windows/fhds.spec` 读取 `FHDS_BUILD_VARIANT`，内置 `data/ui_variant.txt` 并生成三个明确文件名。`.github/workflows/release.yml` 已改为调用统一批处理并上传三案。
 
-- 用户此前已完成真实 Forza 抓地力路由验证：只踩 L2 时进入 L2，只踩 R2 扳机键时进入 R2 扳机键，两者同时踩时进入 R2 扳机键；L2 ABS 可同时存在。
-- GT7 风格 ABS zoned wall、动态 EWMA/hysteresis、四类材质频带、G force damping 和低速烧胎识别保留。
-- R2 扳机键红线继续使用独立开关，要求踩住油门，松油门立即退出；本轮未修改 `src/modules/forzahorizon/effects.py`。
-- 碰撞 detector、方向包络、compatible fallback 的 priority-event 侧别投影和边沿日志保留；正常 Bluetooth 路径不再依赖该投影。
-- USB/BT `0x02`/`0x31` trigger layout、trigger flags、motor flags、pending rumble release 和 reconnect 保留；新增 `0x36` report、队列和序列状态，没有改变 `HapticMixer` 的 transport-independent frame。
-- DSX adapter 未修改；DSX 仍只提供扳机兼容路径，不提供本项目握把触觉。
+### Windows 内置更新器
+
+- `src/modules/update/model.py` 定义不可变 Release/状态快照和更新状态机。
+- `src/modules/update/github.py` 只筛选稳定 `R<n>` Release，要求当前 Miku 方案的 EXE 与同名 `.sha256`，限制响应/下载大小和超时，以 `.part` 下载并校验长度、SHA-256 与 `MZ` 头。
+- `src/modules/update/service.py` 在后台线程检查、下载和恢复待安装状态；自动检查默认开启，后台下载默认关闭，安装必须由用户确认。
+- `src/modules/update/install.py` 只允许冻结后的 Windows EXE 调度替换。源码、Linux 和 ZUV 运行的 GUI/TUI 更新操作被禁用并显示明确状态。
+- `packaging/windows/update_helper.py` 使用 Win32 `OpenProcess`/`WaitForSingleObject` 等待旧程序，执行 `.old` 备份、原子替换、重启和失败回滚。
+- Windows spec 内置独立 `FH-DualSense-Update-Helper.exe`；构建脚本为三个 EXE 分别生成 `.sha256`。
+
+### 触觉、扳机与灯效
+
+- 握把红线默认仍为左侧开启、R2 扳机键红线关闭；默认峰值改为 `220/255`、10 Hz、70% duty、low ratio `0.45`，进入后前 120 ms 叠加 `0.65` 起始冲击。
+- `grip_redline_gain=1.5` 继续兼容旧 Profile，但现在使用 `1 - (1 - base)^gain` 非线性曲线，避免线性放大后过早削顶。
+- `src/modules/forzahorizon/effects.py` 新增默认关闭的涡轮增压附加阻力、经 EWMA 的 G 力油门阻力、L2/R2 碰撞扳机冲击、松开扳机时的路面/减速带纹理。
+- `src/modules/loop.py` 每个 telemetry tick 只计算一次 `CollisionSignal`，同时传给 `Controller` 和 `HapticMixer`。
+- `src/modules/forzahorizon/lighting.py` 新增默认关闭的转速灯带、红线闪烁和挡位 Player LEDs；`ControllerVisualState` 同时进入 USB `0x02`、BT `0x31` 和 BT `0x36` state block，DSX 不写灯光。
+- Bluetooth 3 kHz renderer 在量化前使用归一化 `tanh` 软限幅；`BluetoothPcmQuantizer` 使用默认 `0.75` 一阶误差反馈保存低幅平均能量。398 字节、32 stereo frames、序列和 CRC 未改变。
+- 新增设置已进入 GUI/TUI、Profile/share code 和六个非英语目录；静态翻译审计在当前代码上未发现 GUI/TUI 常量键缺失。
+
+### 公开说明和发布准备
+
+- `README.md` 继续在同一页面集成简中、English、日本語，不恢复独立跳转式主页。
+- `docs/ReadmeEN.md`、`docs/ReadmeJA.md` 继续保留为独立镜像文档，但不作为根 README 的语言切换目标。
+- `.github/workflows/release.yml` 的 R4 Release body 已写入中文功能说明、三案文件名、更新器、Bluetooth 改进、上游 `1.6.2` 和 HorizonHaptics `1.3.0` 参考信息。
+- ZUV、`win_start.bat` 和 Linux 路径继续保留；Windows 独立 EXE 现在是 README 推荐入口。
 
 ## 正在进行的工作
 
-- Enhanced R3 业务实现与正式发布均已完成。
-- 本文件作为发布后交接提交追加到 `main`，不会移动已经发布的 `R3` 标签。
-- 红线调校、自动更新改良和前端优化仅记录为后续工作，当前没有对应未提交业务代码。
+- 本地候选已整理到工作区根部的 `outputs/FH-DualSense-Enhanced-R4-review/`，等待用户选择界面并进行真实游戏体验。
+- 当前代码、测试与文档准备提交到 `feat/r4-ui-updater-haptics`；Enhanced R4 仍未 tag、未推送 Release。
 
 ## 尚未完成的工作
 
-1. 单独设计并调校红线握把振动，重点改善节奏和从连续背景中辨认的能力。
-2. 单独设计 ZUV/启动器自动更新改良，明确独立 EXE 不自更新、ZUV 更新源、失败回退和用户可见状态。
-3. 单独设计 GUI/TUI 前端优化，先处理信息层级、普通设置与实验性功能导航，再考虑视觉改版。
-4. 本地 Linux ELF 构建和真实 Linux DualSense 验证尚未执行；R3 的 GitHub Actions Ubuntu ELF 构建已成功。
-
-以下事项明确不属于 Enhanced R3：
-
-- 接管或完整复现 Steam Input/Forza 原生振动。
-- R3 ZUV 的移除或替代方案；本轮继续保留现有 ZUV 链路。
-- DSX 握把适配和 DSX 实机调校。
-- 修改 `R2`、`R2-preview` tag、Release 或既有资产。
+1. 由用户进行真实 Forza 手感审阅。新红线、新扳机层、灯效和 Bluetooth 软限幅/误差反馈尚无 R4 实车评价。
+2. 三种窗口在当前桌面尺度已通过视觉冒烟，但 100%、125%、150% 三档 DPI 的逐档检查尚未执行。
+3. 真实 R4 到下一稳定版的更新替换需等后续 Release 资产才能端到端验证。
+4. 本地 Linux ELF 构建和真实 Linux DualSense 验证仍未执行。
+5. 24 小时更新节流、PE 版本解析、签名信任和应用内 Release 摘要保留为后续改进，不阻塞本地 R4 审阅。
 
 ## 当前已知 Bug 和待确认风险
 
-- 自动测试没有已知失败项。
-- 游戏内原生振动可能掩盖本项目的碰撞左右方向。用户此前确认关闭游戏内振动后方向可以辨认；Enhanced R3 不接管丢失的菜单、过场或上车原生振动。
-- 当前碰撞 detector 只使用 jerk 和 `smashable_vel_diff`。旧设计中的 speed-loss fallback 没有实现；只有真实日志证明漏报后才应重新设计。
-- Bluetooth `0x36` 已证明能实际驱动执行器且维持 94 Hz，完整 EXE 的 Forza 体验也已由用户确认可用；但没有逐项记录左右/纹理评分和 USB 同场景量化对照，因此不能把“物理输出完全一样”写成已验证事实。
-- 不同固件或 Bluetooth adapter 可能拒绝 398 字节 `0x36`。代码会回退 compatible rumble，但回退发生率尚无社区样本。
-- GitHub 过去曾漏掉部分 main/tag push 的 Actions event；Enhanced R2 使用手动 `stable` workflow 恢复发布入口，外部根因待确认。
-- 红线握把振动已经可辨认但节奏和辨识度仍不完美，R3 后续需要继续调校。
-- ZUV/启动器自动更新流程可用但仍需改良，避免用户难以理解独立 EXE、ZUV、本地 bundle 和更新频道之间的区别。
-- GUI/TUI 前端的信息层级和交互仍需优化，尤其是普通设置、实验性功能和运行状态之间的导航。
+- 更新器设计稿要求“最多每 24 小时检查一次”，当前 `UpdateService` 只在每次启动约 10 秒后检查，没有持久化节流，属于已确认未实现项。
+- 更新下载检查文件名、大小、SHA-256 与 `MZ` 头，但没有解析 PE 版本资源或验证代码签名；不能把后两项写成已实现。
+- GUI/TUI 不在应用内展开中文 Release body，只提供“查看 Release”链接；是否需要内嵌摘要待用户后续决定。
+- 当前没有一个已发布的 Enhanced R5 资产，因此真实“R4 EXE 检查并替换为下一稳定版”的端到端更新只能在后续 Release 环境验证。
+- 不同 DualSense 固件或 Bluetooth adapter 仍可能拒绝 398 字节 `0x36` 并回退 compatible rumble；社区发生率待确认。
+- 游戏/Steam Input 原生振动可能掩盖本项目碰撞方向。Enhanced R4 仍不接管菜单、CG、上车过场等原生振动。
+- 三案共享设置目录。若用户同时运行两个 EXE，会争用默认 UDP 端口 `5300`；这是并行运行限制，不是功能差异。
 
 ## 当前技术债
 
-- 遥测仍是无类型 `dict`，字段名错误只能在运行时暴露。
-- GUI/TUI 设置和控制组重复声明，依赖 AST parity test 防止漂移。
-- `wheelspin_*` 内部字段名与 traction/grip UI 术语不一致；直接重命名会破坏 Profile/share-code 兼容。
-- DSX 无 ACK 且没有 body haptics。
+- 遥测仍是无类型 `dict`；GUI/TUI 设置声明仍有重复，依赖测试防止漂移。
+- `wheelspin_*` 内部字段名与 traction/grip UI 术语不一致，直接重命名会破坏 Profile/share-code 兼容。
+- 更新器没有 24 小时节流、PE 版本解析、代码签名和应用内 Release 摘要。
+- `src/lang/` 仍保留旧 ZUV sentinel 的未使用翻译键。
+- Windows 三案通过同一 spec 循环构建，耗时较长；当前没有针对三案的 CI 启动截图或 DPI 自动化。
+- DSX 无 ACK、没有本项目 body haptics，也不接收灯效。
 - USB audio endpoint 依赖名称 heuristic，没有用户选择和多 host API fallback。
-- `0x36` haptics-only 封包依据 vDS、DS5Dongle、HID descriptor 和当前固件实测，Sony 没有公开该 PC 协议；旧固件兼容性仍依赖回退。
-- Bluetooth 音频调度依赖 Python 3.13 在 Windows 上的高精度 `time.sleep()`；其他 Python/平台的周期抖动需要单独测量。
-- 根 README 已集成三种语言，同时保留 `docs/ReadmeEN.md` 和 `docs/ReadmeJA.md`，存在内容漂移风险。
-- Release workflow 的正文直接写在 YAML 中，后续版本需要同步修改契约测试。
-- 本地 Windows 环境只有 `w64devkit` 简化 bash，无法证明 Linux ELF 构建或运行行为。
+- 根 README 与两个独立语言镜像重复内容，后续仍有漂移风险。
 
 ## 暂时不要修改的部分
 
-- 已验证的 `src/modules/dualsense/bt_haptics.py` report `0x36` offsets、state/haptics block、序列、CRC 和 haptics-only speaker omission；修改必须同步字节测试和真实硬件探针。
-- `src/modules/dualsense/main.py` 的 `0x02`/`0x31` layout、rumble flags、pending release、`0x36` 单槽队列和 event clear/check 顺序。
+- 已验证的 `src/modules/dualsense/bt_haptics.py` report `0x36` 长度、offset、序列、CRC 和 haptics-only speaker omission；变更必须同时有字节测试与真实硬件探针。
+- `src/modules/dualsense/main.py` 的 `0x02`/`0x31` trigger layout、pending compatible release、单槽队列和 event clear/check 顺序。
 - `src/modules/forzahorizon/udp_listener.py` 的 324 字节 offsets 与 `recv_latest()` drain 语义。
-- `src/modules/loop.py` 的 state-change write gate、静音和 body haptics failure isolation。
-- `src/modules/haptics/mixer.py` 中已经过用户验证的静止、滚动、烧胎、路面、悬挂和抓地力 gating。
-- `src/modules/config/preferences.py` 的 Default Profile 重建、GLOBAL_FIELDS、atomic write 和现有迁移分支。
-- `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名与第三方声明。
-- Enhanced R2 tag、Release、稳定资产和已发布算法默认值。
-- `R3` 已发布，后续修复不得覆盖或移动该稳定标签；新代码必须进入新的版本或明确的预发布频道。
+- `src/modules/loop.py` 的 shared `CollisionSignal`、状态改变写入 gate、静音和 body-haptics failure isolation。
+- 三案共用 Tab/Settings/backend 的边界；不要为视觉差异复制 `main.py` 或设置页面。
+- Windows updater 的当前方案资产锁定、`.sha256`、Helper 和 `.old` 回滚边界。
+- `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名、原项目与第三方声明。
+- 已发布 Enhanced R1/R2/R3 tag、Release 和资产。
 
 ## 最近涉及的关键文件
 
-- `src/modules/config/settings.py`、`src/modules/config/preferences.py`：新默认值和 Profile 迁移。
-- `src/modules/haptics/mixer.py`：握把红线增益和独立握把换挡状态机。
-- `src/modules/haptics/pcm.py`、`audio.py`、`bt_audio.py`、`manager.py`：共享 PCM、USB/Bluetooth transport 与 fallback。
-- `src/modules/dualsense/bt_haptics.py`、`main.py`：`0x36` 协议、HID 队列、调度和失败隔离。
-- `tests/haptics/test_pcm.py`、`test_bt_audio.py`、`test_manager.py`、`tests/dualsense/test_bt_haptics.py`、`test_output_report.py`：波形、协议、路由和 I/O 回归。
-- `src/modules/gui/controls_tab.py`、`settings_tab.py` 及对应 `src/modules/tui/` 文件：普通/实验性设置入口。
-- `src/lang/de.py`、`ja.py`、`ru.py`、`tr.py`、`zh.py`、`zh_tw.py`：新增界面文案。
-- `tests/haptics/test_mixer.py`、`tests/test_community_defaults.py`、`tests/test_haptic_settings.py`：行为、迁移、UI 和翻译契约。
-- `README.md`、`docs/ReadmeEN.md`、`docs/ReadmeJA.md`、`.github/workflows/release.yml`：Enhanced R3 公开说明和发布正文。
-- `AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DECISIONS.md`：老三样。
-- `docs/superpowers/specs/2026-07-15-r3-grip-shift-redline-defaults-design.md`：已批准并提交的设计。
-- `docs/superpowers/plans/2026-07-15-r3-grip-shift-redline-defaults.md`：已执行的实施计划。
+- 前端：`src/modules/gui/main.py`、`variants.py`、`theme.py`、`widgets.py`、`overview_tab.py`、`system_tab.py`、`lighting_tab.py`。
+- TUI：`src/modules/tui/main.py`、`system_tab.py`、`lighting_tab.py`。
+- 更新器：`src/modules/update/model.py`、`github.py`、`service.py`、`install.py`、`presentation.py`、`packaging/windows/update_helper.py`。
+- 触觉与扳机：`src/modules/haptics/mixer.py`、`pcm.py`、`bt_audio.py`、`src/modules/forzahorizon/effects.py`、`collision.py`、`lighting.py`、`src/modules/loop.py`。
+- HID：`src/modules/dualsense/main.py`、`bt_haptics.py`、`output_state.py`。
+- 配置/语言：`src/modules/config/settings.py`、`preferences.py`、`src/lang/*.py`。
+- 构建/发布：`src/pyproject.toml`、`src/uv.lock`、`packaging/windows/fhds.spec`、`build_exe.bat`、`.github/workflows/release.yml`。
+- 契约测试：`tests/test_updater.py`、`tests/gui/test_r4_frontend.py`、`tests/test_enhanced_distribution.py`、`tests/test_packaging_haptics.py`、`tests/test_about_and_release.py`。
+- 设计：`docs/superpowers/specs/2026-07-16-r4-frontend-variants-design.md`、`...r4-built-in-updater-design.md`、`...r4-haptics-expansion-design.md`。
 
 ## 当前 Git 工作区状态
 
-- `main` 与功能分支已经在 `61a99cc` 快进汇合并推送；稳定 `R3` 标签指向该提交。
-- 本发布后状态提交会使 `main` 前进，但不会改变 `R3` Release 的源码快照。
-- `feat/r3-traction-redline` 没有单独推送需求；R3 代码已经完整进入 `origin/main`。
-- `packaging/zuv/dist`、`packaging/windows/dist` 和 build 目录由 `.gitignore` 排除，不进入提交。
-- 当前仅有本发布后 `docs/PROJECT_STATE.md` 交接更新待提交；提交并推送后主工作树应保持干净。
+- 已提交的 R4 设计与实现节点：
+  - `0a9412e docs: design R4 frontend updater and haptics`
+  - `2259a5c feat: add R4 GUI variants and built-in updater`
+  - `3dd6e8d feat: expand R4 haptics and controller lighting`
+- `3dd6e8d` 之后的更新器 Windows 等待修复、运行时 gate、状态翻译、前端细节、R4 版本、打包、workflow、测试与文档改动正在整理为本地提交。
+- `packaging/windows/dist`、build、helper_dist 等生成目录应由 `.gitignore` 排除；最终提交前仍需确认没有产物进入 Git。
 
 ## 已执行的测试和验证结果
 
-- mixer、frame、迁移定向测试：`89 passed`。
-- GUI/TUI、迁移和 mixer 组合定向测试：`99 passed`。
-- README、Release、packaging 和 about 定向测试：`26 passed`。
-- 最终全量测试：`uv run --project src pytest -q` 为 `242 passed in 3.74s`。
-- 源码编译检查：`python -m compileall -q src/modules src/lang` 通过。
-- `git diff --check` 通过。
-- 包含本轮 Bluetooth HD haptics 的 Windows EXE 构建通过：
-  - 路径：`packaging/windows/dist/FH-DualSense-Enhanced-R3.exe`
-  - 大小：`37,812,228` bytes
-  - SHA-256：`E75386300055FA60C880DB0D04DE7357968775FD644052F11469FD5E372FE6E0`
-  - `FileVersion=R3`、`ProductVersion=R3`、`ProductName=FH-DualSense-Enhanced`
-  - `--help` 退出码 `0`
-  - PyInstaller recursive archive 已确认包含 `modules.dualsense.bt_haptics`、`modules.haptics.bt_audio`、`modules.haptics.pcm` 和 `docs/THIRD_PARTY_NOTICES.md`
-- update-enabled ZUV 构建通过：
-  - 路径：`packaging/zuv/dist/FH-DualSense-Enhanced.zuv.py`
-  - 大小：`1,333,389` bytes
-  - SHA-256：`4F678A5A376FF3D61632C6BC0C5BB105368F9955C071E5893E33924600ED5888`
-  - 内嵌更新仓库：`piereacy/FH-DualSense-Enhanced`
-- 用户此前已真实验证 Enhanced R3 抓地力踏板路由。
-- 用户此前确认碰撞方向在关闭游戏内振动后可以辨认，开启原生振动时可能被掩盖。
-- 本轮真实 Bluetooth 合成探针：bus `2`、DualSense PID `0x0ce6`。连续 100 个全零 `0x36` 全部被 HID 接受，连接保持、失败标志为 False、零覆盖。
-- 本轮真实 Bluetooth 左握把 `0.45` 探针：加速度计候选 offset `23` 的标准差从约 `13.1` 增至约 `1931.2`，证明 haptics-only `0x36` 实际驱动了执行器；探针未运行 Forza，游戏内振动和 Steam Input 状态不适用。
-- 本轮完整 manager/renderer/HID 链压力验证：`0x36` 平均发送间隔 `10.668 ms`，最大 `11.204 ms`，单槽覆盖 `0`，连接保持且 `bt_haptics_failed=False`；探针未运行 Forza，游戏内振动和 Steam Input 状态不适用。
-- 用户运行包含 Bluetooth HD haptics 的完整 R3 EXE 进入 Forza 后确认“完全没问题”。本次反馈没有记录游戏内振动开关和 Steam Input 状态，因此这两个环境条件标记为待确认；不能据此声称所有电脑、固件和适配器都与 USB 完全一致。
-- GitHub Actions run `29426936667` 成功，`prepare`、ZUV bundle、Windows EXE、Ubuntu ELF 和 Release jobs 全部通过。tag push 事件没有自动生成运行，因此使用仓库既有 `workflow_dispatch channel=stable` 恢复入口；只创建了一份正式 R3 Release。
-- 线上 Release 为正式版，`isDraft=false`、`isPrerelease=false`，发布时间为 2026-07-15 23:14:19 Asia/Shanghai；中文正文包含默认红线开关、Bluetooth `0x36`、上游 `1.6.2`、HorizonHaptics `1.3.0` 和 vDS `0.3.0-rc7` 说明。
-- 线上资产共 7 个：Windows EXE、Linux ELF、ZUV、Windows/Linux 启动器、`LICENSE` 和 `THIRD_PARTY_NOTICES.md`。Windows EXE 为 `37,656,144` bytes，GitHub digest 为 `a181bd56884e995b5df577e55fbfac6028e8db57f9b8e84a4e338454482c4ecc`；Linux ELF digest 为 `8a0dd916dba51bcfe60d76fa0d880e42c0781890f9ab2204fa74372707f82baa`；ZUV digest 为 `6ea29fe386cc24a8bc1cece59a5dedb2bc878b90898b67e9cb182d5cc1971f8a`。
-- Windows EXE 下载 URL 经 302 跳转后返回 `200 OK`、`Content-Length: 37656144`。当前本机完整下载随后遇到连接重置，因此未再次执行线上 EXE 的本地哈希和 `--help`；本地同提交构建的 EXE 已完成版本和启动冒烟。
-
-## 尚未执行或未通过的验证
-
-- 本轮新增握把换挡开关/调教和红线 1.5 增益的 USB 实车验证：未执行。
-- Bluetooth Forza 的完整 EXE 用户体验已确认可用，但没有逐项记录左右/low/high/engine、碰撞、红线和各路面材质评分，也没有记录游戏内振动和 Steam Input 状态。
-- Bluetooth 与 USB 的严格同场景强度量化对照未执行；当前结论是用户主观体验通过，不是两个 transport 的物理输出完全相等。
-- 本地 Linux ELF 构建：未执行。本机 `bash.exe` 来自 Windows `w64devkit`，不是可用于验证 Linux 产物的 Linux 环境。
-- 真实 Linux DualSense 硬件验证：未执行。
-- GitHub Actions 使用旧版 action 时出现 Node.js 20 弃用警告，但本次所有 job 均成功；后续应升级 action 版本以消除警告。
-- 线上 EXE 的完整本地重新下载与哈希复核因当前网络连接重置未完成；GitHub 已提供资产 digest，下载 URL 和 Content-Length 已验证。
+- 在 `3dd6e8d` 触觉/灯效实现节点运行全量测试：`274 passed`。
+- 更新器与 Helper 定向测试在后续修复后：`14 passed`。
+- R4 前端、更新器、设置组合定向测试：`36 passed`。
+- 早期 packaging/updater 契约的 4 个文档失败已随 README/Release body 修正；最终全量测试覆盖这些用例并通过。
+- 静态翻译键审计在六个非英语目录未发现当前 GUI/TUI 常量键缺失。
+- 当前工作树最终全量测试：`uv run --project src pytest -q` 为 `282 passed in 3.94s`。
+- `python -m compileall -q src/modules src/lang` 与 `git diff --check` 通过；Git 只提示工作树未来可能进行 LF/CRLF 转换，没有空白错误。
+- `packaging/windows/build_exe.bat` 完整执行成功，Helper 和三个 one-file EXE 均由 PyInstaller `6.21.0` 构建。Console archive 已确认包含 `data/FH-DualSense-Update-Helper.exe` 与 `data/ui_variant.txt`。
+- 三个 EXE 的 `FileVersion`/`ProductVersion` 都是 `R4`，`ProductName` 为 `FH-DualSense-Enhanced`，`OriginalFilename` 与各自方案文件名一致；三个配套 `.sha256` 均与实际文件匹配，`--help` 退出码均为 `0`：
+  - Console：`46,300,574` bytes，SHA-256 `09e8cf7c5026db5b38baabc5559ee7d63e2bbe1b483325d0bfc8a7185f6f7c27`。
+  - Stage：`46,300,567` bytes，SHA-256 `fc021f42255db771861b2413a89bd9bbccb60458bb6ea3382c661e1bc113fc2c`。
+  - Studio：`46,299,413` bytes，SHA-256 `6c89b77c74824bb23f975af19f6cafff95421142d10e85e28359269bd9625215`。
+- 三案逐一启动并正常退出：Console 显示完整左侧导航，Stage 显示顶部导航，Studio 显示紧凑导航；三者总览状态卡、系统与更新页和页面切换可用，Console 灯效页也已目视检查。更新控件在冻结 Windows EXE 中正确启用，自动检查开、后台下载关。没有生成 crash log，也没有残留主程序进程。
+- Enhanced R4 真实 USB/Bluetooth Forza 测试：尚未执行；游戏内振动状态、Steam Input 状态均未记录。
 
 ## 下一次会话开始时优先阅读
 
@@ -172,9 +141,8 @@
 2. 本文件 `docs/PROJECT_STATE.md`
 3. `docs/ARCHITECTURE.md`
 4. `docs/DECISIONS.md`
-5. `docs/superpowers/specs/2026-07-15-r3-release-closeout-design.md`
-6. `docs/superpowers/specs/2026-07-15-r3-bluetooth-hd-haptics-design.md`
-7. `docs/superpowers/plans/2026-07-15-r3-bluetooth-hd-haptics.md`
-8. `.github/workflows/release.yml`
+5. 三份 `docs/superpowers/specs/2026-07-16-r4-*.md`
+6. `src/modules/update/`、`src/modules/gui/variants.py`、`packaging/windows/build_exe.bat`
+7. `git status --short --branch`、`git diff` 和最近 10 条提交
 
-下一次会话建议首先处理的具体任务：先为红线握把振动建立独立调校规格并收集可重复的 Forza 场景，再依次处理自动更新体验和前端信息架构，不要把三项混成一次大改。
+下一次会话建议首先处理的具体任务：读取用户对 Console、Stage、Studio 与真实 Forza 手感的审阅结果；记录连接方式、游戏内振动和 Steam Input 状态后再调参。没有新的发布指令时，不要自动 tag 或发布 Enhanced R4。

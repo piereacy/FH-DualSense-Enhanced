@@ -127,31 +127,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
-      - name: Build FH-DualSense-Enhanced.exe
+      - name: Build three FH-DualSense-Enhanced EXE variants
         shell: pwsh
         run: |
-          uvx --from "pyinstaller>=6.11.1" `
-              --with customtkinter --with textual `
-              --with hidapi --with psutil --with dotenv `
-              --with pystray --with pillow `
-              --with numpy --with sounddevice `
-              pyinstaller "$Env:GITHUB_WORKSPACE\packaging\windows\fhds.spec" `
-              --distpath "$Env:GITHUB_WORKSPACE\packaging\windows\dist" `
-              --workpath "$Env:GITHUB_WORKSPACE\packaging\windows\build" `
-              --noconfirm --clean
-
-      - name: Rename EXE with version
-        shell: pwsh
-        run: |
-          $tag = "${{ needs.prepare.outputs.tag }}"
-          $dest = "packaging\windows\dist\FH-DualSense-Enhanced-$tag.exe"
-          Move-Item -Force "packaging\windows\dist\FH-DualSense-Enhanced.exe" $dest
-          Write-Host "Built $dest"
+          & "$Env:GITHUB_WORKSPACE\packaging\windows\build_exe.bat"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
         with:
           name: exe
-          path: packaging/windows/dist/FH-DualSense-Enhanced-*.exe
+          path: |
+            packaging/windows/dist/FH-DualSense-Enhanced-*.exe
+            packaging/windows/dist/FH-DualSense-Enhanced-*.exe.sha256
 
   # MARK: Linux standalone ELF -------------------------------------------
   elf:
@@ -217,47 +204,47 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: true
           body: |
-            ## Enhanced R3 中文说明
+            ## Enhanced R4 中文说明
 
-            Enhanced R3 在 Enhanced R2 的动态扳机基础上加入按踏板状态路由的抓地力反馈：只踩刹车进入 L2，只踩油门进入 R2 扳机键，同时踩下时进入 R2 扳机键，L2 的 ABS 仍可独立介入。铺装、积水、泥土和碎石继续使用不同的材质频带。
+            Enhanced R4 将界面统一为初音未来青绿色视觉，并提供三个功能完全相同的 Windows EXE：`Miku Console` 使用完整左侧导航，`Miku Stage` 使用顶部导航，`Miku Studio` 使用紧凑工作台侧栏。三者共用同一套设置、Profile、遥测循环、触觉引擎和手柄后端，只改变信息布局。
 
-            R2 扳机键红线与握把红线现在拥有独立开关。默认关闭 R2 扳机键红线、开启握把红线；握把侧默认在左握把输出带 1.5 信号增益的断油脉冲。碰撞握把反馈加入方向包络；可选握把换挡冲击默认关闭，并使用独立的强度和持续时间普通设置。
+            Windows 独立 EXE 现在可以在“系统与更新”中检查更新、选择后台下载、显示进度，并在用户确认后重启安装。每个界面只下载同名的新版本 EXE，并要求 Release 同时提供匹配的 SHA-256；独立更新助手等待主程序退出后替换文件，失败时恢复 `.old`。ZUV 和启动脚本继续作为网络或 Linux 环境下的备用安装方式，不再是 Windows EXE 更新的必要条件。
 
-            USB 与 Bluetooth 现在共用同一套左右 PCM 波形。USB 继续使用手柄四声道音频端点；Bluetooth 通过 HID report 0x36 直接发送 3 kHz 双声道 HD haptics，保留路面纹理、发动机频率、红线波形和碰撞方向。如果当前连接拒绝 HD haptics，程序会自动回退到 compatible rumble，扳机不受影响。
+            红线握把反馈改为非线性感知增益，默认强度提高到 `220/255`，low 比例提高到 `45%`，脉冲宽度提高到 `70%`，并加入可调的进入冲击。默认关闭 R2 扳机键红线、开启握把红线；握把默认仍在左侧。可选握把换挡冲击继续默认关闭。
 
-            游戏内原生振动可以保留菜单和过场反馈，但可能掩盖本项目的左右碰撞方向。验证方向或排查重复振动时，请关闭游戏内振动进行比较。本项目目前不会接管或完整复现游戏原生振动。
+            新增的可选功能默认全部关闭，避免改变既有 Profile 手感：涡轮增压 R2 扳机键阻力、横纵向 G 力 R2 扳机键阻力、L2/R2 独立碰撞冲击、松开扳机键时的路面与减速带纹理、转速灯条和挡位 Player LEDs。每项都可独立开关和调节。碰撞检测由扳机与握把共享同一个事件，避免同一遥测帧被重复判定。
 
-            Enhanced R3 基于 Forza-Horizon-DualSense-Python 1.6.2，参考 HorizonHaptics 1.3.0，并使用 vDS 0.3.0-rc7 作为 Bluetooth HD haptics 协议参考。项目从 Enhanced R2 起使用独立 R 版本体系；历史 Enhanced R1 使用 1.6.2.post1。
+            USB 与 Bluetooth 继续使用同一套左右 PCM 语义。Bluetooth `0x36` 路径增加 soft limiter 和带误差反馈的 int8 量化器，尽量保留低幅路面细节和叠加瞬态；灯条和 Player LEDs 同样写入 USB、Bluetooth `0x31` 与 Bluetooth HD haptics `0x36` 的状态区。如果当前连接拒绝 `0x36`，程序仍会回退到 compatible rumble，扳机不受影响。
 
-            ## Enhanced R3 highlights
+            Enhanced R4 基于 Forza-Horizon-DualSense-Python 1.6.2，参考 HorizonHaptics 1.3.0，并使用 vDS 0.3.0-rc7 与 DS5Dongle 作为 Bluetooth HD haptics 协议参考。历史 Enhanced R1 使用 `1.6.2.post1`；从 Enhanced R2 起使用独立 R 版本体系。
 
-            Enhanced R3 routes dynamic traction feedback by pedal state while preserving the GT7-style L2 ABS wall, material-specific frequency bands, asymmetric EWMA smoothing, hysteresis, low-speed wheel rotation, and G-force damping introduced in Enhanced R2.
+            ## Windows 独立 EXE（推荐）
 
-            R2-trigger redline and grip redline now have independent switches. Trigger redline is off by default; grip redline is on by default on the left grip with a 1.5 signal gain. Directional collision haptics use a priority envelope. The optional grip gear-shift thump is off by default with independent normal settings for strength and duration.
+            任选一个下载即可，三者功能一致：
 
-            USB and Bluetooth now share the same stereo PCM waveform renderer. USB uses the controller's four-channel audio endpoint; Bluetooth sends 3 kHz stereo HD haptics directly through HID report 0x36, preserving road texture, engine frequency, redline waveform, and collision direction. If the current connection rejects HD haptics, the app falls back to compatible rumble without interrupting adaptive triggers. The Bluetooth protocol implementation references vDS 0.3.0-rc7.
+            - `${{ format('FH-DualSense-Enhanced-{0}-Miku-Console.exe', needs.prepare.outputs.tag) }}`
+            - `${{ format('FH-DualSense-Enhanced-{0}-Miku-Stage.exe', needs.prepare.outputs.tag) }}`
+            - `${{ format('FH-DualSense-Enhanced-{0}-Miku-Studio.exe', needs.prepare.outputs.tag) }}`
 
-            ## Recommended: launcher scripts
+            EXE 已包含 Python 和全部依赖，不需要 BAT、ZUV、uv 或本机 Python。请把对应 `.sha256` 文件留在 Release 中供内置更新器校验；用户手动启动 EXE 时不需要同时下载 `.sha256`。
 
-            Download **`win_start.bat`** on Windows or **`linux_start.sh`** on Linux and run it. The launcher downloads the ZUV application bundle, and the Windows launcher installs `uv` when needed. `uv` then provisions the managed Python runtime. The published ZUV checks this fork's releases for updates.
+            ## Enhanced R4 highlights
 
-            If the automatic download is unreliable, use the manual ZUV fallback: download **`FH-DualSense-Enhanced.zuv.py`** from this Release, place it beside the launcher, and run the launcher again.
+            Enhanced R4 adds three Miku-teal GUI layouts backed by one shared application runtime, a Windows-only in-app updater with variant pinning, SHA-256 verification, restart replacement, and rollback, plus stronger nonlinear grip-redline tuning.
 
-            ## Standalone binaries
+            New opt-in effects include turbo and G-force R2-trigger resistance, independent L2/R2 collision jolts, idle-trigger road texture, a tachometer lightbar, and gear Player LEDs. Bluetooth HD haptics now uses soft limiting and error-feedback int8 quantization to retain more low-level detail. All new effects are disabled by default and do not remove existing traction, GT7-style ABS wall, material bands, grip haptics, or compatible fallback behavior.
 
-            `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}` for Windows contains Python and all application dependencies. It can be downloaded and run by itself without BAT, ZUV, uv, or a system Python installation. It does not self-update.
+            ## ZUV / Linux 备用方式
 
-            `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}` is the standalone Linux build. It is built on Ubuntu, so older or substantially different distributions may need the ZUV launcher instead.
+            Windows 可下载 `win_start.bat`，Linux 可下载 `linux_start.sh`。启动器下载 `FH-DualSense-Enhanced.zuv.py`，Windows 启动器在需要时安装 `uv`。网络不稳定时，也可以手动下载 ZUV 本体并放到启动器旁边。Linux 独立文件为 `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`；内置 EXE 更新只支持 Windows 冻结版本。
 
-            ## Required setup
+            ## 必要设置
 
-            Enable Steam Input and DualSense vibration, then enable Forza Horizon Data Out at `127.0.0.1:5300`. Start FH-DualSense-Enhanced before launching the game. If no UDP packets arrive, allow the application and UDP 5300 through the firewall. Disable the firewall only for a short diagnostic comparison and turn it back on immediately. Disable in-game vibration when validating this project's directional collision output.
+            启用 Steam Input 和 DualSense vibration，然后在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`。先启动 FH-DualSense-Enhanced，再启动游戏。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300；只在短暂排查时关闭防火墙，随后立即恢复。验证本项目的方向碰撞时，关闭游戏内振动可避免 Steam Input 原生 rumble 掩盖左右差异。本项目仍不会接管或完整复现菜单、CG 和上车过场的游戏原生振动。
 
             ---
-            > **Heads up**
-            > - A manually downloaded ZUV can be kept next to the launcher script. The launcher copies it into its managed `app` folder.
-            > - Settings live in `data/user_preferences.json` next to the launcher and survive updates.
-            > - Linux: the launcher does not install system udev rules. If HID access is denied, download [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules), copy it to `/etc/udev/rules.d/`, reload the rules, and reconnect the controller.
-            > - Prerelease channel: run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to track rolling test builds.
+            > - 设置保存在程序旁边的 `data/user_preferences.json`，更新后继续保留。
+            > - Linux 启动器不会安装 udev 规则。HID 权限不足时，请下载 [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules)，复制到 `/etc/udev/rules.d/`，重新载入规则后连接手柄。
+            > - 预发布频道仍可通过 `uv run FH-DualSense-Enhanced.zuv.py --prerelease` 跟踪。
           files: release/*
 

@@ -317,3 +317,31 @@ STRINGS.update({
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "1 檔至 5 檔以上使用五顆白色玩家指示燈顯示。",
 })
+
+STRINGS.update({
+    "Overview": "總覽", "Drive": "駕駛", "Driving feedback": "駕駛回饋",
+    "Grip haptics": "握把觸覺", "Lights": "燈效", "Lang": "語言",
+    "System and updates": "系統與更新",
+    "Controller, telemetry, profile, and update status at a glance.": "集中查看控制器、遙測、設定檔和更新狀態。",
+    "Every interface variant uses the same settings, haptic engine, and controller backend.": "三種介面使用完全相同的設定、觸覺引擎和控制器後端。",
+    "Active profile": "目前設定檔", "Changes save instantly": "變更會即時儲存",
+    "Connected": "已連線", "Waiting": "等待中", "Listening": "監聽中",
+    "Waiting for packets": "等待遙測資料", "USB or Bluetooth": "USB 或 Bluetooth",
+    "Transport: {transport}": "連線方式：{transport}", "Forza telemetry": "Forza 遙測",
+    "UDP data out": "UDP Data Out", "UDP port {port}": "UDP 連接埠 {port}",
+    "Quick access": "快速入口", "R4 workspace": "R4 工作台", "DualSense": "DualSense",
+    "Profile": "設定檔", "Automatically check for updates": "自動檢查更新",
+    "Download updates in the background": "在背景下載更新", "Check now": "立即檢查",
+    "Download update": "下載更新", "Restart and install": "重新啟動並安裝",
+    "View release": "檢視 Release", "Update status: idle": "更新狀態：閒置",
+    "Built-in updater": "內建更新程式", "Windows EXE": "Windows EXE",
+    "Unavailable in this runtime": "目前執行方式不可用",
+    "Built-in updates require the Windows standalone EXE": "內建更新僅適用於 Windows 獨立 EXE",
+    "Checking for updates": "正在檢查更新", "You are up to date": "目前已是最新版本",
+    "Update available: {tag}": "發現新版本：{tag}", "Downloading update": "正在下載更新",
+    "Verifying update": "正在驗證更新", "Update ready to install": "更新已準備好安裝",
+    "Restarting to install": "正在重新啟動並安裝", "Update failed": "更新失敗",
+    "Could not start update: {error}": "無法啟動更新：{error}",
+    "Toggle individual trigger effects. Changes save instantly.": "個別切換每種扳機鍵效果，變更會即時儲存。",
+    "Lock the app to a specific DualSense, or let it pick the first one.": "將應用程式鎖定到指定 DualSense，或自動選擇第一個控制器。",
+})

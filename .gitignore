@@ -13,6 +13,9 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+packaging/windows/generated/
+packaging/windows/helper_build/
+packaging/windows/helper_dist/
 downloads/
 eggs/
 .eggs/

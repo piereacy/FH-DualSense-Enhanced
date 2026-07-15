@@ -5,6 +5,7 @@ import customtkinter as ctk
 
 from lang import t
 from modules.config import profiles
+from modules.update.presentation import localized_status
 
 from . import theme as T
 from . import widgets as W
@@ -26,7 +27,7 @@ class OverviewTab(ctk.CTkFrame):
 
         status = ctk.CTkFrame(self, fg_color="transparent")
         status.pack(fill="x")
-        for col in range(3):
+        for col in range(2):
             status.grid_columnconfigure(col, weight=1, uniform="overview")
 
         _, self.controller_value, self.controller_hint = self._status_card(
@@ -37,6 +38,9 @@ class OverviewTab(ctk.CTkFrame):
         )
         _, self.profile_value, _ = self._status_card(
             status, 2, t("Active profile"), "-", t("Changes save instantly")
+        )
+        _, self.update_value, self.update_hint = self._status_card(
+            status, 3, t("Updates"), t("Update status: idle"), t("Built-in updater")
         )
 
         quick = W.Card(self)
@@ -68,11 +72,14 @@ class OverviewTab(ctk.CTkFrame):
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
     @staticmethod
-    def _status_card(parent, column, title, value, hint):
+    def _status_card(parent, index, title, value, hint):
+        row, column = divmod(index, 2)
         card = W.Card(parent)
-        card.grid(row=0, column=column, sticky="nsew",
+        card.grid(row=row, column=column, sticky="nsew",
                   padx=(0 if column == 0 else T.PAD_SM // 2,
-                        0 if column == 2 else T.PAD_SM // 2))
+                        T.PAD_SM // 2 if column == 0 else 0),
+                  pady=(0 if row == 0 else T.PAD_SM // 2,
+                        T.PAD_SM // 2 if row == 0 else 0))
         W.Hint(card, title).pack(anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_XS))
         value_label = ctk.CTkLabel(
             card, text=value, anchor="w", text_color=T.TEXT,
@@ -105,3 +112,9 @@ class OverviewTab(ctk.CTkFrame):
             text=t("UDP port {port}").format(port=self.settings.udp_port)
         )
         self.profile_value.configure(text=profiles.active_name())
+        snapshot = self.app._update_service.snapshot()
+        self.update_value.configure(text=localized_status(snapshot, t))
+        self.update_hint.configure(
+            text=t("Windows EXE") if self.app._update_service.supported
+            else t("Unavailable in this runtime")
+        )

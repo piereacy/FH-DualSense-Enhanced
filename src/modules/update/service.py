@@ -24,16 +24,23 @@ def _current_version() -> int:
 
 
 class UpdateService:
-    def __init__(self, settings, *, variant: str, client=None):
+    def __init__(self, settings, *, variant: str, client=None, supported: bool = True):
         self.settings = settings
         self.variant = variant
+        self.supported = bool(supported)
         self.client = client or GitHubReleaseClient()
         self._lock = threading.Lock()
-        self._snapshot = UpdateSnapshot()
+        self._snapshot = UpdateSnapshot(
+            message=(
+                "Built-in updates require the Windows standalone EXE"
+                if not self.supported else ""
+            )
+        )
         self._worker: threading.Thread | None = None
         self._stop = threading.Event()
         self._last_sha256 = ""
-        self._load_pending()
+        if self.supported:
+            self._load_pending()
 
     def snapshot(self) -> UpdateSnapshot:
         with self._lock:
@@ -52,7 +59,10 @@ class UpdateService:
         return True
 
     def start_background(self, *, initial_delay: float = 10.0) -> None:
-        if not bool(getattr(self.settings, "check_for_updates", True)):
+        if (
+            not self.supported
+            or not bool(getattr(self.settings, "check_for_updates", True))
+        ):
             return
 
         def delayed_check():
@@ -73,6 +83,8 @@ class UpdateService:
         self._stop.set()
 
     def check_now(self) -> bool:
+        if not self.supported:
+            return False
         return self._start(lambda: self._check_impl(background=False), name="fhds-update-check")
 
     def _check_impl(self, *, background: bool) -> None:
@@ -106,6 +118,8 @@ class UpdateService:
             self._download_impl()
 
     def download(self) -> bool:
+        if not self.supported:
+            return False
         snapshot = self.snapshot()
         if snapshot.release is None:
             return False
@@ -207,6 +221,8 @@ class UpdateService:
                 pass
 
     def install_on_exit(self) -> Path:
+        if not self.supported:
+            raise RuntimeError("built-in updates require the Windows standalone EXE")
         snapshot = self.snapshot()
         if snapshot.phase is not UpdatePhase.READY or not snapshot.staged_path:
             raise RuntimeError("no verified update is ready")

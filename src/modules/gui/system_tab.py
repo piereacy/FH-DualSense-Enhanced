@@ -8,6 +8,7 @@ from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
 from modules.update import UpdatePhase
+from modules.update.presentation import localized_status
 
 from . import theme as T
 from . import widgets as W
@@ -108,9 +109,11 @@ class SystemTab(SettingsTab):
         card.pack(fill="x", pady=(0, T.PAD_MD))
         W.H2(card, t("Updates")).pack(anchor="w", padx=T.PAD_MD,
                                       pady=(T.PAD_MD, T.PAD_SM))
+        supported = self.app._update_service.supported
         self._update_switch = ctk.CTkSwitch(card,
                                             text=t("Automatically check for updates"),
-                                            command=self._on_update_toggle)
+                                            command=self._on_update_toggle,
+                                            state="normal" if supported else "disabled")
         if self.settings.check_for_updates:
             self._update_switch.select()
         self._update_switch.pack(anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_XS))
@@ -118,13 +121,18 @@ class SystemTab(SettingsTab):
             card,
             text=t("Download updates in the background"),
             command=self._on_auto_download_toggle,
+            state="normal" if supported else "disabled",
         )
         if self.settings.auto_download_updates:
             self._auto_download_switch.select()
         self._auto_download_switch.pack(anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_SM))
         W.Hint(
             card,
-            t("The standalone EXE can update itself. Background download never restarts the app without confirmation."),
+            t(
+                "The standalone EXE can update itself. Background download never restarts the app without confirmation."
+                if supported else
+                "Built-in updates require the Windows standalone EXE"
+            ),
             wrap=self.app.px(640),
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
 
@@ -136,9 +144,12 @@ class SystemTab(SettingsTab):
 
         actions = ctk.CTkFrame(card, fg_color="transparent")
         actions.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
-        W.SecondaryButton(
+        check_button = W.SecondaryButton(
             actions, t("Check now"), self._on_check_update, width=120
-        ).pack(side="left", padx=(0, T.PAD_SM))
+        )
+        if not supported:
+            check_button.configure(state="disabled")
+        check_button.pack(side="left", padx=(0, T.PAD_SM))
         self._update_action = W.PrimaryButton(
             actions, t("Download update"), self._on_update_action, width=150
         )
@@ -283,7 +294,7 @@ class SystemTab(SettingsTab):
             return
         snapshot = self.app._update_service.snapshot()
         if self._update_status is not None:
-            self._update_status.configure(text=t(snapshot.message or "Update status: idle"))
+            self._update_status.configure(text=localized_status(snapshot, t))
         if self._update_progress is not None:
             self._update_progress.set(snapshot.progress)
         if self._update_action is not None:

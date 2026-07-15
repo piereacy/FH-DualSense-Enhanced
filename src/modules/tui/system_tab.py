@@ -11,6 +11,7 @@ from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
 from modules.update import UpdatePhase
+from modules.update.presentation import localized_status
 
 from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 
@@ -31,6 +32,7 @@ class SystemTab(SettingsTab):
     """
 
     def compose(self) -> ComposeResult:
+        updater_supported = self.app._update_service.supported
         yield Label(t("Controller"), classes="section")
         # Skip blocking HID enumeration here; on_show() scans off-thread.
         self._devices = []
@@ -49,15 +51,27 @@ class SystemTab(SettingsTab):
 
         yield Label(t("Updates"), classes="section")
         with Horizontal(classes="row"):
-            yield Switch(value=self.settings.check_for_updates, id="check_for_updates")
+            yield Switch(
+                value=self.settings.check_for_updates,
+                id="check_for_updates",
+                disabled=not updater_supported,
+            )
             yield Label(t("Automatically check for updates"))
         with Horizontal(classes="row"):
-            yield Switch(value=self.settings.auto_download_updates, id="auto_download_updates")
+            yield Switch(
+                value=self.settings.auto_download_updates,
+                id="auto_download_updates",
+                disabled=not updater_supported,
+            )
             yield Label(t("Download updates in the background"))
         yield Label(t("Update status: idle"), id="update-status", classes="hint")
         yield ProgressBar(total=100, show_eta=False, id="update-progress")
         with Horizontal(id="update-buttons"):
-            yield Button(t("Check now"), id="update-check")
+            yield Button(
+                t("Check now"),
+                id="update-check",
+                disabled=not updater_supported,
+            )
             yield Button(t("Download update"), id="update-action", disabled=True)
 
         yield from super().compose()
@@ -68,7 +82,7 @@ class SystemTab(SettingsTab):
 
     def _refresh_update_status(self) -> None:
         snapshot = self.app._update_service.snapshot()
-        self.query_one("#update-status", Label).update(t(snapshot.message or "Update status: idle"))
+        self.query_one("#update-status", Label).update(localized_status(snapshot, t))
         self.query_one("#update-progress", ProgressBar).update(progress=snapshot.progress * 100)
         action = self.query_one("#update-action", Button)
         if snapshot.phase is UpdatePhase.AVAILABLE:

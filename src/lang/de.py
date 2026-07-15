@@ -318,3 +318,31 @@ STRINGS.update({
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "Die Gänge 1 bis 5+ verwenden die fünf weißen Player-LEDs.",
 })
+
+STRINGS.update({
+    "Overview": "Übersicht", "Drive": "Fahren", "Driving feedback": "Fahrfeedback",
+    "Grip haptics": "Griff-Haptik", "Lights": "Licht", "Lang": "Sprache",
+    "System and updates": "System und Updates",
+    "Controller, telemetry, profile, and update status at a glance.": "Controller, Telemetrie, Profil und Update-Status auf einen Blick.",
+    "Every interface variant uses the same settings, haptic engine, and controller backend.": "Alle drei Oberflächen verwenden dieselben Einstellungen, dieselbe Haptik-Engine und dasselbe Controller-Backend.",
+    "Active profile": "Aktives Profil", "Changes save instantly": "Änderungen werden sofort gespeichert",
+    "Connected": "Verbunden", "Waiting": "Warten", "Listening": "Empfang aktiv",
+    "Waiting for packets": "Warten auf Telemetrie", "USB or Bluetooth": "USB oder Bluetooth",
+    "Transport: {transport}": "Verbindung: {transport}", "Forza telemetry": "Forza-Telemetrie",
+    "UDP data out": "UDP Data Out", "UDP port {port}": "UDP-Port {port}",
+    "Quick access": "Schnellzugriff", "R4 workspace": "R4-Arbeitsbereich", "DualSense": "DualSense",
+    "Profile": "Profil", "Automatically check for updates": "Automatisch nach Updates suchen",
+    "Download updates in the background": "Updates im Hintergrund herunterladen",
+    "Check now": "Jetzt prüfen", "Download update": "Update herunterladen",
+    "Restart and install": "Neu starten und installieren", "View release": "Release anzeigen",
+    "Update status: idle": "Update-Status: bereit", "Built-in updater": "Integrierter Updater",
+    "Windows EXE": "Windows-EXE", "Unavailable in this runtime": "In dieser Laufzeit nicht verfügbar",
+    "Built-in updates require the Windows standalone EXE": "Integrierte Updates benötigen die eigenständige Windows-EXE",
+    "Checking for updates": "Updates werden gesucht", "You are up to date": "Die Version ist aktuell",
+    "Update available: {tag}": "Update verfügbar: {tag}", "Downloading update": "Update wird heruntergeladen",
+    "Verifying update": "Update wird geprüft", "Update ready to install": "Update ist installationsbereit",
+    "Restarting to install": "Neustart zur Installation", "Update failed": "Update fehlgeschlagen",
+    "Could not start update: {error}": "Update konnte nicht gestartet werden: {error}",
+    "Toggle individual trigger effects. Changes save instantly.": "Einzelne Triggereffekte umschalten. Änderungen werden sofort gespeichert.",
+    "Lock the app to a specific DualSense, or let it pick the first one.": "Die App an einen bestimmten DualSense binden oder automatisch den ersten auswählen.",
+})

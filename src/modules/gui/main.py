@@ -34,7 +34,7 @@ from modules.config.preferences import _release_version
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 from modules.update import UpdateService
-from modules.update.install import cleanup_previous_update
+from modules.update.install import cleanup_previous_update, self_update_supported
 
 from . import theme as T
 from . import widgets as W
@@ -68,6 +68,16 @@ NAV_LABELS = {
     "Profiles": "Profiles",
     "System": "System and updates",
     "Language": "Language",
+    "Logs": "Logs",
+}
+NAV_SHORT_LABELS = {
+    "Overview": "Overview",
+    "Driving": "Drive",
+    "Haptics": "Haptics",
+    "Lighting": "Lights",
+    "Profiles": "Profiles",
+    "System": "System",
+    "Language": "Lang",
     "Logs": "Logs",
 }
 
@@ -105,7 +115,9 @@ class TriggerGUI:
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
         self._update_service = UpdateService(
-            settings, variant=self.variant.key
+            settings,
+            variant=self.variant.key,
+            supported=self_update_supported(),
         )
         cleanup_previous_update()
 
@@ -312,12 +324,17 @@ class TriggerGUI:
             nav_side = "top"
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
+        self._nav_tooltips = []
         for key in NAV_ITEMS:
             label = t(NAV_LABELS[key])
             if self.variant.compact_nav:
-                text = f"{T.ICON[key]}  {label}"
+                text = f"{T.ICON[key]}  {t(NAV_SHORT_LABELS[key])}"
                 anchor = "center"
                 width = self.variant.sidebar_width - 12
+            elif self.variant.navigation == "top":
+                text = f"{T.ICON[key]}  {t(NAV_SHORT_LABELS[key])}"
+                anchor = "center"
+                width = 0
             else:
                 text = f"  {T.ICON[key]}   {label}"
                 anchor = "w" if nav_side == "top" else "center"
@@ -335,6 +352,8 @@ class TriggerGUI:
             else:
                 btn.pack(side="left", fill="x", expand=True, padx=T.PAD_XS, pady=2)
             self._nav_buttons[key] = btn
+            if self.variant.compact_nav:
+                self._nav_tooltips.append(W.Tooltip(btn, label))
 
         self._content = ctk.CTkFrame(body, corner_radius=0, fg_color=T.BG_MAIN)
         self._content.pack(side="left", fill="both", expand=True)

@@ -6,6 +6,67 @@ import customtkinter as ctk
 from . import theme as T
 
 
+class Tooltip:
+    """Small delayed tooltip used by the compact Studio navigation rail."""
+
+    def __init__(self, widget, text: str, delay_ms: int = 450):
+        self.widget = widget
+        self.text = text
+        self.delay_ms = delay_ms
+        self._after = None
+        self._window = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        self._after = self.widget.after(self.delay_ms, self._show)
+
+    def _cancel(self):
+        if self._after is not None:
+            try:
+                self.widget.after_cancel(self._after)
+            except Exception:
+                pass
+            self._after = None
+
+    def _show(self):
+        self._after = None
+        if self._window is not None or not self.widget.winfo_exists():
+            return
+        top = self._window = ctk.CTkToplevel(self.widget)
+        top.overrideredirect(True)
+        try:
+            top.attributes("-topmost", True)
+        except Exception:
+            pass
+        ctk.CTkLabel(
+            top,
+            text=self.text,
+            fg_color=T.BG_PANEL,
+            text_color=T.TEXT,
+            corner_radius=6,
+            padx=10,
+            pady=6,
+        ).pack()
+        top.update_idletasks()
+        x = self.widget.winfo_rootx() + self.widget.winfo_width() + 8
+        y = self.widget.winfo_rooty() + max(
+            0, (self.widget.winfo_height() - top.winfo_height()) // 2
+        )
+        top.geometry(f"+{x}+{y}")
+
+    def _hide(self, _event=None):
+        self._cancel()
+        if self._window is not None:
+            try:
+                self._window.destroy()
+            except Exception:
+                pass
+            self._window = None
+
+
 # MARK: typography --------------------------------------------------------
 
 class H1(ctk.CTkLabel):

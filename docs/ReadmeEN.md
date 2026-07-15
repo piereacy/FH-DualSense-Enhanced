@@ -10,7 +10,7 @@
   <p><strong>DualSense adaptive triggers and telemetry-driven body haptics for Forza Horizon on PC.</strong></p>
 </div>
 
-FH-DualSense-Enhanced `R3` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2` and informed by `HorizonHaptics 1.3.0`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
+FH-DualSense-Enhanced `R4` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2` and informed by `HorizonHaptics 1.3.0`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
 
 This is not an official upstream release and does not represent the upstream author's views.
 
@@ -23,13 +23,16 @@ Starting with R2, this project uses its own concise `R` version series to avoid 
 - Traction feedback follows pedal state: brake only routes to L2, throttle only routes to the R2 trigger, and pressing both routes traction to the R2 trigger while L2 ABS remains independent.
 - Tarmac, puddles, dirt, and gravel use distinct R2-trigger material frequency bands.
 - Body haptics for engine, road material, suspension, impacts, puddles, tire slip, burnouts, and ABS.
-- R2-trigger redline and grip redline use independent switches. Trigger redline is off by default, while grip redline is on by default and provides an enhanced fuel-cut pulse on the left grip.
+- R2-trigger redline and grip redline use independent switches. Trigger redline is off by default, while grip redline is on by default and provides a clearer nonlinear fuel-cut pulse and onset attack on the left grip.
 - Collision body feedback uses a directional envelope. The optional grip gear-shift thump is off by default and has independent strength and duration controls.
+- Optional turbo-boost resistance, G-force throttle resistance, L2/R2 collision jolts, and released-trigger road texture each have independent switches and are off by default.
+- Optional tachometer lightbar, redline flash, and gear Player LEDs are also off by default and share the same semantic state over USB and Bluetooth.
 - No meaningless continuous vibration when the vehicle is truly stationary at idle.
 - Revving and burnouts while stationary still produce appropriate feedback.
 - Road material contributes only while the car moves or the tires create physical excitation.
 - USB and Bluetooth support.
-- Profiles, tray behavior, exit-with-game behavior, and ZUV updates.
+- Miku Console, Miku Stage, and Miku Studio share the same backend, pages, settings, and profile format; only their layout differs.
+- Standalone Windows EXEs provide in-app update checks, download, SHA-256 verification, restart-to-install, and rollback. ZUV remains an optional compatibility and development path.
 - Advanced traction, ABS, redline, and collision controls live under a collapsed Experimental section. Grip gear-shift tuning is a normal setting.
 
 The default tuning is informed by community feedback and refined through hands-on driving tests. It is a practical starting point, not a universal setting for every car or player.
@@ -47,21 +50,25 @@ Small differences can depend on the PC, controller firmware, and Bluetooth adapt
 
 ## Quick installation
 
-### Recommended Windows method
+### Recommended Windows method: standalone EXE
 
 1. Open the [latest Release](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest).
-2. Download only `win_start.bat`.
-3. Run it. The launcher downloads `FH-DualSense-Enhanced.zuv.py` and prepares uv plus an isolated Python environment.
+2. Download any one of these layouts. All three have identical functionality and profile compatibility:
+   - `FH-DualSense-Enhanced-R4-Miku-Console.exe`: full text sidebar and the safest narrow-window layout.
+   - `FH-DualSense-Enhanced-R4-Miku-Stage.exe`: horizontal top navigation and a wider workspace.
+   - `FH-DualSense-Enhanced-R4-Miku-Studio.exe`: compact navigation rail and a tuning-oriented workspace.
+3. Run the EXE directly. Python, BAT, ZUV, and uv are not required; settings live in the adjacent `data` folder.
+4. System & Updates can check, download, verify, and restart to install. Automatic checks are on by default; background downloads are off. Only the asset matching the current Miku layout is accepted.
 
-For the manual network fallback, also download `FH-DualSense-Enhanced.zuv.py`, place it beside `win_start.bat`, and run the launcher again. The adjacent bundle is used first.
+The detached helper restores the old EXE if replacement fails and never silently asks for administrator rights. Source, Linux, and ZUV runs do not offer Windows EXE replacement.
 
-### Standalone EXE
+### Optional ZUV path
 
-Downloading only `FH-DualSense-Enhanced-R3.exe` also works. The EXE includes Python and all application dependencies, so BAT, ZUV, uv, and a system Python installation are not required.
+You can still download only `win_start.bat`. It fetches `FH-DualSense-Enhanced.zuv.py` and prepares uv plus an isolated Python environment.
 
-The standalone EXE does not update itself. Settings are stored in a `data` folder beside the EXE.
+For a manual network fallback, put `FH-DualSense-Enhanced.zuv.py` beside `win_start.bat`; the adjacent bundle is preferred. ZUV is not required by an R4 standalone EXE.
 
-To try rolling test builds, use the `R3-preview` Release and run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to follow the prerelease channel.
+To try rolling test builds, use the `R4-preview` Release and run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to follow the prerelease channel.
 
 ### Linux
 

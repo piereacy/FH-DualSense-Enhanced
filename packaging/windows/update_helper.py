@@ -18,7 +18,52 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _wait_for_pid_windows(pid: int, timeout: float) -> None:
+    """Wait without sending a signal to the process.
+
+    ``os.kill(pid, 0)`` is a harmless existence probe on POSIX, but Windows
+    treats non-console-control signals as process termination. Use a waitable
+    process handle instead so the updater can never kill the main app while
+    merely checking whether it has exited.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    open_process.restype = wintypes.HANDLE
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    wait_for_single_object.restype = wintypes.DWORD
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+
+    synchronize = 0x00100000
+    wait_object_0 = 0x00000000
+    wait_timeout = 0x00000102
+    handle = open_process(synchronize, False, int(pid))
+    if not handle:
+        # The process is already gone, or cannot be opened. The helper only
+        # receives the PID of its own parent, so a failed open is safe to treat
+        # as exited and the atomic rename remains the final authority.
+        return
+    try:
+        result = wait_for_single_object(handle, max(0, int(timeout * 1000)))
+    finally:
+        close_handle(handle)
+    if result == wait_object_0:
+        return
+    if result == wait_timeout:
+        raise TimeoutError(f"process {pid} did not exit")
+    raise OSError(f"WaitForSingleObject failed with result 0x{result:08x}")
+
+
 def wait_for_pid(pid: int, timeout: float = 30.0) -> None:
+    if os.name == "nt":
+        _wait_for_pid_windows(pid, timeout)
+        return
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -37,8 +82,10 @@ def apply(plan_path: Path) -> None:
     expected = str(plan["sha256"]).lower()
     if not staged.is_file() or sha256(staged).lower() != expected:
         raise ValueError("staged update failed checksum validation")
-    if staged == target or target.parent == staged:
+    if staged == target:
         raise ValueError("invalid update paths")
+    if staged.suffix.lower() != ".exe" or target.suffix.lower() != ".exe":
+        raise ValueError("update paths must point to Windows executables")
 
     wait_for_pid(pid)
     old = Path(str(target) + ".old")

@@ -67,5 +67,6 @@ def test_windows_packaging_ships_both_license_notice_files():
     build = _source("packaging/windows/build_exe.bat")
 
     assert 'str(ROOT / "LICENSE")' in spec
+    assert "FH-DualSense-Update-Helper.exe" in spec
     assert 'copy /y "LICENSE" "%DIST%\\LICENSE"' in build
     assert 'copy /y "docs\\THIRD_PARTY_NOTICES.md" "%DIST%\\THIRD_PARTY_NOTICES.md"' in build

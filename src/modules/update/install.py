@@ -12,6 +12,11 @@ from pathlib import Path
 from modules.config import paths
 
 
+def self_update_supported() -> bool:
+    """Only a frozen Windows EXE can safely replace itself with this helper."""
+    return sys.platform.startswith("win") and bool(getattr(sys, "frozen", False))
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -83,4 +88,3 @@ def launch_update_helper(
         if sys.platform.startswith("win") else 0,
     )
     return plan
-
