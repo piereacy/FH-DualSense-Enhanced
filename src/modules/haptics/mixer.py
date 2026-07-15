@@ -70,6 +70,28 @@ def _surface_components(value: float) -> tuple[float, float]:
     return low, high
 
 
+def _collision_envelope(
+    elapsed: float, duration: float, rebound_ratio: float
+) -> tuple[float, float]:
+    """Return low/high event energy for a main hit, gap, and rebound."""
+    progress = clamp01(elapsed / max(1e-6, duration))
+    rebound_ratio = clamp01(rebound_ratio)
+    if progress < 0.30:
+        local = progress / 0.30
+        low = 1.0 - 0.35 * local
+        high = 0.40 * (1.0 - local)
+        return low, high
+    if progress < (65.0 / 150.0):
+        return 0.0, 0.0
+    if progress < 0.80:
+        local = (progress - 65.0 / 150.0) / (0.80 - 65.0 / 150.0)
+        low = rebound_ratio * (1.0 - 0.40 * local)
+        return low, low * 0.15
+    local = (progress - 0.80) / 0.20
+    low = rebound_ratio * 0.60 * (1.0 - local)
+    return low, low * 0.10
+
+
 class HapticMixer:
     def __init__(self):
         self.reset()
@@ -83,6 +105,8 @@ class HapticMixer:
         self._collision_until = 0.0
         self._collision_left = 0.0
         self._collision_right = 0.0
+        self._collision_armed = True
+        self._collision_cooldown_until = 0.0
         self._shift_until = 0.0
         self._redline_started_at: float | None = None
         self._redline_active = False
@@ -135,6 +159,7 @@ class HapticMixer:
         continuous = _Channels()
         transient = _Channels()
         redline_event = _Channels()
+        collision_event = _Channels()
 
         rpm = _number(telemetry.get("rpm"))
         idle_rpm = _number(telemetry.get("idle_rpm"))
@@ -331,34 +356,76 @@ class HapticMixer:
 
         accel_x = _number(telemetry.get("accel_x"))
         accel_z = _number(telemetry.get("accel_z"))
+        jerk = 0.0
         jerk_intensity = 0.0
         if self._prev_accel is not None:
             jerk = math.hypot(accel_x - self._prev_accel[0], accel_z - self._prev_accel[1])
             jerk_threshold = _setting(settings, "collision_haptics_jerk_threshold", 3.0)
             if jerk > jerk_threshold:
                 jerk_intensity = clamp01((jerk - jerk_threshold) / 27.0)
+        else:
+            jerk_threshold = _setting(settings, "collision_haptics_jerk_threshold", 3.0)
         self._prev_accel = (accel_x, accel_z)
 
         smashable = max(0.0, _number(telemetry.get("smashable_vel_diff")))
         smash_intensity = clamp01(smashable / 15.0) if smashable > 3.0 else 0.0
+        jerk_active = jerk > jerk_threshold
+        smash_active = smashable > 3.0
+        if (
+            not jerk_active
+            and not smash_active
+            and now >= self._collision_cooldown_until
+        ):
+            self._collision_armed = True
+
         collision_intensity = max(jerk_intensity, smash_intensity)
-        if collision_intensity > 0.0:
+        if self._collision_armed and collision_intensity > 0.0:
             duration = _setting(settings, "collision_haptics_duration_ms", 150.0) / 1000.0
             self._collision_started = now
             self._collision_until = now + duration
+            self._collision_cooldown_until = now + (
+                _setting(settings, "collision_haptics_cooldown_ms", 250.0) / 1000.0
+            )
+            self._collision_armed = False
             scaled = collision_intensity * impact_scale
+            weak_side = clamp01(
+                _setting(settings, "collision_haptics_weak_side_ratio", 0.35)
+            )
             if accel_x > 5.0:
-                self._collision_left, self._collision_right = scaled, scaled * 0.2
+                direction = "left"
+                self._collision_left, self._collision_right = scaled, scaled * weak_side
             elif accel_x < -5.0:
-                self._collision_left, self._collision_right = scaled * 0.2, scaled
+                direction = "right"
+                self._collision_left, self._collision_right = scaled * weak_side, scaled
             else:
+                direction = "center"
                 self._collision_left = self._collision_right = scaled
 
-        if now < self._collision_until:
+            source = "both" if jerk_active and smash_active else (
+                "jerk" if jerk_active else "smashable"
+            )
+            log.info(
+                "Collision armed source=%s jerk=%.3f smashable=%.3f "
+                "intensity=%.3f direction=%s",
+                source,
+                jerk,
+                smashable,
+                collision_intensity,
+                direction,
+            )
+
+        collision_active = now < self._collision_until
+        if collision_active:
             duration = max(1e-6, self._collision_until - self._collision_started)
-            envelope = clamp01((self._collision_until - now) / duration)
-            transient.left_low += self._collision_left * envelope
-            transient.right_low += self._collision_right * envelope
+            low_envelope, high_envelope = _collision_envelope(
+                now - self._collision_started,
+                duration,
+                _setting(settings, "collision_haptics_rebound_ratio", 0.45),
+            )
+            collision_event.left_low = self._collision_left * low_envelope
+            collision_event.left_high = self._collision_left * high_envelope
+            collision_event.right_low = self._collision_right * low_envelope
+            collision_event.right_high = self._collision_right * high_envelope
 
         gear = int(_number(telemetry.get("gear")))
         if (self._prev_gear is not None and self._prev_gear > 0 and gear > 0
@@ -388,21 +455,43 @@ class HapticMixer:
         background.add(transient)
         engine_amplitude *= continuous_duck
 
-        mixed = background.scaled(1.0)
-        mixed.add(redline_event)
+        non_collision = background.scaled(1.0)
+        non_collision.add(redline_event)
+        collision_duck = (
+            clamp01(_setting(settings, "collision_background_duck", 0.20))
+            if collision_active else 1.0
+        )
+        mixed = non_collision.scaled(collision_duck)
+        mixed.add(collision_event)
+        compatible_background = background.scaled(collision_duck)
+        engine_amplitude *= collision_duck
         engine_amplitude = clamp01(engine_amplitude * master)
 
         compatible_low = None
         compatible_high = None
-        if redline_amplitude > 0.0:
+        if redline_amplitude > 0.0 or collision_active:
             compatible_low = clamp01(
-                max(background.left_low, background.right_low) * master
+                max(
+                    compatible_background.left_low,
+                    compatible_background.right_low,
+                ) * master
                 + 0.5 * engine_amplitude
-                + (redline_amplitude * master if redline_left else 0.0)
+                + (
+                    redline_amplitude * collision_duck * master
+                    if redline_left else 0.0
+                )
+                + max(collision_event.left_low, collision_event.left_high) * master
             )
             compatible_high = clamp01(
-                max(background.left_high, background.right_high) * master
-                + (redline_amplitude * master if redline_right else 0.0)
+                max(
+                    compatible_background.left_high,
+                    compatible_background.right_high,
+                ) * master
+                + (
+                    redline_amplitude * collision_duck * master
+                    if redline_right else 0.0
+                )
+                + max(collision_event.right_low, collision_event.right_high) * master
             )
 
         return HapticFrame(

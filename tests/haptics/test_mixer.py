@@ -704,6 +704,193 @@ def test_smashable_velocity_arms_a_centered_impact(settings):
     assert frame.left_low > 0.0
 
 
+@pytest.mark.parametrize(
+    ("telemetry", "source"),
+    [
+        ({"accel_x": 10.0}, "jerk"),
+        ({"smashable_vel_diff": 9.0}, "smashable"),
+        ({"accel_x": 10.0, "smashable_vel_diff": 9.0}, "both"),
+    ],
+    ids=("jerk", "smashable", "both"),
+)
+def test_collision_logs_one_arm_with_detector_source(settings, caplog, telemetry, source):
+    mixer = HapticMixer()
+    mixer.update(_telemetry(speed=0.0, rpm=1000.0), settings, now=1.0)
+
+    with caplog.at_level("INFO", logger="fhds.haptics"):
+        mixer.update(
+            _telemetry(speed=0.0, rpm=1000.0, **telemetry),
+            settings,
+            now=1.01,
+        )
+
+    armed = [record for record in caplog.records if "Collision armed" in record.message]
+    assert len(armed) == 1
+    assert f"source={source}" in armed[0].message
+    assert "intensity=" in armed[0].message
+    assert "direction=" in armed[0].message
+
+
+def test_collision_requires_signal_release_and_cooldown_before_rearming(settings, caplog):
+    mixer = HapticMixer()
+
+    with caplog.at_level("INFO", logger="fhds.haptics"):
+        mixer.update(_telemetry(smashable_vel_diff=9.0), settings, now=1.0)
+        mixer.update(_telemetry(smashable_vel_diff=9.0), settings, now=1.16)
+        mixer.update(_telemetry(smashable_vel_diff=9.0), settings, now=1.30)
+        mixer.update(_telemetry(smashable_vel_diff=0.0), settings, now=1.31)
+        mixer.update(_telemetry(smashable_vel_diff=9.0), settings, now=1.32)
+
+    armed = [record for record in caplog.records if "Collision armed" in record.message]
+    assert len(armed) == 2
+
+
+def test_body_haptics_reset_reestablishes_collision_acceleration_baseline(settings):
+    mixer = HapticMixer()
+    mixer.update(
+        _telemetry(speed=0.0, rpm=1000.0, accel_x=0.0), settings, now=1.0
+    )
+    settings.enable_body_haptics = False
+    mixer.update(
+        _telemetry(speed=0.0, rpm=1000.0, accel_x=10.0), settings, now=1.1
+    )
+    settings.enable_body_haptics = True
+
+    frame = mixer.update(
+        _telemetry(speed=0.0, rpm=1000.0, accel_x=10.0), settings, now=1.2
+    )
+
+    assert frame == SILENT_FRAME
+
+
+def test_collision_uses_main_gap_rebound_and_release_envelope(settings):
+    mixer = HapticMixer()
+    telemetry = _telemetry(
+        speed=0.0,
+        rpm=1000.0,
+        smashable_vel_diff=15.0,
+    )
+
+    main = mixer.update(telemetry, settings, now=1.0)
+    gap = mixer.update(telemetry, settings, now=1.050)
+    rebound = mixer.update(telemetry, settings, now=1.070)
+    release = mixer.update(telemetry, settings, now=1.140)
+    ended = mixer.update(telemetry, settings, now=1.151)
+
+    assert main.left_low == pytest.approx(main.right_low)
+    assert main.left_high == pytest.approx(main.right_high)
+    assert main.left_low > main.left_high > 0.0
+    assert gap.left_low == gap.left_high == 0.0
+    assert 0.0 < rebound.left_low < main.left_low
+    assert 0.0 < rebound.left_high < rebound.left_low
+    assert 0.0 < release.left_low < rebound.left_low
+    assert ended.left_low == ended.left_high == 0.0
+
+
+def test_collision_direction_keeps_thirty_five_percent_on_weak_side(settings):
+    mixer = HapticMixer()
+    mixer.update(_telemetry(speed=0.0, rpm=1000.0), settings, now=1.0)
+
+    frame = mixer.update(
+        _telemetry(
+            speed=0.0,
+            rpm=1000.0,
+            accel_x=10.0,
+            smashable_vel_diff=15.0,
+        ),
+        settings,
+        now=1.01,
+    )
+
+    assert frame.right_low == pytest.approx(
+        frame.left_low * settings.collision_haptics_weak_side_ratio
+    )
+
+
+def test_collision_gap_ducks_all_non_collision_haptics(settings):
+    settings.enable_grip_redline_haptics = False
+    telemetry = dict(
+        speed=50.0,
+        rpm=7000.0,
+        accel=200,
+        surface_rumble_rr=0.4,
+    )
+    reference = HapticMixer()
+    collision = HapticMixer()
+    reference.update(_telemetry(gear=2, **telemetry), settings, now=1.0)
+    collision.update(_telemetry(gear=2, **telemetry), settings, now=1.0)
+    reference.update(_telemetry(gear=3, **telemetry), settings, now=1.01)
+    collision.update(
+        _telemetry(gear=3, smashable_vel_diff=15.0, **telemetry),
+        settings,
+        now=1.01,
+    )
+
+    normal = reference.update(_telemetry(gear=3, **telemetry), settings, now=1.06)
+    ducked = collision.update(
+        _telemetry(gear=3, smashable_vel_diff=15.0, **telemetry),
+        settings,
+        now=1.06,
+    )
+
+    factor = settings.collision_background_duck
+    assert ducked.left_low == pytest.approx(normal.left_low * factor)
+    assert ducked.left_high == pytest.approx(normal.left_high * factor)
+    assert ducked.right_low == pytest.approx(normal.right_low * factor)
+    assert ducked.right_high == pytest.approx(normal.right_high * factor)
+    assert ducked.engine_amplitude == pytest.approx(normal.engine_amplitude * factor)
+
+
+def test_redline_resumes_after_collision_priority_window(settings):
+    mixer = HapticMixer()
+    mixer.update(
+        _telemetry(speed=0.0, rpm=9000.0, accel=255, smashable_vel_diff=15.0),
+        settings,
+        now=1.0,
+    )
+
+    resumed = mixer.update(
+        _telemetry(speed=0.0, rpm=9000.0, accel=255, smashable_vel_diff=0.0),
+        settings,
+        now=1.201,
+    )
+
+    assert resumed.left_high == pytest.approx(settings.grip_redline_amp / 255.0)
+    assert resumed.right_high == 0.0
+
+
+@pytest.mark.parametrize(
+    ("accel_x", "strong_motor"),
+    [(10.0, "low"), (-10.0, "high")],
+    ids=("left-impact", "right-impact"),
+)
+def test_bluetooth_collision_projection_preserves_direction(
+    settings, accel_x, strong_motor
+):
+    mixer = HapticMixer()
+    mixer.update(_telemetry(speed=0.0, rpm=1000.0), settings, now=1.0)
+    frame = mixer.update(
+        _telemetry(
+            speed=0.0,
+            rpm=1000.0,
+            accel_x=accel_x,
+            smashable_vel_diff=15.0,
+        ),
+        settings,
+        now=1.01,
+    )
+    rumble = to_compatible_rumble(frame)
+
+    if strong_motor == "low":
+        assert rumble.high_frequency == pytest.approx(
+            rumble.low_frequency * settings.collision_haptics_weak_side_ratio
+        )
+    else:
+        assert rumble.low_frequency == pytest.approx(
+            rumble.high_frequency * settings.collision_haptics_weak_side_ratio
+        )
+
+
 def test_gear_change_creates_centered_kick(settings):
     mixer = HapticMixer()
     mixer.update(_telemetry(gear=2, speed=50.0), settings, now=1.0)
