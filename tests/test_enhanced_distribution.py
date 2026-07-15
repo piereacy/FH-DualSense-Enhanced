@@ -134,6 +134,7 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
     assert "Enhanced R3 中文说明" in workflow
     assert "握把换挡冲击" in workflow
+    assert "默认关闭 R2 扳机键红线、开启握把红线" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow
 
@@ -228,6 +229,11 @@ def test_readmes_describe_r3_features_and_public_artifact_names():
         assert "wheelspin" in text.lower()
         assert "ABS wall" in text
         assert "R3-preview" in text
+
+    assert "默认关闭 R2 扳机键红线、开启握把红线" in chinese
+    assert "HapticPcmRenderer" in chinese
+    assert "398 字节 HID report `0x36`" in chinese
+    assert "单槽最新帧队列" in chinese
 
 
 def test_release_identity_uses_public_r2_and_internal_pep440_version():

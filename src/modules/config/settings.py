@@ -63,7 +63,7 @@ class Settings:
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE
 
     # MARK: R2 trigger redline warning
-    enable_rev_limiter: bool = True
+    enable_rev_limiter: bool = False
     rev_limit_ratio: float = 0.93             # fraction of max_rpm to fire at
     rev_limit_freq: int = 30                  # adaptive-trigger vibration frequency
     rev_limit_amp: int = 12                   # adaptive-trigger vibration strength
@@ -71,7 +71,7 @@ class Settings:
 
     # MARK: Body haptics redline warning
     # Fuel-cut pulse with independent left/right grip routing.
-    enable_grip_redline_haptics: bool = False
+    enable_grip_redline_haptics: bool = True
     grip_redline_left: bool = True
     grip_redline_right: bool = False
     grip_redline_ratio: float = 0.93

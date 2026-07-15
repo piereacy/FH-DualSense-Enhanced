@@ -73,3 +73,18 @@ def test_disconnect_explicitly_zeros_owned_compatible_rumble():
     assert report[dualsense_main.BT["motor_l"]] == 0
     assert report[dualsense_main.BT["motor_r"]] == 0
     assert device.closed is True
+
+
+def test_disconnect_sends_silent_hd_haptics_before_closing_bluetooth():
+    device = _Device()
+    controller = dualsense_main.DualSense(enable_startup_pulse=False)
+    controller.dev = device
+    controller.lay = dualsense_main.BT
+    controller._bt_haptics_streamed = True
+
+    controller._disconnect()
+
+    assert device.writes[0][0] == 0x36
+    assert device.writes[0][78:142] == bytes(64)
+    assert device.writes[-1][0] == 0x31
+    assert device.closed is True

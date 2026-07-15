@@ -18,6 +18,7 @@ else:
 
 from . import hidhide
 from .adaptive_trigger import M_RIGID, off
+from .bt_haptics import BluetoothHapticsPacketBuilder
 
 if TYPE_CHECKING:
     from ..haptics.frame import CompatibleRumble
@@ -212,6 +213,12 @@ class DualSense:
         self._left = self._right = off()
         self._rumble: CompatibleRumble | None = None
         self._pending_rumble_release = None
+        self._bt_haptics_pending: bytes | None = None
+        self._bt_haptics_dropped = 0
+        self._bt_haptics_failed = False
+        self._bt_haptics_failure_logged = False
+        self._bt_haptics_streamed = False
+        self._bt_haptics_builder = BluetoothHapticsPacketBuilder()
         self._dirty = False
         self._running = False
         self._thread = None
@@ -250,6 +257,14 @@ class DualSense:
     def persistent(self) -> bool:
         return (self._ever_connected
                 and (hidhide.is_detected() or not self._enable_reconnect))
+
+    @property
+    def bt_haptics_dropped(self) -> int:
+        return self._bt_haptics_dropped
+
+    @property
+    def bt_haptics_failed(self) -> bool:
+        return self._bt_haptics_failed
 
     def open(self):
         """Start the I/O thread. Never raises if the controller is absent."""
@@ -290,6 +305,19 @@ class DualSense:
             self._dirty = True
         self._wake.set()
 
+    def queue_bt_haptics(self, samples: bytes) -> bool:
+        samples = bytes(samples)
+        if len(samples) != 64:
+            raise ValueError("Bluetooth haptics payload must be exactly 64 bytes")
+        if self.transport != "bluetooth" or self._bt_haptics_failed:
+            return False
+        with self._lock:
+            if self._bt_haptics_pending is not None:
+                self._bt_haptics_dropped += 1
+            self._bt_haptics_pending = samples
+        self._wake.set()
+        return True
+
     @staticmethod
     def _is_rumble_release(rumble: CompatibleRumble | None) -> bool:
         return (
@@ -312,6 +340,20 @@ class DualSense:
             frame = self._left, self._right, self._rumble
             self._dirty = False
             return frame
+
+    def _take_pending_bt_haptics(self) -> bytes | None:
+        with self._lock:
+            samples = self._bt_haptics_pending
+            self._bt_haptics_pending = None
+            return samples
+
+    def _has_pending_output(self) -> bool:
+        with self._lock:
+            return bool(
+                self._pending_rumble_release is not None
+                or self._dirty
+                or self._bt_haptics_pending is not None
+            )
 
     def set_reconnect_enabled(self, enabled: bool) -> None:
         """Live-toggle from the Settings tab. Wakes the I/O thread so the
@@ -409,6 +451,12 @@ class DualSense:
         self._open_hinted = self._waiting_hinted = False
         self._ever_connected = True
         self._last_input_at = time.monotonic()
+        with self._lock:
+            self._bt_haptics_pending = None
+            self._bt_haptics_failed = False
+            self._bt_haptics_failure_logged = False
+            self._bt_haptics_streamed = False
+            self._bt_haptics_builder.reset()
         bus = "BT" if self.lay["bt"] else "USB"
         if self.persistent:
             log.info("DualSense connected (%s) - latched", bus)
@@ -436,6 +484,15 @@ class DualSense:
             return
         was_connected = self.dev is not None
         if was_connected:
+            if self.lay["bt"] and self._bt_haptics_streamed:
+                self._safe_write(
+                    self._bt_haptics_builder.build(
+                        bytes(64),
+                        left=off(),
+                        right=off(),
+                    )
+                )
+                self._bt_haptics_streamed = False
             with self._lock:
                 rumble = self._rumble
                 pending_release = self._pending_rumble_release
@@ -454,6 +511,8 @@ class DualSense:
         self.dev = None
         self.dev_path = None
         self.dev_serial = None
+        with self._lock:
+            self._bt_haptics_pending = None
         # Skip the "disconnected" warning during intentional shutdown
         if was_connected and self._running:
             suffix = f" ({reason})" if reason else ""
@@ -520,9 +579,27 @@ class DualSense:
                     self._disconnect(f"write returned {n}")
                     continue
 
-            # Sleep until set() queues a new frame, or wake to recheck watchdogs.
-            self._wake.wait(0.5)
+            haptics = self._take_pending_bt_haptics()
+            if haptics is not None and self.lay["bt"] and not self._bt_haptics_failed:
+                try:
+                    n = self.dev.write(self._build_bt_haptics(haptics))
+                except Exception as e:
+                    self._mark_bt_haptics_failed(f"write failed: {e}")
+                else:
+                    if n is not None and n <= 0:
+                        self._mark_bt_haptics_failed(f"write returned {n}")
+                    else:
+                        self._bt_haptics_streamed = True
+
+            # Clear before checking the queue so a producer cannot set the event
+            # between wait() returning and clear(). That race used to lose roughly
+            # one third of 94 Hz Bluetooth audio wakes on Windows.
             self._wake.clear()
+            if self._has_pending_output():
+                continue
+            # Sleep until set()/queue_bt_haptics() publishes a new frame, or wake
+            # periodically to recheck the input watchdog.
+            self._wake.wait(0.5)
 
     def _new_report(self):
         L = self.lay
@@ -553,6 +630,24 @@ class DualSense:
             buf[pos + 1:pos + 1 + len(params)] = params[:10]
         self._finalize_bt_crc(buf)
         return buf  # hidapi accepts bytearray — skip the bytes() copy.
+
+    def _build_bt_haptics(self, samples: bytes):
+        with self._lock:
+            left = self._left
+            right = self._right
+        return self._bt_haptics_builder.build(samples, left=left, right=right)
+
+    def _mark_bt_haptics_failed(self, reason: str) -> None:
+        self._bt_haptics_failed = True
+        with self._lock:
+            self._bt_haptics_pending = None
+        if not self._bt_haptics_failure_logged:
+            self._bt_haptics_failure_logged = True
+            log.warning(
+                "Bluetooth HD body haptics unavailable for this connection (%s); "
+                "adaptive triggers remain active.",
+                reason,
+            )
 
     def _build_power_saver(self):
         """Build a minimal HID report that enables the power-save flag only."""

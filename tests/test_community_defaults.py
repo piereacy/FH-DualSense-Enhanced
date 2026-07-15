@@ -21,7 +21,8 @@ def test_fresh_settings_match_community_defaults():
 def test_r3_grip_effects_use_safe_defaults():
     settings = Settings()
 
-    assert settings.enable_grip_redline_haptics is False
+    assert settings.enable_rev_limiter is False
+    assert settings.enable_grip_redline_haptics is True
     assert settings.grip_redline_gain == 1.5
     assert settings.enable_grip_gear_shift_haptics is False
     assert settings.grip_gear_shift_strength == 0.8
@@ -90,7 +91,7 @@ def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
     assert settings.grip_redline_freq == 10
     assert settings.grip_redline_amp == 192
     assert settings.grip_redline_gain == 1.5
-    assert settings.enable_grip_redline_haptics is False
+    assert settings.enable_grip_redline_haptics is True
     assert settings.grip_redline_left is True
     assert settings.grip_redline_right is False
     assert settings.enable_grip_gear_shift_haptics is False

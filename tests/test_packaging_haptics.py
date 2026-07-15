@@ -36,12 +36,15 @@ def test_pyinstaller_specs_collect_sounddevice_runtime():
         assert "THIRD_PARTY_NOTICES.md" in text
 
 
-def test_horizonhaptics_notice_and_user_docs_are_present():
+def test_haptics_reference_notices_and_user_docs_are_present():
     notice = (ROOT / "docs/THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     readme = (ROOT / "docs/ReadmeEN.md").read_text(encoding="utf-8")
     readme_zh = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "79fbe2fd7a56e21bd101867dbf14718f2e91ffab" in notice
+    assert "2d27ab0b2ea02e735cd3aa758cc5bf3d6e578534" in notice
+    assert "ade9ea15b6fb1bf3f4fdc72da8c316234f32e0d0" in notice
     assert "MIT License" in notice
-    assert "Bluetooth" in readme and "compatible rumble" in readme
-    assert "蓝牙" in readme_zh and "兼容振动" in readme_zh
+    assert "Bluetooth" in readme and "report `0x36`" in readme
+    assert "compatible rumble" in readme
+    assert "蓝牙" in readme_zh and "`0x36`" in readme_zh

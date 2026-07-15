@@ -23,7 +23,7 @@ Starting with R2, this project uses its own concise `R` version series to avoid 
 - Traction feedback follows pedal state: brake only routes to L2, throttle only routes to the R2 trigger, and pressing both routes traction to the R2 trigger while L2 ABS remains independent.
 - Tarmac, puddles, dirt, and gravel use distinct R2-trigger material frequency bands.
 - Body haptics for engine, road material, suspension, impacts, puddles, tire slip, burnouts, and ABS.
-- R2-trigger redline and optional grip redline use independent switches. Grip redline is off by default and provides an enhanced fuel-cut pulse on the left grip when enabled.
+- R2-trigger redline and grip redline use independent switches. Trigger redline is off by default, while grip redline is on by default and provides an enhanced fuel-cut pulse on the left grip.
 - Collision body feedback uses a directional envelope. The optional grip gear-shift thump is off by default and has independent strength and duration controls.
 - No meaningless continuous vibration when the vehicle is truly stationary at idle.
 - Revving and burnouts while stationary still produce appropriate feedback.
@@ -36,14 +36,14 @@ The default tuning is informed by community feedback and refined through hands-o
 
 ## USB and Bluetooth
 
-The practical experience is broadly similar over USB and Bluetooth. Both retain adaptive triggers and body feedback.
+USB and Bluetooth now use the same stereo waveform synthesis. Both retain adaptive triggers, road texture, engine, redline, and directional collision feedback.
 
 | Connection | Output path |
 | --- | --- |
 | USB | Uses the DualSense four-channel audio endpoint for left and right haptics, plus HID trigger control |
-| Bluetooth | Uses compatible low and high frequency rumble, sent together with trigger state |
+| Bluetooth | Sends 3 kHz stereo HD haptics directly over HID report `0x36`; trigger state remains under HID control |
 
-Small differences can depend on the PC, controller firmware, and Bluetooth adapter. Trigger feedback continues to work if the USB audio endpoint is unavailable.
+Small differences can depend on the PC, controller firmware, and Bluetooth adapter. If Bluetooth HD haptics cannot start, the app automatically falls back to compatible rumble; a haptics failure does not block triggers.
 
 ## Quick installation
 
@@ -155,7 +155,7 @@ If the log keeps showing `No UDP packets yet`:
 | DualSense not found | Check the connection, Steam ownership, and the HidHide allowlist; BAT mode normally needs `python.exe` allowed |
 | USB body haptics cannot start | Confirm that Windows exposes the DualSense four-channel audio endpoint, close apps using it, and reconnect USB |
 | `PaErrorCode -9999` or WDM-KS error | Let the app try its compatibility fallback; if it still fails, check Windows Audio and the controller audio device; triggers remain available |
-| Bluetooth feels slightly different | This is normal because Bluetooth uses compatible rumble, while the feedback logic remains the same |
+| Log reports a Bluetooth HD haptics fallback | The current connection rejected report `0x36`; compatible rumble remains active and HD haptics is retried after reconnecting the controller |
 | Triggers or body haptics are too strong | Lower the relevant strength in Settings or create a vehicle-specific profile |
 
 ## Development and builds
@@ -194,6 +194,6 @@ Originally created by Hamza Yeşilmen (HamzaYslmn).
 
 Source: <https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python>
 
-The body-haptics and USB-channel work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics). Its MIT notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The body-haptics and USB-channel work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics). The Bluetooth HD haptics protocol references [vDS](https://github.com/hurryman2212/vds). Their MIT notices are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 This project uses a custom source-available license for personal, non-commercial use. Read [LICENSE](../LICENSE) before copying, modifying, or redistributing it.

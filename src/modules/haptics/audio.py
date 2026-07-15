@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-import math
 import sys
 import threading
 import time
 from collections.abc import Sequence
 
-from .frame import HapticFrame, SILENT_FRAME, clamp01
+from .frame import HapticFrame, SILENT_FRAME
+from .pcm import HapticPcmRenderer
 
 try:
     import numpy as np
@@ -55,6 +55,7 @@ class UsbAudioHaptics:
         platform: str | None = None,
         sample_rate: int = 48_000,
         blocksize: int = 512,
+        renderer: HapticPcmRenderer | None = None,
     ):
         self._sd = sounddevice_module
         self._np = numpy_module
@@ -67,10 +68,12 @@ class UsbAudioHaptics:
         self._device_index: int | None = None
         self._frame = SILENT_FRAME
         self._frame_lock = threading.Lock()
-        self._levels = [0.0, 0.0, 0.0, 0.0, 0.0]
-        self._phase_low = 0.0
-        self._phase_high = 0.0
-        self._phase_engine = 0.0
+        self._renderer = renderer
+        if self._renderer is None and self._np is not None:
+            self._renderer = HapticPcmRenderer(
+                numpy_module=self._np,
+                sample_rate=self.sample_rate,
+            )
         self._last_status_log = 0.0
         self._warned: set[str] = set()
 
@@ -145,7 +148,8 @@ class UsbAudioHaptics:
             stream.close()
         except Exception:
             pass
-        self._levels = [0.0, 0.0, 0.0, 0.0, 0.0]
+        if self._renderer is not None:
+            self._renderer.reset()
 
     def _audio_callback(self, outdata, frames, time_info, status) -> None:
         del time_info
@@ -155,62 +159,20 @@ class UsbAudioHaptics:
                 self._last_status_log = now
                 log.debug("USB body haptics audio status: %s", status)
 
-        if not self._running or self._np is None or outdata.shape[1] < 4:
+        if (
+            not self._running
+            or self._np is None
+            or self._renderer is None
+            or outdata.shape[1] < 4
+        ):
             outdata.fill(0.0)
             return
 
         with self._frame_lock:
             frame = self._frame
 
-        targets = (
-            clamp01(frame.left_low),
-            clamp01(frame.left_high),
-            clamp01(frame.right_low),
-            clamp01(frame.right_high),
-            clamp01(frame.engine_amplitude),
-        )
-        smoothing = 0.35
-        self._levels = [
-            current + (target - current) * smoothing
-            for current, target in zip(self._levels, targets)
-        ]
-        left_low, left_high, right_low, right_high, engine_amplitude = self._levels
-
-        np_module = self._np
-        positions = np_module.arange(frames, dtype=np_module.float64)
-        tau = 2.0 * math.pi
-
-        low_step = tau * 65.0 / self.sample_rate
-        low_phase = self._phase_low + positions * low_step
-        wave_low = np_module.sin(low_phase)
-        self._phase_low = (self._phase_low + frames * low_step) % tau
-
-        high_step = tau * 190.0 / self.sample_rate
-        high_phase = self._phase_high + positions * high_step
-        wave_high = 0.7 * np_module.sin(high_phase) + 0.3 * np_module.sin(high_phase * 1.618)
-        self._phase_high = (self._phase_high + frames * high_step) % tau
-
-        engine_hz = max(0.0, float(frame.engine_hz)) if math.isfinite(float(frame.engine_hz)) else 0.0
-        if engine_hz > 0.0 and engine_amplitude > 0.0:
-            engine_step = tau * engine_hz / self.sample_rate
-            engine_phase = self._phase_engine + positions * engine_step
-            cycles = engine_phase / tau
-            wave_engine = 2.0 * (cycles - np_module.floor(cycles + 0.5))
-            self._phase_engine = (self._phase_engine + frames * engine_step) % tau
-        else:
-            wave_engine = np_module.zeros(frames, dtype=np_module.float64)
-
-        mix_left = (
-            wave_low * left_low
-            + wave_high * left_high
-            + wave_engine * engine_amplitude
-        )
-        mix_right = (
-            wave_low * right_low
-            + wave_high * right_high
-            + wave_engine * engine_amplitude
-        )
+        pcm = self._renderer.render(frame, frames)
 
         outdata.fill(0.0)
-        outdata[:, 2] = np_module.clip(mix_left, -1.0, 1.0)
-        outdata[:, 3] = np_module.clip(mix_right, -1.0, 1.0)
+        outdata[:, 2] = pcm[:, 0]
+        outdata[:, 3] = pcm[:, 1]

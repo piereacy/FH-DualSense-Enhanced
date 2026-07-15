@@ -221,19 +221,21 @@ jobs:
 
             Enhanced R3 在 Enhanced R2 的动态扳机基础上加入按踏板状态路由的抓地力反馈：只踩刹车进入 L2，只踩油门进入 R2 扳机键，同时踩下时进入 R2 扳机键，L2 的 ABS 仍可独立介入。铺装、积水、泥土和碎石继续使用不同的材质频带。
 
-            R2 扳机键红线与握把红线现在拥有独立开关。握把红线默认关闭，启用后默认在左握把输出带 1.5 信号增益的断油脉冲。碰撞握把反馈加入方向包络和 Bluetooth 侧别投影；可选握把换挡冲击默认关闭，并使用独立的强度和持续时间普通设置。
+            R2 扳机键红线与握把红线现在拥有独立开关。默认关闭 R2 扳机键红线、开启握把红线；握把侧默认在左握把输出带 1.5 信号增益的断油脉冲。碰撞握把反馈加入方向包络；可选握把换挡冲击默认关闭，并使用独立的强度和持续时间普通设置。
+
+            USB 与 Bluetooth 现在共用同一套左右 PCM 波形。USB 继续使用手柄四声道音频端点；Bluetooth 通过 HID report 0x36 直接发送 3 kHz 双声道 HD haptics，保留路面纹理、发动机频率、红线波形和碰撞方向。如果当前连接拒绝 HD haptics，程序会自动回退到 compatible rumble，扳机不受影响。
 
             游戏内原生振动可以保留菜单和过场反馈，但可能掩盖本项目的左右碰撞方向。验证方向或排查重复振动时，请关闭游戏内振动进行比较。本项目目前不会接管或完整复现游戏原生振动。
 
-            Enhanced R3 基于 Forza-Horizon-DualSense-Python 1.6.2，并参考 HorizonHaptics 1.3.0。项目从 Enhanced R2 起使用独立 R 版本体系；历史 Enhanced R1 使用 1.6.2.post1。
+            Enhanced R3 基于 Forza-Horizon-DualSense-Python 1.6.2，参考 HorizonHaptics 1.3.0，并使用 vDS 0.3.0-rc7 作为 Bluetooth HD haptics 协议参考。项目从 Enhanced R2 起使用独立 R 版本体系；历史 Enhanced R1 使用 1.6.2.post1。
 
             ## Enhanced R3 highlights
 
             Enhanced R3 routes dynamic traction feedback by pedal state while preserving the GT7-style L2 ABS wall, material-specific frequency bands, asymmetric EWMA smoothing, hysteresis, low-speed wheel rotation, and G-force damping introduced in Enhanced R2.
 
-            R2-trigger redline and grip redline now have independent switches. Grip redline is off by default and applies a 1.5 signal gain when enabled. Directional collision haptics use a priority envelope and Bluetooth side projection. The optional grip gear-shift thump is off by default with independent normal settings for strength and duration.
+            R2-trigger redline and grip redline now have independent switches. Trigger redline is off by default; grip redline is on by default on the left grip with a 1.5 signal gain. Directional collision haptics use a priority envelope. The optional grip gear-shift thump is off by default with independent normal settings for strength and duration.
 
-            USB and Bluetooth consume the same normalized haptic event semantics. USB uses the controller audio endpoint, while Bluetooth uses compatible low and high frequency rumble. Adaptive triggers remain available on both connections.
+            USB and Bluetooth now share the same stereo PCM waveform renderer. USB uses the controller's four-channel audio endpoint; Bluetooth sends 3 kHz stereo HD haptics directly through HID report 0x36, preserving road texture, engine frequency, redline waveform, and collision direction. If the current connection rejects HD haptics, the app falls back to compatible rumble without interrupting adaptive triggers. The Bluetooth protocol implementation references vDS 0.3.0-rc7.
 
             ## Recommended: launcher scripts
 

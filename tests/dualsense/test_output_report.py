@@ -259,3 +259,61 @@ def test_transport_is_only_reported_while_connected():
 
     controller.lay = BT
     assert controller.transport == "bluetooth"
+
+
+def test_bluetooth_haptics_queue_keeps_only_the_freshest_audio_chunk():
+    controller = DualSense(enable_startup_pulse=False)
+    controller.dev = object()
+    controller.lay = BT
+
+    assert controller.queue_bt_haptics(bytes([1]) * 64) is True
+    assert controller.queue_bt_haptics(bytes([2]) * 64) is True
+
+    assert controller.bt_haptics_dropped == 1
+    assert controller._take_pending_bt_haptics() == bytes([2]) * 64
+    assert controller._take_pending_bt_haptics() is None
+
+
+def test_bluetooth_haptics_queue_rejects_usb_and_bad_payloads():
+    controller = DualSense(enable_startup_pulse=False)
+    controller.dev = object()
+    controller.lay = USB
+
+    assert controller.queue_bt_haptics(bytes(64)) is False
+    with pytest.raises(ValueError, match="64 bytes"):
+        controller.queue_bt_haptics(bytes(63))
+
+
+def test_io_serializes_trigger_state_before_bluetooth_haptics_report():
+    controller = DualSense(enable_startup_pulse=False)
+    controller.lay = BT
+    controller.dev = _GatedDevice(read_count=2)
+    controller._ever_connected = True
+    controller.set(LEFT, RIGHT, None)
+    assert controller.queue_bt_haptics(bytes(range(64))) is True
+    controller._running = True
+    thread = threading.Thread(target=controller._io)
+    thread.start()
+
+    try:
+        assert controller.dev.read_entered[0].wait(timeout=2.0)
+        controller.dev.read_released[0].set()
+        assert controller.dev.wait_for_writes(2)
+
+        assert controller.dev.read_entered[1].wait(timeout=2.0)
+        controller._running = False
+        controller._wake.set()
+        controller.dev.read_released[1].set()
+        thread.join(timeout=2.0)
+        assert not thread.is_alive()
+    finally:
+        controller._running = False
+        controller._wake.set()
+        for release in controller.dev.read_released:
+            release.set()
+        thread.join(timeout=2.0)
+
+    state_report, haptics_report = controller.dev.writes
+    assert state_report[0] == 0x31
+    assert haptics_report[0] == 0x36
+    assert haptics_report[78:142] == bytes(range(64))

@@ -46,6 +46,45 @@ class _AudioFactory:
         return value
 
 
+class _BtAudio:
+    def __init__(self, controller, starts=True):
+        self.controller = controller
+        self.starts = starts
+        self.running = False
+        self.failed = False
+        self.start_calls = 0
+        self.stop_calls = 0
+        self.reset_failure_calls = 0
+        self.frames = []
+
+    def start(self):
+        self.start_calls += 1
+        self.running = self.starts and not self.failed
+        return self.running
+
+    def set_frame(self, frame):
+        self.frames.append(frame)
+
+    def stop(self):
+        self.stop_calls += 1
+        self.running = False
+
+    def reset_failure(self):
+        self.reset_failure_calls += 1
+        self.failed = False
+
+
+class _BtAudioFactory:
+    def __init__(self, starts=True):
+        self.starts = starts
+        self.instances = []
+
+    def __call__(self, controller):
+        value = _BtAudio(controller, self.starts)
+        self.instances.append(value)
+        return value
+
+
 def _settings(enabled=True):
     value = Settings()
     value.enable_body_haptics = enabled
@@ -67,18 +106,32 @@ def test_usb_starts_audio_once_and_publishes_every_frame():
     assert audio.frames == [first, second]
 
 
-def test_bluetooth_returns_compatible_rumble_without_creating_audio():
+def test_bluetooth_starts_hd_haptics_and_does_not_claim_compatible_rumble():
     factory = _AudioFactory()
-    manager = HapticManager(_Controller("bluetooth"), _settings(), audio_factory=factory)
+    bt_factory = _BtAudioFactory()
+    manager = HapticManager(
+        _Controller("bluetooth"),
+        _settings(),
+        audio_factory=factory,
+        bt_audio_factory=bt_factory,
+    )
     frame = HapticFrame(left_low=0.4, right_high=0.7, engine_amplitude=0.2)
 
-    assert manager.route(frame) == to_compatible_rumble(frame)
+    assert manager.route(frame) is None
     assert factory.instances == []
+    assert bt_factory.instances[0].frames == [frame]
+    assert manager.mode == "bluetooth"
 
 
 def test_bluetooth_uses_explicit_priority_event_motor_projection():
     factory = _AudioFactory()
-    manager = HapticManager(_Controller("bluetooth"), _settings(), audio_factory=factory)
+    bt_factory = _BtAudioFactory(starts=False)
+    manager = HapticManager(
+        _Controller("bluetooth"),
+        _settings(),
+        audio_factory=factory,
+        bt_audio_factory=bt_factory,
+    )
     frame = HapticFrame(
         left_high=0.8,
         compatible_low_frequency=0.8,
@@ -94,7 +147,11 @@ def test_bluetooth_uses_explicit_priority_event_motor_projection():
 
 def test_disabling_bluetooth_releases_rumble_exactly_once():
     settings = _settings()
-    manager = HapticManager(_Controller("bluetooth"), settings)
+    manager = HapticManager(
+        _Controller("bluetooth"),
+        settings,
+        bt_audio_factory=_BtAudioFactory(starts=False),
+    )
 
     assert manager.route(HapticFrame(left_low=0.4)) == CompatibleRumble(
         low_frequency=0.4
@@ -109,7 +166,13 @@ def test_disabling_bluetooth_releases_rumble_exactly_once():
 def test_switching_from_usb_to_bluetooth_stops_audio():
     controller = _Controller("usb")
     factory = _AudioFactory()
-    manager = HapticManager(controller, _settings(), audio_factory=factory)
+    bt_factory = _BtAudioFactory()
+    manager = HapticManager(
+        controller,
+        _settings(),
+        audio_factory=factory,
+        bt_audio_factory=bt_factory,
+    )
     manager.route(HapticFrame(left_low=0.2))
     audio = factory.instances[0]
 
@@ -117,7 +180,8 @@ def test_switching_from_usb_to_bluetooth_stops_audio():
     rumble = manager.route(HapticFrame(right_low=0.6))
 
     assert audio.stop_calls == 1
-    assert rumble == to_compatible_rumble(HapticFrame(right_low=0.6))
+    assert rumble is None
+    assert bt_factory.instances[0].running is True
 
 
 def test_disabling_after_usb_stops_audio_and_returns_none():
@@ -216,10 +280,58 @@ def test_external_usb_audio_receives_frames_without_worker_lifecycle_calls():
 
 def test_external_usb_audio_does_not_change_bluetooth_routing():
     audio = _Audio()
-    manager = HapticManager(_Controller("bluetooth"), _settings(), audio=audio)
+    bt_factory = _BtAudioFactory()
+    manager = HapticManager(
+        _Controller("bluetooth"),
+        _settings(),
+        audio=audio,
+        bt_audio_factory=bt_factory,
+    )
     frame = HapticFrame(right_high=0.7)
 
-    assert manager.route(frame) == to_compatible_rumble(frame)
+    assert manager.route(frame) is None
     assert audio.start_calls == 0
     assert audio.stop_calls == 0
     assert audio.frames == [SILENT_FRAME]
+
+
+def test_running_bluetooth_backend_failure_falls_back_on_next_frame():
+    bt_factory = _BtAudioFactory()
+    manager = HapticManager(
+        _Controller("bluetooth"),
+        _settings(),
+        bt_audio_factory=bt_factory,
+    )
+    first = HapticFrame(left_low=0.4)
+    second = HapticFrame(right_high=0.7)
+
+    assert manager.route(first) is None
+    backend = bt_factory.instances[0]
+    backend.failed = True
+    backend.running = False
+
+    assert manager.route(second) == to_compatible_rumble(second)
+    assert manager.mode == "bluetooth-compatible"
+
+
+def test_reconnect_resets_bluetooth_hd_failure_and_retries_backend():
+    controller = _Controller("bluetooth")
+    bt_factory = _BtAudioFactory()
+    manager = HapticManager(
+        controller,
+        _settings(),
+        bt_audio_factory=bt_factory,
+    )
+    assert manager.route(HapticFrame(left_low=0.4)) is None
+    backend = bt_factory.instances[0]
+    backend.failed = True
+    backend.running = False
+    assert manager.route(HapticFrame(left_low=0.4)) is not None
+
+    controller.transport = None
+    manager.route(SILENT_FRAME)
+    controller.transport = "bluetooth"
+
+    assert manager.route(HapticFrame(right_low=0.5)) is None
+    assert backend.reset_failure_calls == 1
+    assert backend.running is True

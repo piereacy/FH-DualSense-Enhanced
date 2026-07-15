@@ -340,6 +340,7 @@ def test_r2_trigger_traction_still_uses_low_speed_raw_rotation():
 
 def test_rev_buzz_uses_trigger_frequency_strength_and_hold():
     settings = Settings()
+    settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     high = _telemetry(rpm=9000.0, max_rpm=9000.0)
     below = _telemetry(rpm=1000.0, max_rpm=9000.0)
@@ -354,6 +355,7 @@ def test_rev_buzz_uses_trigger_frequency_strength_and_hold():
 
 def test_rev_buzz_requires_continuous_throttle_and_clears_hold_on_release():
     settings = Settings()
+    settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     high = _telemetry(rpm=9000.0, max_rpm=9000.0)
 
@@ -364,6 +366,7 @@ def test_rev_buzz_requires_continuous_throttle_and_clears_hold_on_release():
 
 def test_rev_buzz_honors_switch_and_requires_positive_throttle_at_default_deadzone():
     settings = Settings()
+    settings.enable_rev_limiter = True
     high = _telemetry(rpm=9000.0, max_rpm=9000.0, accel=0)
     animation = TriggerAnimations()
 
@@ -375,6 +378,7 @@ def test_rev_buzz_honors_switch_and_requires_positive_throttle_at_default_deadzo
 
 def test_rev_buzz_keeps_handbrake_full_throttle_special_case():
     settings = Settings()
+    settings.enable_rev_limiter = True
     telemetry = _telemetry(
         speed=0.0,
         accel=204,
@@ -391,6 +395,7 @@ def test_rev_buzz_keeps_handbrake_full_throttle_special_case():
 
 def test_reset_transients_clears_rev_hold():
     settings = Settings()
+    settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     animation.rev_buzz(_telemetry(rpm=9000.0, max_rpm=9000.0), settings, 1.0)
 
@@ -401,6 +406,7 @@ def test_reset_transients_clears_rev_hold():
 
 def test_r2_trigger_uses_rev_limiter_when_traction_is_clear():
     settings = Settings()
+    settings.enable_rev_limiter = True
     telemetry = _telemetry(rpm=9000.0, max_rpm=9000.0)
 
     frame = Controller(settings).R2(telemetry, settings, 1.0)
@@ -411,6 +417,7 @@ def test_r2_trigger_uses_rev_limiter_when_traction_is_clear():
 
 def test_r2_traction_keeps_priority_over_rev_limiter():
     settings = Settings()
+    settings.enable_rev_limiter = True
     controller = Controller(settings)
     telemetry = _telemetry(
         rpm=9000.0,
