@@ -55,7 +55,7 @@ Enhanced R4 本地候选已经完成。当前重心是把三套 EXE 交给用户
 ## 正在进行的工作
 
 - 本地候选已整理到工作区根部的 `outputs/FH-DualSense-Enhanced-R4-review/`，等待用户选择界面并进行真实游戏体验。
-- 当前代码、测试与文档准备提交到 `feat/r4-ui-updater-haptics`；Enhanced R4 仍未 tag、未推送 Release。
+- 当前代码、测试与文档已提交到 `feat/r4-ui-updater-haptics`；Enhanced R4 仍未 tag、未推送 Release。
 
 ## 尚未完成的工作
 
@@ -115,8 +115,9 @@ Enhanced R4 本地候选已经完成。当前重心是把三套 EXE 交给用户
   - `0a9412e docs: design R4 frontend updater and haptics`
   - `2259a5c feat: add R4 GUI variants and built-in updater`
   - `3dd6e8d feat: expand R4 haptics and controller lighting`
-- `3dd6e8d` 之后的更新器 Windows 等待修复、运行时 gate、状态翻译、前端细节、R4 版本、打包、workflow、测试与文档改动正在整理为本地提交。
-- `packaging/windows/dist`、build、helper_dist 等生成目录应由 `.gitignore` 排除；最终提交前仍需确认没有产物进入 Git。
+  - `f1e8df2 feat: finalize R4 Windows distribution`
+- `f1e8df2` 已收录更新器 Windows 等待修复、运行时 gate、状态翻译、前端细节、R4 版本、打包、workflow、测试与文档改动。
+- `packaging/windows/dist`、build、generated、helper_build、helper_dist 等生成目录已由 `.gitignore` 排除；`f1e8df2` 未提交任何构建产物。
 
 ## 已执行的测试和验证结果
 
@@ -125,7 +126,7 @@ Enhanced R4 本地候选已经完成。当前重心是把三套 EXE 交给用户
 - R4 前端、更新器、设置组合定向测试：`36 passed`。
 - 早期 packaging/updater 契约的 4 个文档失败已随 README/Release body 修正；最终全量测试覆盖这些用例并通过。
 - 静态翻译键审计在六个非英语目录未发现当前 GUI/TUI 常量键缺失。
-- 当前工作树最终全量测试：`uv run --project src pytest -q` 为 `282 passed in 3.94s`。
+- 当前工作树最终全量测试：`uv run --project src pytest -q` 为 `282 passed in 4.02s`。
 - `python -m compileall -q src/modules src/lang` 与 `git diff --check` 通过；Git 只提示工作树未来可能进行 LF/CRLF 转换，没有空白错误。
 - `packaging/windows/build_exe.bat` 完整执行成功，Helper 和三个 one-file EXE 均由 PyInstaller `6.21.0` 构建。Console archive 已确认包含 `data/FH-DualSense-Update-Helper.exe` 与 `data/ui_variant.txt`。
 - 三个 EXE 的 `FileVersion`/`ProductVersion` 都是 `R4`，`ProductName` 为 `FH-DualSense-Enhanced`，`OriginalFilename` 与各自方案文件名一致；三个配套 `.sha256` 均与实际文件匹配，`--help` 退出码均为 `0`：
