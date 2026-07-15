@@ -112,14 +112,41 @@ def _redline_frame(settings, mixer, now, **telemetry):
     )
 
 
-def test_redline_grip_warning_starts_immediately_and_is_bilateral(settings):
+def test_redline_grip_warning_starts_immediately_on_left_by_default(settings):
     mixer = HapticMixer()
 
     frame = _redline_frame(settings, mixer, now=1.0)
 
-    assert frame.left_high == pytest.approx(settings.rev_limit_amp / 255.0)
-    assert frame.right_high == pytest.approx(frame.left_high)
+    event = settings.grip_redline_amp / 255.0
+    assert frame.left_high == pytest.approx(event)
+    assert frame.left_low == pytest.approx(event * settings.grip_redline_low_ratio)
+    assert frame.right_high == 0.0
+    assert frame.right_low == 0.0
     assert frame.engine_amplitude > 0.0
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "expected_left", "expected_right"),
+    [
+        (True, False, True, False),
+        (False, True, False, True),
+        (True, True, True, True),
+        (False, False, False, False),
+    ],
+    ids=("left-only", "right-only", "both", "neither"),
+)
+def test_redline_grip_warning_routes_to_selected_sides(
+    settings, left, right, expected_left, expected_right
+):
+    settings.grip_redline_left = left
+    settings.grip_redline_right = right
+
+    frame = _redline_frame(settings, HapticMixer(), now=1.0)
+
+    assert (frame.left_high > 0.0) is expected_left
+    assert (frame.right_high > 0.0) is expected_right
+    if expected_left and expected_right:
+        assert frame.left_high == pytest.approx(frame.right_high)
 
 
 def test_redline_grip_warning_uses_ten_hz_half_duty_fuel_cut_pulse(settings):
@@ -136,22 +163,43 @@ def test_redline_grip_warning_uses_ten_hz_half_duty_fuel_cut_pulse(settings):
     assert next_cycle.left_high == pytest.approx(onset.left_high)
 
 
-def test_redline_grip_warning_holds_for_configured_deadline(settings):
+def test_redline_grip_warning_uses_rpm_hysteresis_while_throttle_is_held(settings):
     mixer = HapticMixer()
     _redline_frame(settings, mixer, now=1.0)
 
-    held = _redline_frame(settings, mixer, now=1.10, rpm=1000.0)
-    expired = _redline_frame(settings, mixer, now=1.121, rpm=1000.0)
+    held = _redline_frame(
+        settings,
+        mixer,
+        now=1.10,
+        rpm=(settings.grip_redline_release_ratio + 0.01) * 9000.0,
+    )
+    expired = _redline_frame(
+        settings,
+        mixer,
+        now=1.20,
+        rpm=(settings.grip_redline_release_ratio - 0.001) * 9000.0,
+    )
 
     assert held.left_high > 0.0
     assert expired.left_high == 0.0
     assert expired.right_high == 0.0
 
 
+def test_redline_grip_warning_clears_immediately_when_throttle_is_released(settings):
+    mixer = HapticMixer()
+    assert _redline_frame(settings, mixer, now=1.0).left_high > 0.0
+
+    frame = _redline_frame(settings, mixer, now=1.01, accel=0)
+
+    assert frame.left_low == 0.0
+    assert frame.left_high == 0.0
+    assert mixer._redline_active is False
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
-        lambda value: setattr(value, "enable_rev_limiter", False),
+        lambda value: setattr(value, "enable_grip_redline_haptics", False),
         lambda value: setattr(value, "engine_haptics_intensity", 0.0),
         lambda value: setattr(value, "body_haptics_intensity", 0.0),
     ],
@@ -170,11 +218,12 @@ def test_disabling_redline_warning_clears_an_existing_hold(settings):
     mixer = HapticMixer()
     assert _redline_frame(settings, mixer, now=1.0).left_high > 0.0
 
-    settings.enable_rev_limiter = False
+    settings.enable_grip_redline_haptics = False
     frame = _redline_frame(settings, mixer, now=1.01, rpm=1000.0)
 
     assert frame.left_high == 0.0
     assert frame.right_high == 0.0
+    assert mixer._redline_active is False
 
 
 def test_redline_grip_warning_requires_accelerator_and_rpm_threshold(settings):
@@ -188,7 +237,7 @@ def test_redline_grip_warning_requires_accelerator_and_rpm_threshold(settings):
     )
     below_redline = mixer.update(
         _telemetry(
-            rpm=settings.rev_limit_ratio * 9000.0 - 1.0,
+            rpm=settings.grip_redline_ratio * 9000.0 - 1.0,
             accel=255,
         ),
         settings,
@@ -199,13 +248,92 @@ def test_redline_grip_warning_requires_accelerator_and_rpm_threshold(settings):
     assert below_redline.left_high == below_redline.right_high == 0.0
 
 
-def test_usb_and_bluetooth_share_the_same_normalized_redline_envelope(settings):
-    mixer = HapticMixer()
-    usb_frame = _redline_frame(settings, mixer, now=1.0)
-    bluetooth_rumble = to_compatible_rumble(usb_frame)
+def test_redline_ducks_continuous_background_but_not_transients(settings):
+    reference = Settings()
+    reference.enable_body_haptics = True
+    reference.body_haptics_intensity = 1.0
+    reference.engine_haptics_intensity = 1.0
+    reference.road_haptics_intensity = 1.0
+    reference.impact_haptics_intensity = 1.0
+    reference.slip_haptics_intensity = 0.0
+    reference.accel_deadzone = settings.accel_deadzone
+    reference.enable_grip_redline_haptics = False
+    telemetry = _telemetry(
+        rpm=9000.0,
+        accel=255,
+        surface_rumble_rr=0.4,
+    )
 
-    assert usb_frame.left_high == usb_frame.right_high
-    assert bluetooth_rumble.high_frequency == pytest.approx(usb_frame.left_high)
+    baseline = HapticMixer().update(telemetry, reference, now=1.0)
+    active = HapticMixer().update(telemetry, settings, now=1.0)
+
+    assert active.right_low == pytest.approx(
+        baseline.right_low * settings.grip_redline_background_duck
+    )
+    assert active.right_high == pytest.approx(
+        baseline.right_high * settings.grip_redline_background_duck
+    )
+    assert active.engine_amplitude == pytest.approx(
+        baseline.engine_amplitude * settings.grip_redline_background_duck
+    )
+
+    reference_mixer = HapticMixer()
+    active_mixer = HapticMixer()
+    reference_mixer.update(_telemetry(gear=2, rpm=9000.0, accel=255), reference, 2.0)
+    active_mixer.update(_telemetry(gear=2, rpm=9000.0, accel=255), settings, 2.0)
+    reference_shift = reference_mixer.update(
+        _telemetry(gear=3, rpm=9000.0, accel=255), reference, 2.01
+    )
+    active_shift = active_mixer.update(
+        _telemetry(gear=3, rpm=9000.0, accel=255), settings, 2.01
+    )
+
+    assert active_shift.right_low == pytest.approx(reference_shift.right_low)
+
+
+def test_redline_logs_only_state_edges(settings, caplog):
+    mixer = HapticMixer()
+
+    with caplog.at_level("INFO", logger="fhds.haptics"):
+        _redline_frame(settings, mixer, now=1.0)
+        _redline_frame(settings, mixer, now=1.01)
+        _redline_frame(settings, mixer, now=1.02, accel=0)
+
+    entered = [record for record in caplog.records if "Grip redline entered" in record.message]
+    exited = [record for record in caplog.records if "Grip redline exited" in record.message]
+    assert len(entered) == 1
+    assert len(exited) == 1
+    assert "sides=left" in entered[0].message
+    assert "reason=throttle" in exited[0].message
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "motor"),
+    [(True, False, "low"), (False, True, "high")],
+    ids=("left-motor", "right-motor"),
+)
+def test_usb_and_bluetooth_share_redline_event_with_side_projection(
+    settings, left, right, motor
+):
+    settings.grip_redline_left = left
+    settings.grip_redline_right = right
+    mixer = HapticMixer()
+    on = _redline_frame(settings, mixer, now=1.0)
+    off = _redline_frame(settings, mixer, now=1.051)
+    on_rumble = to_compatible_rumble(on)
+    off_rumble = to_compatible_rumble(off)
+    event = settings.grip_redline_amp / 255.0
+
+    if motor == "low":
+        assert on.left_high == pytest.approx(event)
+        assert on.right_high == 0.0
+        assert on_rumble.low_frequency - off_rumble.low_frequency == pytest.approx(event)
+        assert on_rumble.high_frequency == pytest.approx(off_rumble.high_frequency)
+    else:
+        assert on.right_high == pytest.approx(event)
+        assert on.left_high == 0.0
+        assert on_rumble.high_frequency - off_rumble.high_frequency == pytest.approx(event)
+        assert on_rumble.low_frequency == pytest.approx(off_rumble.low_frequency)
 
 
 def test_true_stationary_idle_is_silent(settings):

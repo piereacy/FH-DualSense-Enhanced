@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
+import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from modules.forzahorizon.effects import (
     BURNOUT_ROT_THRESHOLD,
@@ -12,12 +14,36 @@ from modules.forzahorizon.effects import (
 from .frame import HapticFrame, SILENT_FRAME, clamp01
 
 
+log = logging.getLogger("fhds.haptics")
+
 _WHEELS = ("fl", "fr", "rl", "rr")
 _ROLLING_ENTER_KMH = 0.5
 _ROLLING_EXIT_KMH = 0.2
 _ENGINE_ACCEL_ACTIVITY = 1.0
 _ENGINE_RPM_ACTIVITY_MIN = 100.0
 _ENGINE_RPM_ACTIVITY_RATIO = 0.05
+
+
+@dataclass(slots=True)
+class _Channels:
+    left_low: float = 0.0
+    left_high: float = 0.0
+    right_low: float = 0.0
+    right_high: float = 0.0
+
+    def add(self, other: _Channels) -> None:
+        self.left_low += other.left_low
+        self.left_high += other.left_high
+        self.right_low += other.right_low
+        self.right_high += other.right_high
+
+    def scaled(self, factor: float) -> _Channels:
+        return _Channels(
+            left_low=self.left_low * factor,
+            left_high=self.left_high * factor,
+            right_low=self.right_low * factor,
+            right_high=self.right_high * factor,
+        )
 
 
 def _number(value, default: float = 0.0) -> float:
@@ -59,7 +85,7 @@ class HapticMixer:
         self._collision_right = 0.0
         self._shift_until = 0.0
         self._redline_started_at: float | None = None
-        self._redline_until = 0.0
+        self._redline_active = False
 
     def _update_rolling(self, speed_kmh: float) -> bool:
         if self._rolling:
@@ -70,6 +96,11 @@ class HapticMixer:
 
     def update(self, telemetry: Mapping[str, object], settings, now: float) -> HapticFrame:
         if not getattr(settings, "enable_body_haptics", False) or not telemetry.get("on", False):
+            if self._redline_active:
+                reason = "body-toggle" if not getattr(
+                    settings, "enable_body_haptics", False
+                ) else "telemetry-off"
+                log.info("Grip redline exited reason=%s", reason)
             self.reset()
             return SILENT_FRAME
 
@@ -101,10 +132,9 @@ class HapticMixer:
         impact_scale = _setting(settings, "impact_haptics_intensity", 1.0)
         slip_scale = _setting(settings, "slip_haptics_intensity", 1.0)
 
-        left_low = 0.0
-        left_high = 0.0
-        right_low = 0.0
-        right_high = 0.0
+        continuous = _Channels()
+        transient = _Channels()
+        redline_event = _Channels()
 
         rpm = _number(telemetry.get("rpm"))
         idle_rpm = _number(telemetry.get("idle_rpm"))
@@ -128,42 +158,88 @@ class HapticMixer:
             engine_hz = 0.0
             engine_amplitude = 0.0
 
-        redline_enabled = bool(getattr(settings, "enable_rev_limiter", False))
+        redline_enabled = bool(
+            getattr(settings, "enable_grip_redline_haptics", False)
+        )
+        redline_left = bool(getattr(settings, "grip_redline_left", True))
+        redline_right = bool(getattr(settings, "grip_redline_right", False))
         engine_scale = _setting(settings, "engine_haptics_intensity", 1.0)
         accel_deadzone = max(1.0, _setting(settings, "accel_deadzone", 0.0))
         redline_ratio = rpm / max_rpm if max_rpm > 0.0 else 0.0
-        above_redline = (
-            redline_enabled
-            and engine_scale > 0.0
-            and accel_raw >= accel_deadzone
-            and redline_ratio >= _setting(settings, "rev_limit_ratio", 0.93)
+        enter_ratio = clamp01(_setting(settings, "grip_redline_ratio", 0.93))
+        release_ratio = min(
+            enter_ratio,
+            clamp01(_setting(settings, "grip_redline_release_ratio", 0.90)),
         )
-        hold_seconds = _setting(settings, "rev_limit_hold_ms", 120.0) / 1000.0
-        if not redline_enabled or engine_scale <= 0.0:
-            self._redline_started_at = None
-            self._redline_until = 0.0
-        elif above_redline:
-            if self._redline_started_at is None or now >= self._redline_until:
-                self._redline_started_at = now
-            self._redline_until = now + hold_seconds
-        elif now >= self._redline_until:
+        throttle_active = accel_raw >= accel_deadzone
+        redline_available = (
+            redline_enabled
+            and (redline_left or redline_right)
+            and engine_scale > 0.0
+            and master > 0.0
+        )
+
+        exit_reason = None
+        if not redline_available:
+            if not redline_enabled or not (redline_left or redline_right):
+                exit_reason = "toggle"
+            elif engine_scale <= 0.0:
+                exit_reason = "engine-intensity"
+            else:
+                exit_reason = "body-intensity"
+            self._redline_active = False
+        elif not throttle_active:
+            exit_reason = "throttle"
+            self._redline_active = False
+        elif self._redline_active:
+            if redline_ratio < release_ratio:
+                exit_reason = "ratio"
+                self._redline_active = False
+        elif max_rpm > 0.0 and redline_ratio >= enter_ratio:
+            self._redline_active = True
+            self._redline_started_at = now
+            sides = "both" if redline_left and redline_right else (
+                "left" if redline_left else "right"
+            )
+            log.info(
+                "Grip redline entered rpm=%.0f max_rpm=%.0f ratio=%.3f "
+                "accel=%.0f sides=%s",
+                rpm,
+                max_rpm,
+                redline_ratio,
+                accel_raw,
+                sides,
+            )
+
+        if not self._redline_active:
+            if self._redline_started_at is not None and exit_reason is not None:
+                log.info(
+                    "Grip redline exited reason=%s rpm=%.0f max_rpm=%.0f ratio=%.3f",
+                    exit_reason,
+                    rpm,
+                    max_rpm,
+                    redline_ratio,
+                )
             self._redline_started_at = None
 
         redline_amplitude = 0.0
-        redline_latched = redline_enabled and engine_scale > 0.0 and (
-            above_redline or now < self._redline_until
-        )
-        if redline_latched and self._redline_started_at is not None:
-            pulse_hz = max(1.0, _setting(settings, "rev_limit_freq", 10.0))
+        if self._redline_active and self._redline_started_at is not None:
+            pulse_hz = max(1.0, _setting(settings, "grip_redline_freq", 10.0))
             period = 1.0 / pulse_hz
             phase = (now - self._redline_started_at) % period
             if phase < period * 0.5:
                 redline_amplitude = clamp01(
-                    _setting(settings, "rev_limit_amp", 96.0) / 255.0
+                    _setting(settings, "grip_redline_amp", 192.0) / 255.0
                 ) * engine_scale
-
-        left_high += redline_amplitude
-        right_high += redline_amplitude
+                redline_low = redline_amplitude * clamp01(
+                    _setting(settings, "grip_redline_low_ratio", 0.25)
+                )
+                if redline_left:
+                    redline_event.left_low = redline_low
+                    redline_event.left_high = redline_amplitude
+                if redline_right:
+                    redline_event.right_low = redline_low
+                    redline_event.right_high = redline_amplitude
 
         for wheel in _WHEELS:
             excitation = contact_excitation[wheel]
@@ -174,11 +250,11 @@ class HapticMixer:
                 telemetry.get(f"surface_rumble_{wheel}")
             )
             if side == "left":
-                left_low += surface_low * road_scale * excitation
-                left_high += surface_high * road_scale * excitation
+                continuous.left_low += surface_low * road_scale * excitation
+                continuous.left_high += surface_high * road_scale * excitation
             else:
-                right_low += surface_low * road_scale * excitation
-                right_high += surface_high * road_scale * excitation
+                continuous.right_low += surface_low * road_scale * excitation
+                continuous.right_high += surface_high * road_scale * excitation
 
         strip_left = max(
             contact_excitation[wheel]
@@ -192,15 +268,15 @@ class HapticMixer:
             else 0.0
             for wheel in ("fr", "rr")
         )
-        left_high += 0.35 * road_scale * strip_left
-        right_high += 0.35 * road_scale * strip_right
+        continuous.left_high += 0.35 * road_scale * strip_left
+        continuous.right_high += 0.35 * road_scale * strip_right
 
         if rolling:
             speed_mps = speed_kmh / 3.6
             if speed_mps > 3.0:
                 asphalt = min(1.0, (speed_mps - 3.0) / 80.0) * 0.12 * road_scale
-                left_high += asphalt
-                right_high += asphalt
+                continuous.left_high += asphalt
+                continuous.right_high += asphalt
 
         puddle_left = clamp01(max(
             _number(telemetry.get(f"wheel_in_puddle_{wheel}"))
@@ -212,10 +288,10 @@ class HapticMixer:
             * contact_excitation[wheel]
             for wheel in ("fr", "rr")
         ))
-        left_low += puddle_left * 0.6 * road_scale
-        left_high += puddle_left * 0.3 * road_scale
-        right_low += puddle_right * 0.6 * road_scale
-        right_high += puddle_right * 0.3 * road_scale
+        continuous.left_low += puddle_left * 0.6 * road_scale
+        continuous.left_high += puddle_left * 0.3 * road_scale
+        continuous.right_low += puddle_right * 0.6 * road_scale
+        continuous.right_high += puddle_right * 0.3 * road_scale
 
         combined_slips = {
             wheel: abs(_number(telemetry.get(f"tire_combined_slip_{wheel}")))
@@ -227,13 +303,17 @@ class HapticMixer:
         if speed_kmh < LOW_SPEED_KMH:
             slip_left = max(spin_strength["fl"], spin_strength["rl"])
             slip_right = max(spin_strength["fr"], spin_strength["rr"])
-            left_low += slip_left * 0.5 * slip_scale
-            right_low += slip_right * 0.5 * slip_scale
+            continuous.left_low += slip_left * 0.5 * slip_scale
+            continuous.right_low += slip_right * 0.5 * slip_scale
         else:
             slip_left = combined_slip_left
             slip_right = combined_slip_right
-            left_low += max(0.0, slip_left - slip_threshold) * 0.5 * slip_scale
-            right_low += max(0.0, slip_right - slip_threshold) * 0.5 * slip_scale
+            continuous.left_low += (
+                max(0.0, slip_left - slip_threshold) * 0.5 * slip_scale
+            )
+            continuous.right_low += (
+                max(0.0, slip_right - slip_threshold) * 0.5 * slip_scale
+            )
 
         suspension = tuple(
             _number(telemetry.get(f"suspension_travel_meters_{wheel}"))
@@ -244,9 +324,9 @@ class HapticMixer:
             drops = tuple(current - previous
                           for current, previous in zip(suspension, self._prev_suspension))
             if drops[0] < -threshold or drops[2] < -threshold:
-                left_low += impact_scale
+                transient.left_low += impact_scale
             if drops[1] < -threshold or drops[3] < -threshold:
-                right_low += impact_scale
+                transient.right_low += impact_scale
         self._prev_suspension = suspension
 
         accel_x = _number(telemetry.get("accel_x"))
@@ -277,8 +357,8 @@ class HapticMixer:
         if now < self._collision_until:
             duration = max(1e-6, self._collision_until - self._collision_started)
             envelope = clamp01((self._collision_until - now) / duration)
-            left_low += self._collision_left * envelope
-            right_low += self._collision_right * envelope
+            transient.left_low += self._collision_left * envelope
+            transient.right_low += self._collision_right * envelope
 
         gear = int(_number(telemetry.get("gear")))
         if (self._prev_gear is not None and self._prev_gear > 0 and gear > 0
@@ -286,8 +366,8 @@ class HapticMixer:
             self._shift_until = now + _setting(settings, "gear_shift_duration_ms", 100.0) / 1000.0
         self._prev_gear = gear
         if now < self._shift_until:
-            left_low += 0.8 * impact_scale
-            right_low += 0.8 * impact_scale
+            transient.left_low += 0.8 * impact_scale
+            transient.right_low += 0.8 * impact_scale
 
         brake = _number(telemetry.get("brake"))
         brake_threshold = max(1.0, _setting(settings, "abs_brake_threshold", 100.0))
@@ -297,14 +377,41 @@ class HapticMixer:
                 and speed_kmh >= abs_min_speed
                 and max(combined_slip_left, combined_slip_right) > abs_slip_threshold
                 and int(now * 15.0) % 2 == 0):
-            left_low += 0.5 * slip_scale
-            right_low += 0.5 * slip_scale
+            transient.left_low += 0.5 * slip_scale
+            transient.right_low += 0.5 * slip_scale
+
+        continuous_duck = (
+            clamp01(_setting(settings, "grip_redline_background_duck", 0.30))
+            if self._redline_active else 1.0
+        )
+        background = continuous.scaled(continuous_duck)
+        background.add(transient)
+        engine_amplitude *= continuous_duck
+
+        mixed = background.scaled(1.0)
+        mixed.add(redline_event)
+        engine_amplitude = clamp01(engine_amplitude * master)
+
+        compatible_low = None
+        compatible_high = None
+        if redline_amplitude > 0.0:
+            compatible_low = clamp01(
+                max(background.left_low, background.right_low) * master
+                + 0.5 * engine_amplitude
+                + (redline_amplitude * master if redline_left else 0.0)
+            )
+            compatible_high = clamp01(
+                max(background.left_high, background.right_high) * master
+                + (redline_amplitude * master if redline_right else 0.0)
+            )
 
         return HapticFrame(
-            left_low=clamp01(left_low * master),
-            left_high=clamp01(left_high * master),
-            right_low=clamp01(right_low * master),
-            right_high=clamp01(right_high * master),
+            left_low=clamp01(mixed.left_low * master),
+            left_high=clamp01(mixed.left_high * master),
+            right_low=clamp01(mixed.right_low * master),
+            right_high=clamp01(mixed.right_high * master),
             engine_hz=max(0.0, engine_hz),
-            engine_amplitude=clamp01(engine_amplitude * master),
+            engine_amplitude=engine_amplitude,
+            compatible_low_frequency=compatible_low,
+            compatible_high_frequency=compatible_high,
         )
