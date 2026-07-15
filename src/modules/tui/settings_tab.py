@@ -39,11 +39,16 @@ SETTING_SECTIONS = [
         ("abs_amp", "Rumble strength", 0, 255, ""),
         ("abs_sensitivity", "Sensitivity", 0.1, 3.0, ""),
     ]),
-    ("Redline grip warning", [
+    ("R2 trigger redline vibration", [
         ("rev_limit_ratio", "Trigger near redline at", 0.0, 1.0, ""),
-        ("rev_limit_freq", "Pulse rate (Hz)", 1, 20, ""),
-        ("rev_limit_amp", "Grip pulse strength", 0, 255, ""),
-        ("rev_limit_hold_ms", "Pulse hold time (ms)", 0.0, 1000.0, ""),
+        ("rev_limit_freq", "Trigger vibration frequency (Hz)", 1, 255, ""),
+        ("rev_limit_amp", "Trigger vibration strength", 0, 255, ""),
+        ("rev_limit_hold_ms", "Trigger hold time (ms)", 0.0, 1000.0, ""),
+    ]),
+    ("Grip redline vibration", [
+        ("grip_redline_ratio", "Grip trigger near redline at", 0.0, 1.0, ""),
+        ("grip_redline_freq", "Grip pulse rate (Hz)", 1, 20, ""),
+        ("grip_redline_amp", "Grip pulse strength", 0, 255, ""),
     ]),
     ("Traction/grip feedback", [
         ("wheelspin_amp", "Grip feedback strength", 0, 255, ""),
@@ -101,6 +106,19 @@ EXPERIMENTAL_SECTIONS = [
         ("wheelspin_dirt_freq_max", "Dirt maximum frequency (Hz)", 0, 255, ""),
         ("wheelspin_gravel_freq_min", "Gravel minimum frequency (Hz)", 0, 255, ""),
         ("wheelspin_gravel_freq_max", "Gravel maximum frequency (Hz)", 0, 255, ""),
+    ]),
+    ("Grip redline advanced tuning", [
+        ("grip_redline_release_ratio", "Grip release below redline at", 0.0, 1.0, ""),
+        ("grip_redline_low_ratio", "Low-frequency pulse ratio", 0.0, 1.0, ""),
+        ("grip_redline_background_duck", "Redline background level", 0.0, 1.0, ""),
+    ]),
+    ("Collision haptics advanced tuning", [
+        ("collision_haptics_jerk_threshold", "Collision jerk threshold", 0.0, 50.0, ""),
+        ("collision_haptics_duration_ms", "Collision duration (ms)", 0.0, 1000.0, ""),
+        ("collision_haptics_cooldown_ms", "Collision cooldown (ms)", 0.0, 2000.0, ""),
+        ("collision_haptics_rebound_ratio", "Collision rebound strength", 0.0, 1.0, ""),
+        ("collision_haptics_weak_side_ratio", "Collision weak-side strength", 0.0, 1.0, ""),
+        ("collision_background_duck", "Collision background level", 0.0, 1.0, ""),
     ]),
 ]
 

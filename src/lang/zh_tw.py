@@ -239,4 +239,26 @@ STRINGS = {
 
     # --- external links ---
     "Sponsor": "贊助",
+    # --- R3 redline and collision haptics ---
+    "Redline feedback": "紅線回饋",
+    "R2 trigger redline vibration": "R2 扳機鍵紅線震動",
+    "Grip redline vibration": "握把紅線震動",
+    "Left grip": "左握把",
+    "Right grip": "右握把",
+    "Trigger vibration frequency (Hz)": "扳機鍵震動頻率（Hz）",
+    "Trigger vibration strength": "扳機鍵震動強度",
+    "Trigger hold time (ms)": "扳機鍵保持時間（ms）",
+    "Grip trigger near redline at": "握把接近紅線時觸發",
+    "Grip pulse rate (Hz)": "握把脈衝頻率（Hz）",
+    "Grip redline advanced tuning": "握把紅線進階調校",
+    "Low-frequency pulse ratio": "低頻脈衝比例",
+    "Redline background level": "紅線背景震動比例",
+    "Collision haptics advanced tuning": "碰撞觸覺進階調校",
+    "Collision jerk threshold": "碰撞加速度突變門檻",
+    "Collision duration (ms)": "碰撞持續時間（ms）",
+    "Collision cooldown (ms)": "碰撞冷卻時間（ms）",
+    "Collision rebound strength": "碰撞回彈強度",
+    "Collision weak-side strength": "碰撞弱側強度",
+    "Collision background level": "碰撞背景震動比例",
+    "Grip release below redline at": "握把紅線釋放門檻",
 }

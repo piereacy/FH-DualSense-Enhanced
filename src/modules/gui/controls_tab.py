@@ -22,11 +22,16 @@ TRIGGER_CONTROLS = [
     ("R2 - Throttle", [
         ("enable_gear_shift",          "Shift thump"),
         ("enable_idle_buzz",           "Idle buzz"),
+        ("enable_rev_limiter",         "R2 trigger redline vibration"),
         ("enable_throttle_resistance", "Throttle stiffness"),
     ]),
     ("Shared feedback", [
-        ("enable_rev_limiter",    "Redline grip warning"),
         ("enable_wheelspin_buzz", "Traction/grip feedback"),
+    ]),
+    ("Redline feedback", [
+        ("enable_grip_redline_haptics", "Grip redline vibration"),
+        ("grip_redline_left",           "Left grip"),
+        ("grip_redline_right",          "Right grip"),
     ]),
 ]
 
@@ -47,14 +52,19 @@ class ControlsTab(ctk.CTkFrame):
 
         grid = ctk.CTkFrame(self, fg_color="transparent")
         grid.pack(fill="both", expand=True)
-        for col in range(len(TRIGGER_CONTROLS)):
+        for col in range(2):
             grid.grid_columnconfigure(col, weight=1, uniform="cols")
-        grid.grid_rowconfigure(0, weight=1)
+        for row in range(2):
+            grid.grid_rowconfigure(row, weight=1)
 
-        for col, (title, toggles) in enumerate(TRIGGER_CONTROLS):
+        for index, (title, toggles) in enumerate(TRIGGER_CONTROLS):
+            row, col = divmod(index, 2)
             card = W.Card(grid)
-            card.grid(row=0, column=col,
-                      padx=(0 if col == 0 else T.PAD_MD // 2, 0 if col else T.PAD_MD // 2),
+            card.grid(row=row, column=col,
+                      padx=(0 if col == 0 else T.PAD_MD // 2,
+                            T.PAD_MD // 2 if col == 0 else 0),
+                      pady=(0 if row == 0 else T.PAD_MD // 2,
+                            T.PAD_MD // 2 if row == 0 else 0),
                       sticky="nsew")
             W.H2(card, t(title)).pack(anchor="w", padx=T.PAD_MD,
                                       pady=(T.PAD_MD, T.PAD_SM))

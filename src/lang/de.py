@@ -240,4 +240,26 @@ STRINGS = {
 
     # --- external links ---
     "Sponsor": "Sponsor",
+    # --- R3 redline and collision haptics ---
+    "Redline feedback": "Drehzahlgrenzen-Feedback",
+    "R2 trigger redline vibration": "R2-Trigger-Vibration am Drehzahlbegrenzer",
+    "Grip redline vibration": "Griffvibration am Drehzahlbegrenzer",
+    "Left grip": "Linker Griff",
+    "Right grip": "Rechter Griff",
+    "Trigger vibration frequency (Hz)": "Trigger-Vibrationsfrequenz (Hz)",
+    "Trigger vibration strength": "Trigger-Vibrationsstärke",
+    "Trigger hold time (ms)": "Trigger-Haltezeit (ms)",
+    "Grip trigger near redline at": "Griffwarnung auslösen bei",
+    "Grip pulse rate (Hz)": "Griff-Pulsrate (Hz)",
+    "Grip redline advanced tuning": "Erweiterte Griff-Drehzahlgrenzen-Abstimmung",
+    "Low-frequency pulse ratio": "Anteil des niederfrequenten Pulses",
+    "Redline background level": "Hintergrundpegel bei Drehzahlgrenze",
+    "Collision haptics advanced tuning": "Erweiterte Kollisionshaptik",
+    "Collision jerk threshold": "Kollisions-Ruckschwelle",
+    "Collision duration (ms)": "Kollisionsdauer (ms)",
+    "Collision cooldown (ms)": "Kollisions-Sperrzeit (ms)",
+    "Collision rebound strength": "Stärke des Kollisionsrückpralls",
+    "Collision weak-side strength": "Stärke der schwächeren Kollisionsseite",
+    "Collision background level": "Hintergrundpegel bei Kollision",
+    "Grip release below redline at": "Griffwarnung lösen unter",
 }

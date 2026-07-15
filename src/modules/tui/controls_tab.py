@@ -22,11 +22,16 @@ TRIGGER_CONTROLS = [
     ("R2 - Throttle", [
         ("enable_gear_shift",          "Shift thump"),
         ("enable_idle_buzz",           "Idle buzz"),
+        ("enable_rev_limiter",         "R2 trigger redline vibration"),
         ("enable_throttle_resistance", "Throttle stiffness"),
     ]),
     ("Shared feedback", [
-        ("enable_rev_limiter",    "Redline grip warning"),
         ("enable_wheelspin_buzz", "Traction/grip feedback"),
+    ]),
+    ("Redline feedback", [
+        ("enable_grip_redline_haptics", "Grip redline vibration"),
+        ("grip_redline_left",           "Left grip"),
+        ("grip_redline_right",          "Right grip"),
     ]),
 ]
 

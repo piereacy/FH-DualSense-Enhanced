@@ -39,11 +39,16 @@ BEHAVIOR_LABELS = {
 }
 NORMAL_R3_FIELDS = {
     "ABS (anti-lock brake) rumble": ("abs_amp", "abs_sensitivity"),
-    "Redline grip warning": (
+    "R2 trigger redline vibration": (
         "rev_limit_ratio",
         "rev_limit_freq",
         "rev_limit_amp",
         "rev_limit_hold_ms",
+    ),
+    "Grip redline vibration": (
+        "grip_redline_ratio",
+        "grip_redline_freq",
+        "grip_redline_amp",
     ),
     "Traction/grip feedback": ("wheelspin_amp", "wheelspin_sensitivity"),
 }
@@ -75,15 +80,31 @@ EXPERIMENTAL_FIELDS = (
     "wheelspin_dirt_freq_max",
     "wheelspin_gravel_freq_min",
     "wheelspin_gravel_freq_max",
+    "grip_redline_release_ratio",
+    "grip_redline_low_ratio",
+    "grip_redline_background_duck",
+    "collision_haptics_jerk_threshold",
+    "collision_haptics_duration_ms",
+    "collision_haptics_cooldown_ms",
+    "collision_haptics_rebound_ratio",
+    "collision_haptics_weak_side_ratio",
+    "collision_background_duck",
 )
 R3_LABELS = {
     "Sensitivity",
     "Shared feedback",
-    "Redline grip warning",
+    "Redline feedback",
+    "R2 trigger redline vibration",
+    "Grip redline vibration",
+    "Left grip",
+    "Right grip",
     "Trigger near redline at",
-    "Pulse rate (Hz)",
+    "Trigger vibration frequency (Hz)",
+    "Trigger vibration strength",
+    "Trigger hold time (ms)",
+    "Grip trigger near redline at",
+    "Grip pulse rate (Hz)",
     "Grip pulse strength",
-    "Pulse hold time (ms)",
     "Traction/grip feedback",
     "Grip feedback strength",
     "Experimental features",
@@ -115,6 +136,17 @@ R3_LABELS = {
     "Dirt maximum frequency (Hz)",
     "Gravel minimum frequency (Hz)",
     "Gravel maximum frequency (Hz)",
+    "Grip redline advanced tuning",
+    "Grip release below redline at",
+    "Low-frequency pulse ratio",
+    "Redline background level",
+    "Collision haptics advanced tuning",
+    "Collision jerk threshold",
+    "Collision duration (ms)",
+    "Collision cooldown (ms)",
+    "Collision rebound strength",
+    "Collision weak-side strength",
+    "Collision background level",
 }
 
 
@@ -330,15 +362,30 @@ def test_every_non_english_catalog_translates_r3_settings_labels():
         assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
-def test_gui_and_tui_move_shared_feedback_out_of_the_r2_only_group():
+def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
     gui = _sections(ROOT / "src/modules/gui/controls_tab.py", "TRIGGER_CONTROLS")
     tui = _sections(ROOT / "src/modules/tui/controls_tab.py", "TRIGGER_CONTROLS")
 
     assert gui == tui
     groups = {title: dict(items) for title, items in gui}
-    assert "enable_rev_limiter" not in groups["R2 - Throttle"]
+    assert groups["R2 - Throttle"]["enable_rev_limiter"] == (
+        "R2 trigger redline vibration"
+    )
     assert "enable_wheelspin_buzz" not in groups["R2 - Throttle"]
     assert groups["Shared feedback"] == {
-        "enable_rev_limiter": "Redline grip warning",
         "enable_wheelspin_buzz": "Traction/grip feedback",
     }
+    assert groups["Redline feedback"] == {
+        "enable_grip_redline_haptics": "Grip redline vibration",
+        "grip_redline_left": "Left grip",
+        "grip_redline_right": "Right grip",
+    }
+
+
+def test_simplified_chinese_distinguishes_r2_trigger_and_grip_redline():
+    strings = runpy.run_path(str(ROOT / "src/lang/zh.py"))["STRINGS"]
+
+    assert strings["R2 trigger redline vibration"] == "R2 扳机键红线震动"
+    assert strings["Grip redline vibration"] == "握把红线震动"
+    assert strings["Left grip"] == "左握把"
+    assert strings["Right grip"] == "右握把"
