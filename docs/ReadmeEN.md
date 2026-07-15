@@ -10,7 +10,7 @@
   <p><strong>DualSense adaptive triggers and telemetry-driven body haptics for Forza Horizon on PC.</strong></p>
 </div>
 
-FH-DualSense-Enhanced `R2` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2` and informed by `HorizonHaptics 1.3.0`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
+FH-DualSense-Enhanced `R3` is an enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2` and informed by `HorizonHaptics 1.3.0`. It reads vehicle telemetry sent by the game over UDP and turns braking, throttle, engine, road, tire, and impact states into DualSense feedback.
 
 This is not an official upstream release and does not represent the upstream author's views.
 
@@ -20,14 +20,17 @@ Starting with R2, this project uses its own concise `R` version series to avoid 
 
 - The L2 trigger provides progressive brake resistance and a GT7-style ABS wall, preserving an upper resistance wall while pulsing the lower zones.
 - The R2 trigger provides dynamic wheelspin feedback derived from driven-wheel slip, low-speed wheel rotation, asymmetric EWMA smoothing, hysteresis, and G-force damping; it takes priority over the rev limiter.
+- Traction feedback follows pedal state: brake only routes to L2, throttle only routes to the R2 trigger, and pressing both routes traction to the R2 trigger while L2 ABS remains independent.
 - Tarmac, puddles, dirt, and gravel use distinct R2-trigger material frequency bands.
 - Body haptics for engine, road material, suspension, impacts, puddles, tire slip, burnouts, and ABS.
+- R2-trigger redline and optional grip redline use independent switches. Grip redline is off by default and provides an enhanced fuel-cut pulse on the left grip when enabled.
+- Collision body feedback uses a directional envelope. The optional grip gear-shift thump is off by default and has independent strength and duration controls.
 - No meaningless continuous vibration when the vehicle is truly stationary at idle.
 - Revving and burnouts while stationary still produce appropriate feedback.
 - Road material contributes only while the car moves or the tires create physical excitation.
 - USB and Bluetooth support.
 - Profiles, tray behavior, exit-with-game behavior, and ZUV updates.
-- Dynamic R2 trigger controls live under a collapsed Experimental section; changing them without understanding the algorithm is not recommended.
+- Advanced traction, ABS, redline, and collision controls live under a collapsed Experimental section. Grip gear-shift tuning is a normal setting.
 
 The default tuning is informed by community feedback and refined through hands-on driving tests. It is a practical starting point, not a universal setting for every car or player.
 
@@ -54,11 +57,11 @@ For the manual network fallback, also download `FH-DualSense-Enhanced.zuv.py`, p
 
 ### Standalone EXE
 
-Downloading only `FH-DualSense-Enhanced-R2.exe` also works. The EXE includes Python and all application dependencies, so BAT, ZUV, uv, and a system Python installation are not required.
+Downloading only `FH-DualSense-Enhanced-R3.exe` also works. The EXE includes Python and all application dependencies, so BAT, ZUV, uv, and a system Python installation are not required.
 
 The standalone EXE does not update itself. Settings are stored in a `data` folder beside the EXE.
 
-To try rolling test builds, use the `R2-preview` Release and run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to follow the prerelease channel.
+To try rolling test builds, use the `R3-preview` Release and run `uv run FH-DualSense-Enhanced.zuv.py --prerelease` to follow the prerelease channel.
 
 ### Linux
 
@@ -103,7 +106,7 @@ When using SISR or another tool that can claim the controller, start FH-DualSens
 
 ### 4. In-game vibration
 
-Body haptics are synthesized from telemetry and do not depend on the in-game vibration toggle. It can normally remain enabled. If native rumble feels duplicated, compare the result with in-game vibration disabled.
+Body haptics are synthesized from telemetry and do not depend on the in-game vibration toggle. Keeping it enabled preserves menu, cutscene, and other native game rumble, but native rumble can mask this project's left/right collision direction. Disable in-game vibration when validating direction or comparing duplicated output. This project does not currently capture or fully reproduce native game rumble.
 
 ## DualSense button icons
 

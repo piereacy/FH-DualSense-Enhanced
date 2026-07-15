@@ -11,6 +11,7 @@ from modules.haptics.mixer import HapticMixer
 def settings():
     value = Settings()
     value.enable_body_haptics = True
+    value.enable_grip_redline_haptics = True
     value.body_haptics_intensity = 1.0
     value.engine_haptics_intensity = 1.0
     value.road_haptics_intensity = 1.0
@@ -117,9 +118,13 @@ def test_redline_grip_warning_starts_immediately_on_left_by_default(settings):
 
     frame = _redline_frame(settings, mixer, now=1.0)
 
-    event = settings.grip_redline_amp / 255.0
+    raw_event = settings.grip_redline_amp / 255.0 * settings.grip_redline_gain
+    event = min(1.0, raw_event)
     assert frame.left_high == pytest.approx(event)
-    assert frame.left_low == pytest.approx(event * settings.grip_redline_low_ratio)
+    assert frame.left_low == pytest.approx(min(
+        1.0,
+        raw_event * settings.grip_redline_low_ratio,
+    ))
     assert frame.right_high == 0.0
     assert frame.right_low == 0.0
     assert frame.engine_amplitude > 0.0
@@ -161,6 +166,29 @@ def test_redline_grip_warning_uses_ten_hz_half_duty_fuel_cut_pulse(settings):
     assert still_on.left_high == pytest.approx(onset.left_high)
     assert off_half.left_high == 0.0
     assert next_cycle.left_high == pytest.approx(onset.left_high)
+
+
+def test_redline_grip_gain_multiplies_unsaturated_signal_by_one_point_five(settings):
+    settings.body_haptics_intensity = 0.5
+    settings.engine_haptics_intensity = 0.5
+    settings.grip_redline_gain = 1.0
+    baseline = _redline_frame(settings, HapticMixer(), now=1.0)
+
+    settings.grip_redline_gain = 1.5
+    boosted = _redline_frame(settings, HapticMixer(), now=1.0)
+
+    assert boosted.left_high == pytest.approx(baseline.left_high * 1.5)
+    assert boosted.left_low == pytest.approx(baseline.left_low * 1.5)
+
+
+def test_redline_grip_gain_is_safely_clamped_at_final_output(settings):
+    settings.grip_redline_amp = 255
+    settings.grip_redline_gain = 2.0
+
+    frame = _redline_frame(settings, HapticMixer(), now=1.0)
+
+    assert frame.left_high == 1.0
+    assert frame.left_low <= 1.0
 
 
 def test_redline_grip_warning_uses_rpm_hysteresis_while_throttle_is_held(settings):
@@ -315,6 +343,7 @@ def test_redline_logs_only_state_edges(settings, caplog):
 def test_usb_and_bluetooth_share_redline_event_with_side_projection(
     settings, left, right, motor
 ):
+    settings.grip_redline_amp = 100
     settings.grip_redline_left = left
     settings.grip_redline_right = right
     mixer = HapticMixer()
@@ -322,7 +351,7 @@ def test_usb_and_bluetooth_share_redline_event_with_side_projection(
     off = _redline_frame(settings, mixer, now=1.051)
     on_rumble = to_compatible_rumble(on)
     off_rumble = to_compatible_rumble(off)
-    event = settings.grip_redline_amp / 255.0
+    event = settings.grip_redline_amp / 255.0 * settings.grip_redline_gain
 
     if motor == "low":
         assert on.left_high == pytest.approx(event)
@@ -855,7 +884,10 @@ def test_redline_resumes_after_collision_priority_window(settings):
         now=1.201,
     )
 
-    assert resumed.left_high == pytest.approx(settings.grip_redline_amp / 255.0)
+    assert resumed.left_high == pytest.approx(min(
+        1.0,
+        settings.grip_redline_amp / 255.0 * settings.grip_redline_gain,
+    ))
     assert resumed.right_high == 0.0
 
 
@@ -891,13 +923,97 @@ def test_bluetooth_collision_projection_preserves_direction(
         )
 
 
-def test_gear_change_creates_centered_kick(settings):
+def test_gear_change_is_silent_when_grip_shift_is_disabled(settings):
     mixer = HapticMixer()
     mixer.update(_telemetry(gear=2, speed=50.0), settings, now=1.0)
     frame = mixer.update(_telemetry(gear=3, speed=50.0), settings, now=1.01)
 
-    assert frame.left_low == pytest.approx(0.8)
-    assert frame.right_low == pytest.approx(0.8)
+    assert frame.left_low == 0.0
+    assert frame.right_low == 0.0
+
+
+def test_enabled_grip_gear_change_creates_configured_centered_kick(settings):
+    settings.enable_grip_gear_shift_haptics = True
+    settings.grip_gear_shift_strength = 0.55
+    mixer = HapticMixer()
+    mixer.update(_telemetry(gear=2, speed=50.0), settings, now=1.0)
+    frame = mixer.update(_telemetry(gear=3, speed=50.0), settings, now=1.01)
+
+    assert frame.left_low == pytest.approx(0.55)
+    assert frame.right_low == pytest.approx(0.55)
+
+
+@pytest.mark.parametrize(
+    ("previous", "current", "speed"),
+    [(0, 1, 50.0), (1, 0, 50.0), (2, 3, 3.0)],
+    ids=("from-neutral", "to-neutral", "speed-gate"),
+)
+def test_grip_gear_shift_requires_positive_gears_and_speed(
+    settings, previous, current, speed
+):
+    settings.enable_grip_gear_shift_haptics = True
+    mixer = HapticMixer()
+    mixer.update(_telemetry(gear=previous, speed=speed), settings, now=1.0)
+
+    frame = mixer.update(_telemetry(gear=current, speed=speed), settings, now=1.01)
+
+    assert frame.left_low == 0.0
+    assert frame.right_low == 0.0
+
+
+def test_grip_gear_shift_uses_independent_duration_and_intensity(settings):
+    settings.enable_grip_gear_shift_haptics = True
+    settings.grip_gear_shift_strength = 0.2
+    settings.grip_gear_shift_duration_ms = 40.0
+    settings.impact_haptics_intensity = 1.5
+    settings.body_haptics_intensity = 0.5
+    mixer = HapticMixer()
+    mixer.update(_telemetry(gear=2, speed=50.0), settings, now=1.0)
+
+    active = mixer.update(_telemetry(gear=3, speed=50.0), settings, now=1.01)
+    ended = mixer.update(_telemetry(gear=3, speed=50.0), settings, now=1.051)
+
+    assert active.left_low == pytest.approx(0.15)
+    assert active.right_low == pytest.approx(0.15)
+    assert ended.left_low == 0.0
+    assert ended.right_low == 0.0
+
+
+def test_grip_and_trigger_shift_settings_are_independent(settings):
+    settings.enable_grip_gear_shift_haptics = True
+    settings.enable_gear_shift = False
+    settings.enable_gear_shift_brake = False
+    settings.gear_shift_amp = 255
+    settings.gear_shift_duration_ms = 2000.0
+    settings.grip_gear_shift_strength = 0.3
+    settings.grip_gear_shift_duration_ms = 20.0
+    mixer = HapticMixer()
+    mixer.update(_telemetry(gear=2, speed=50.0), settings, now=1.0)
+
+    active = mixer.update(_telemetry(gear=3, speed=50.0), settings, now=1.01)
+    ended = mixer.update(_telemetry(gear=3, speed=50.0), settings, now=1.031)
+
+    assert active.left_low == pytest.approx(0.3)
+    assert active.right_low == pytest.approx(0.3)
+    assert ended.left_low == 0.0
+    assert ended.right_low == 0.0
+
+
+def test_disabling_grip_shift_clears_active_event_and_tracks_gears(settings):
+    settings.enable_grip_gear_shift_haptics = True
+    mixer = HapticMixer()
+    mixer.update(_telemetry(gear=2, speed=50.0), settings, now=1.0)
+    assert mixer.update(
+        _telemetry(gear=3, speed=50.0), settings, now=1.01
+    ).left_low > 0.0
+
+    settings.enable_grip_gear_shift_haptics = False
+    disabled = mixer.update(_telemetry(gear=4, speed=50.0), settings, now=1.02)
+    settings.enable_grip_gear_shift_haptics = True
+    reenabled = mixer.update(_telemetry(gear=4, speed=50.0), settings, now=1.03)
+
+    assert disabled.left_low == disabled.right_low == 0.0
+    assert reenabled.left_low == reenabled.right_low == 0.0
 
 
 def test_menu_reset_prevents_stale_suspension_and_gear_events(settings):

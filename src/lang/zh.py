@@ -224,4 +224,10 @@ STRINGS = {
     "Collision weak-side strength": "碰撞弱侧强度",
     "Collision background level": "碰撞背景振动比例",
     "Grip release below redline at": "握把红线释放阈值",
+    "Grip feedback": "握把反馈",
+    "Grip gear-shift thump": "握把换挡冲击",
+    "R2 trigger gear-shift thump": "R2 扳机键换挡冲击",
+    "Grip thump strength": "握把冲击强度",
+    "Grip thump length (ms)": "握把冲击持续时间（毫秒）",
+    "Grip signal gain": "握把信号增益",
 }

@@ -236,4 +236,10 @@ STRINGS = {
     "Collision weak-side strength": "Сила слабой стороны столкновения",
     "Collision background level": "Фоновый уровень при столкновении",
     "Grip release below redline at": "Порог отключения рукояток",
+    "Grip feedback": "Обратная связь рукояток",
+    "Grip gear-shift thump": "Толчок рукояток при переключении",
+    "R2 trigger gear-shift thump": "Толчок курка R2 при переключении",
+    "Grip thump strength": "Сила толчка рукояток",
+    "Grip thump length (ms)": "Длительность толчка рукояток (мс)",
+    "Grip signal gain": "Усиление сигнала рукояток",
 }

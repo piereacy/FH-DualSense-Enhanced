@@ -262,4 +262,10 @@ STRINGS = {
     "Collision weak-side strength": "Stärke der schwächeren Kollisionsseite",
     "Collision background level": "Hintergrundpegel bei Kollision",
     "Grip release below redline at": "Griffwarnung lösen unter",
+    "Grip feedback": "Griff-Feedback",
+    "Grip gear-shift thump": "Griff-Schaltruck",
+    "R2 trigger gear-shift thump": "R2-Trigger-Schaltruck",
+    "Grip thump strength": "Stärke des Griff-Schaltrucks",
+    "Grip thump length (ms)": "Dauer des Griff-Schaltrucks (ms)",
+    "Grip signal gain": "Griff-Signalverstärkung",
 }

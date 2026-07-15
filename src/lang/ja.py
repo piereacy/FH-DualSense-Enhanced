@@ -225,4 +225,10 @@ STRINGS = {
     "Collision weak-side strength": "衝突時の弱側強度",
     "Collision background level": "衝突時の背景レベル",
     "Grip release below redline at": "グリップ警告の解除位置",
+    "Grip feedback": "グリップフィードバック",
+    "Grip gear-shift thump": "グリップのシフトショック",
+    "R2 trigger gear-shift thump": "R2トリガーのシフトショック",
+    "Grip thump strength": "グリップショックの強さ",
+    "Grip thump length (ms)": "グリップショックの長さ（ms）",
+    "Grip signal gain": "グリップ信号ゲイン",
 }

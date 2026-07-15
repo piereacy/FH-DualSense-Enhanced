@@ -71,13 +71,14 @@ class Settings:
 
     # MARK: Body haptics redline warning
     # Fuel-cut pulse with independent left/right grip routing.
-    enable_grip_redline_haptics: bool = True
+    enable_grip_redline_haptics: bool = False
     grip_redline_left: bool = True
     grip_redline_right: bool = False
     grip_redline_ratio: float = 0.93
     grip_redline_release_ratio: float = 0.90
     grip_redline_freq: int = 10
     grip_redline_amp: int = 192
+    grip_redline_gain: float = 1.5
     grip_redline_low_ratio: float = 0.25
     grip_redline_background_duck: float = 0.30
 
@@ -122,6 +123,12 @@ class Settings:
     gear_shift_freq: int = 10
     gear_shift_amp: int = 10
     gear_shift_duration_ms: float = 100.0     # burst length
+
+    # MARK: Body haptics gear shift
+    # Optional centered grip thump, independent from the adaptive triggers.
+    enable_grip_gear_shift_haptics: bool = False
+    grip_gear_shift_strength: float = 0.8
+    grip_gear_shift_duration_ms: float = 100.0
 
     # MARK: Body haptics
     # USB and Bluetooth consume the same normalized HapticFrame. Only their

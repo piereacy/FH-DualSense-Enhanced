@@ -225,4 +225,10 @@ STRINGS = {
     "Collision weak-side strength": "Çarpışma zayıf taraf gücü",
     "Collision background level": "Çarpışma arka plan seviyesi",
     "Grip release below redline at": "Tutma kolu bırakma eşiği",
+    "Grip feedback": "Tutma kolu geri bildirimi",
+    "Grip gear-shift thump": "Tutma kolu vites darbesi",
+    "R2 trigger gear-shift thump": "R2 tetik vites darbesi",
+    "Grip thump strength": "Tutma kolu darbe gücü",
+    "Grip thump length (ms)": "Tutma kolu darbe süresi (ms)",
+    "Grip signal gain": "Tutma kolu sinyal kazancı",
 }

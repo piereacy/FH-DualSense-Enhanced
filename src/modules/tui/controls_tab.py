@@ -28,6 +28,9 @@ TRIGGER_CONTROLS = [
     ("Shared feedback", [
         ("enable_wheelspin_buzz", "Traction/grip feedback"),
     ]),
+    ("Grip feedback", [
+        ("enable_grip_gear_shift_haptics", "Grip gear-shift thump"),
+    ]),
     ("Redline feedback", [
         ("enable_grip_redline_haptics", "Grip redline vibration"),
         ("grip_redline_left",           "Left grip"),
@@ -57,7 +60,7 @@ class ControlsTab(VerticalScroll):
         with Horizontal(classes="grid"):
             for trigger, toggles in TRIGGER_CONTROLS:
                 with Vertical(classes="column"):
-                    yield Label(trigger, classes="section")
+                    yield Label(t(trigger), classes="section")
                     for attr, label in toggles:
                         with Horizontal(classes="row"):
                             yield Switch(value=getattr(self.settings, attr), id=attr)

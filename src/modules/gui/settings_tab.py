@@ -60,10 +60,14 @@ SETTING_SECTIONS = [
     ("Idle buzz", [
         ("idle_amp_high", "Idle strength", 0, 255, ""),
     ]),
-    ("Gear shift thump", [
+    ("R2 trigger gear-shift thump", [
         ("gear_shift_freq", "Thump speed (Hz)", 0, 255, ""),
         ("gear_shift_amp", "Thump strength", 0, 255, ""),
         ("gear_shift_duration_ms", "Thump length (ms)", 0.0, 2000.0, ""),
+    ]),
+    ("Grip gear-shift thump", [
+        ("grip_gear_shift_strength", "Grip thump strength", 0.0, 2.0, ""),
+        ("grip_gear_shift_duration_ms", "Grip thump length (ms)", 0.0, 2000.0, ""),
     ]),
     ("Body haptics", [
         ("enable_body_haptics", "Enable body haptics", None, None,
@@ -112,6 +116,7 @@ EXPERIMENTAL_SECTIONS = [
     ]),
     ("Grip redline advanced tuning", [
         ("grip_redline_release_ratio", "Grip release below redline at", 0.0, 1.0, ""),
+        ("grip_redline_gain", "Grip signal gain", 0.0, 2.0, ""),
         ("grip_redline_low_ratio", "Low-frequency pulse ratio", 0.0, 1.0, ""),
         ("grip_redline_background_duck", "Redline background level", 0.0, 1.0, ""),
     ]),

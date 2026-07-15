@@ -183,8 +183,15 @@ _GRIP_REDLINE_FIELDS = (
     "grip_redline_release_ratio",
     "grip_redline_freq",
     "grip_redline_amp",
+    "grip_redline_gain",
     "grip_redline_low_ratio",
     "grip_redline_background_duck",
+)
+
+_GRIP_GEAR_SHIFT_FIELDS = (
+    "enable_grip_gear_shift_haptics",
+    "grip_gear_shift_strength",
+    "grip_gear_shift_duration_ms",
 )
 
 
@@ -230,6 +237,19 @@ def _migrate_r3_redline_split(raw: dict, s) -> None:
             snapshot.setdefault(field, getattr(defaults, field))
 
 
+def _migrate_r3_grip_gear_shift(raw: dict, s) -> None:
+    """Add independent, default-off grip shift tuning to named profiles."""
+    profiles = raw.get("profiles")
+    if not isinstance(profiles, dict):
+        return
+    defaults = type(s)()
+    for name, snapshot in profiles.items():
+        if name == DEFAULT_PROFILE_NAME or not isinstance(snapshot, dict):
+            continue
+        for field in _GRIP_GEAR_SHIFT_FIELDS:
+            snapshot.setdefault(field, getattr(defaults, field))
+
+
 def load(s) -> None:
     """Read the file and apply the active profile to `s`.
 
@@ -239,6 +259,7 @@ def load(s) -> None:
     raw = _read_raw()
     raw = _ensure_active(raw, s)
     _migrate_r3_redline_split(raw, s)
+    _migrate_r3_grip_gear_shift(raw, s)
     # Reset Default on every launch so updates ship new tuning automatically;
     # named profiles and globals are preserved.
     raw["profiles"][DEFAULT_PROFILE_NAME] = _profile_fields(type(s)())

@@ -28,6 +28,9 @@ TRIGGER_CONTROLS = [
     ("Shared feedback", [
         ("enable_wheelspin_buzz", "Traction/grip feedback"),
     ]),
+    ("Grip feedback", [
+        ("enable_grip_gear_shift_haptics", "Grip gear-shift thump"),
+    ]),
     ("Redline feedback", [
         ("enable_grip_redline_haptics", "Grip redline vibration"),
         ("grip_redline_left",           "Left grip"),
@@ -54,7 +57,8 @@ class ControlsTab(ctk.CTkFrame):
         grid.pack(fill="both", expand=True)
         for col in range(2):
             grid.grid_columnconfigure(col, weight=1, uniform="cols")
-        for row in range(2):
+        row_count = (len(TRIGGER_CONTROLS) + 1) // 2
+        for row in range(row_count):
             grid.grid_rowconfigure(row, weight=1)
 
         for index, (title, toggles) in enumerate(TRIGGER_CONTROLS):

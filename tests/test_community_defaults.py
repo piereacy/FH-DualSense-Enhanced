@@ -7,7 +7,7 @@ from modules.config.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = json.loads(
-    (ROOT / "tests/fixtures/community_defaults_2323.json").read_text(encoding="utf-8")
+    (ROOT / "tests/fixtures/community_defaults.json").read_text(encoding="utf-8")
 )
 
 
@@ -16,6 +16,16 @@ def test_fresh_settings_match_community_defaults():
     actual = {name: getattr(settings, name) for name in EXPECTED}
 
     assert actual == EXPECTED
+
+
+def test_r3_grip_effects_use_safe_defaults():
+    settings = Settings()
+
+    assert settings.enable_grip_redline_haptics is False
+    assert settings.grip_redline_gain == 1.5
+    assert settings.enable_grip_gear_shift_haptics is False
+    assert settings.grip_gear_shift_strength == 0.8
+    assert settings.grip_gear_shift_duration_ms == 100.0
 
 
 def test_fresh_default_profile_matches_community_defaults(tmp_path, monkeypatch):
@@ -79,12 +89,19 @@ def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
     assert settings.rev_limit_amp == 12
     assert settings.grip_redline_freq == 10
     assert settings.grip_redline_amp == 192
+    assert settings.grip_redline_gain == 1.5
+    assert settings.enable_grip_redline_haptics is False
     assert settings.grip_redline_left is True
     assert settings.grip_redline_right is False
+    assert settings.enable_grip_gear_shift_haptics is False
+    assert settings.grip_gear_shift_strength == 0.8
+    assert settings.grip_gear_shift_duration_ms == 100.0
     assert raw["profiles"]["Custom"]["rev_limit_freq"] == 30
     assert raw["profiles"]["Custom"]["rev_limit_amp"] == 12
     assert raw["profiles"]["Custom"]["grip_redline_freq"] == 10
     assert raw["profiles"]["Custom"]["grip_redline_amp"] == 192
+    assert raw["profiles"]["Custom"]["grip_redline_gain"] == 1.5
+    assert raw["profiles"]["Custom"]["enable_grip_gear_shift_haptics"] is False
 
 
 def test_r2_named_profile_custom_redline_values_are_preserved(tmp_path, monkeypatch):
@@ -170,3 +187,35 @@ def test_r3_prerelease_custom_values_are_preserved_and_copied_once(
     assert second.grip_redline_amp == 144
     assert snapshot["rev_limit_freq"] == 7
     assert snapshot["grip_redline_freq"] == 7
+
+
+def test_named_profile_preserves_explicit_r3_grip_values_across_reloads(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    custom = dict(EXPECTED)
+    custom.update({
+        "enable_grip_redline_haptics": True,
+        "grip_redline_gain": 1.2,
+        "enable_grip_gear_shift_haptics": True,
+        "grip_gear_shift_strength": 0.55,
+        "grip_gear_shift_duration_ms": 75.0,
+    })
+    preferences.PATH.write_text(json.dumps({
+        "version": "3",
+        "active_profile": "Custom",
+        "profiles": {"Custom": custom},
+        "globals": {},
+    }), encoding="utf-8")
+
+    first = Settings()
+    preferences.load(first)
+    second = Settings()
+    preferences.load(second)
+
+    assert second.enable_grip_redline_haptics is True
+    assert second.grip_redline_gain == 1.2
+    assert second.enable_grip_gear_shift_haptics is True
+    assert second.grip_gear_shift_strength == 0.55
+    assert second.grip_gear_shift_duration_ms == 75.0

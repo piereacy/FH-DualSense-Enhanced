@@ -13,7 +13,7 @@ APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
 CURRENT_INTERNAL_VERSION = "3"
 CURRENT_RELEASE_VERSION = "R3"
-DOCUMENTED_STABLE_RELEASE = "R2"
+DOCUMENTED_STABLE_RELEASE = "R3"
 
 
 def _source(path: str) -> str:
@@ -132,6 +132,10 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "Download **`win_start.bat`**" in workflow
     assert "manual ZUV fallback" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
+    assert "Enhanced R3 中文说明" in workflow
+    assert "握把换挡冲击" in workflow
+    assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
+    assert "HorizonHaptics 1.3.0" in workflow
 
 
 def test_windows_packaging_emits_the_enhanced_executable_name():
@@ -214,16 +218,16 @@ def test_readmes_are_original_enhanced_project_documentation():
         assert "1.6.2.post1" in text
 
 
-def test_readmes_describe_r2_features_and_public_artifact_names():
+def test_readmes_describe_r3_features_and_public_artifact_names():
     chinese = _source("README.md")
     english = _source("docs/ReadmeEN.md")
     japanese = _source("docs/ReadmeJA.md")
 
     for text in (chinese, english, japanese):
-        assert "FH-DualSense-Enhanced-R2.exe" in text
+        assert "FH-DualSense-Enhanced-R3.exe" in text
         assert "wheelspin" in text.lower()
         assert "ABS wall" in text
-        assert "R2-preview" in text
+        assert "R3-preview" in text
 
 
 def test_release_identity_uses_public_r2_and_internal_pep440_version():

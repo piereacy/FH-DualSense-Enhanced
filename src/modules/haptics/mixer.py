@@ -253,9 +253,12 @@ class HapticMixer:
             period = 1.0 / pulse_hz
             phase = (now - self._redline_started_at) % period
             if phase < period * 0.5:
-                redline_amplitude = clamp01(
-                    _setting(settings, "grip_redline_amp", 192.0) / 255.0
-                ) * engine_scale
+                redline_amplitude = (
+                    _setting(settings, "grip_redline_amp", 192.0)
+                    / 255.0
+                    * _setting(settings, "grip_redline_gain", 1.5)
+                    * engine_scale
+                )
                 redline_low = redline_amplitude * clamp01(
                     _setting(settings, "grip_redline_low_ratio", 0.25)
                 )
@@ -428,13 +431,21 @@ class HapticMixer:
             collision_event.right_high = self._collision_right * high_envelope
 
         gear = int(_number(telemetry.get("gear")))
-        if (self._prev_gear is not None and self._prev_gear > 0 and gear > 0
-                and gear != self._prev_gear and speed_kmh > 3.0):
-            self._shift_until = now + _setting(settings, "gear_shift_duration_ms", 100.0) / 1000.0
+        grip_shift_enabled = bool(
+            getattr(settings, "enable_grip_gear_shift_haptics", False)
+        )
+        if not grip_shift_enabled:
+            self._shift_until = 0.0
+        elif (self._prev_gear is not None and self._prev_gear > 0 and gear > 0
+              and gear != self._prev_gear and speed_kmh > 3.0):
+            self._shift_until = now + (
+                _setting(settings, "grip_gear_shift_duration_ms", 100.0) / 1000.0
+            )
         self._prev_gear = gear
-        if now < self._shift_until:
-            transient.left_low += 0.8 * impact_scale
-            transient.right_low += 0.8 * impact_scale
+        if grip_shift_enabled and now < self._shift_until:
+            grip_shift = _setting(settings, "grip_gear_shift_strength", 0.8)
+            transient.left_low += grip_shift * impact_scale
+            transient.right_low += grip_shift * impact_scale
 
         brake = _number(telemetry.get("brake"))
         brake_threshold = max(1.0, _setting(settings, "abs_brake_threshold", 100.0))

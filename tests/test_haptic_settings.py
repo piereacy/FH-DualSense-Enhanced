@@ -50,6 +50,10 @@ NORMAL_R3_FIELDS = {
         "grip_redline_freq",
         "grip_redline_amp",
     ),
+    "Grip gear-shift thump": (
+        "grip_gear_shift_strength",
+        "grip_gear_shift_duration_ms",
+    ),
     "Traction/grip feedback": ("wheelspin_amp", "wheelspin_sensitivity"),
 }
 EXPERIMENTAL_FIELDS = (
@@ -81,6 +85,7 @@ EXPERIMENTAL_FIELDS = (
     "wheelspin_gravel_freq_min",
     "wheelspin_gravel_freq_max",
     "grip_redline_release_ratio",
+    "grip_redline_gain",
     "grip_redline_low_ratio",
     "grip_redline_background_duck",
     "collision_haptics_jerk_threshold",
@@ -93,6 +98,8 @@ EXPERIMENTAL_FIELDS = (
 R3_LABELS = {
     "Sensitivity",
     "Shared feedback",
+    "Grip feedback",
+    "Grip gear-shift thump",
     "Redline feedback",
     "R2 trigger redline vibration",
     "Grip redline vibration",
@@ -138,6 +145,7 @@ R3_LABELS = {
     "Gravel maximum frequency (Hz)",
     "Grip redline advanced tuning",
     "Grip release below redline at",
+    "Grip signal gain",
     "Low-frequency pulse ratio",
     "Redline background level",
     "Collision haptics advanced tuning",
@@ -147,6 +155,9 @@ R3_LABELS = {
     "Collision rebound strength",
     "Collision weak-side strength",
     "Collision background level",
+    "R2 trigger gear-shift thump",
+    "Grip thump strength",
+    "Grip thump length (ms)",
 }
 
 
@@ -287,6 +298,10 @@ def test_r2_tuning_fields_round_trip_in_a_named_profile(tmp_path, monkeypatch):
     settings.wheelspin_sensitivity = 1.4
     settings.wheelspin_attack_ms = 35.0
     settings.wheelspin_tarmac_freq_max = 175
+    settings.enable_grip_gear_shift_haptics = True
+    settings.grip_gear_shift_strength = 0.6
+    settings.grip_gear_shift_duration_ms = 80.0
+    settings.grip_redline_gain = 1.25
     assert profiles.save_profile("R2 Test", settings) == "R2 Test"
 
     loaded = Settings()
@@ -297,6 +312,10 @@ def test_r2_tuning_fields_round_trip_in_a_named_profile(tmp_path, monkeypatch):
     assert loaded.wheelspin_sensitivity == 1.4
     assert loaded.wheelspin_attack_ms == 35.0
     assert loaded.wheelspin_tarmac_freq_max == 175
+    assert loaded.enable_grip_gear_shift_haptics is True
+    assert loaded.grip_gear_shift_strength == 0.6
+    assert loaded.grip_gear_shift_duration_ms == 80.0
+    assert loaded.grip_redline_gain == 1.25
 
 
 def test_r2_tuning_fields_round_trip_through_share_code(tmp_path, monkeypatch):
@@ -308,6 +327,8 @@ def test_r2_tuning_fields_round_trip_through_share_code(tmp_path, monkeypatch):
     settings.abs_wall_zones = 4
     settings.wheelspin_sensitivity = 1.3
     settings.wheelspin_release_ms = 140.0
+    settings.enable_grip_gear_shift_haptics = True
+    settings.grip_gear_shift_strength = 0.65
     assert profiles.save_profile("R2 Share", settings) == "R2 Share"
 
     code = profiles.export_profile("R2 Share")
@@ -320,6 +341,8 @@ def test_r2_tuning_fields_round_trip_through_share_code(tmp_path, monkeypatch):
     assert snapshot["abs_wall_zones"] == 4
     assert snapshot["wheelspin_sensitivity"] == 1.3
     assert snapshot["wheelspin_release_ms"] == 140.0
+    assert snapshot["enable_grip_gear_shift_haptics"] is True
+    assert snapshot["grip_gear_shift_strength"] == 0.65
 
 
 def test_experimental_settings_are_collapsed_by_default_and_excluded_from_system_tabs():
@@ -367,6 +390,9 @@ def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
     tui = _sections(ROOT / "src/modules/tui/controls_tab.py", "TRIGGER_CONTROLS")
 
     assert gui == tui
+    assert "yield Label(t(trigger), classes=\"section\")" in (
+        ROOT / "src/modules/tui/controls_tab.py"
+    ).read_text(encoding="utf-8")
     groups = {title: dict(items) for title, items in gui}
     assert groups["R2 - Throttle"]["enable_rev_limiter"] == (
         "R2 trigger redline vibration"
@@ -374,6 +400,9 @@ def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
     assert "enable_wheelspin_buzz" not in groups["R2 - Throttle"]
     assert groups["Shared feedback"] == {
         "enable_wheelspin_buzz": "Traction/grip feedback",
+    }
+    assert groups["Grip feedback"] == {
+        "enable_grip_gear_shift_haptics": "Grip gear-shift thump",
     }
     assert groups["Redline feedback"] == {
         "enable_grip_redline_haptics": "Grip redline vibration",
@@ -389,3 +418,6 @@ def test_simplified_chinese_distinguishes_r2_trigger_and_grip_redline():
     assert strings["Grip redline vibration"] == "握把红线震动"
     assert strings["Left grip"] == "左握把"
     assert strings["Right grip"] == "右握把"
+    assert strings["Grip feedback"] == "握把反馈"
+    assert strings["Grip gear-shift thump"] == "握把换挡冲击"
+    assert strings["R2 trigger gear-shift thump"] == "R2 扳机键换挡冲击"
