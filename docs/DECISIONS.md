@@ -4,7 +4,7 @@
 
 ## 2026-07-17：Enhanced R4 收敛为单一 Console，并建立持久化 Default 交互
 
-- 状态：生产代码、自动测试和源码 GUI 视觉/滚轮冒烟已实现；新单一 EXE 构建和冻结程序冒烟待执行。
+- 状态：生产代码、自动测试、125% 缩放下的源码 GUI 视觉/滚轮冒烟、单一 EXE 构建和冻结程序冒烟均已完成；100% 与 150% 缩放和用户交互验收待执行。
 - 背景：用户审阅三种 R4 前端后选择 Miku Console，并要求彻底删除 Stage、Studio。现有驾驶反馈页在 DPI 缩放窗口中压缩卡片且不能可靠使用滚轮；`Default` 又在每次启动时被代码默认值覆盖，无法承担无命名工作配置。
 - 单一产品：删除 `src/modules/gui/variants.py`、`FHDS_UI_VARIANT`、`FHDS_BUILD_VARIANT` 和 `data/ui_variant.txt`。Windows 只构建 `FH-DualSense-Enhanced-R<n>.exe`，更新器只接受该规范资产及同名 `.sha256`。历史三壳层决定保留在下文，但已被本决定取代。
 - 持久化：`Default` 与命名 Profile 一样即时保存并跨重启保留。代码内 `Settings()` 继续定义不可变的出厂起点，但发布新默认值不再覆盖用户已经保存的 `Default`。第一次有效配置自动匹配系统显示语言，用户后续选择不被自动检测覆盖。
