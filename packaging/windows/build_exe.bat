@@ -1,6 +1,6 @@
 @echo off
-REM Build three standalone single-file EXEs of FH-DualSense-Enhanced.
-REM Output: ...-RN-Miku-Console.exe, ...-Miku-Stage.exe, ...-Miku-Studio.exe
+REM Build the standalone single-file EXE of FH-DualSense-Enhanced.
+REM Output: FH-DualSense-Enhanced-RN.exe
 REM (no install, no traces - MEIPASS auto-cleans on exit)
 REM Requires: uv  (https://docs.astral.sh/uv/)
 
@@ -25,18 +25,16 @@ if not defined VER (
     popd
     exit /b 1
 )
-echo Building FH-DualSense-Enhanced R%VER% updater helper and three GUI variants ...
+echo Building FH-DualSense-Enhanced R%VER% and updater helper ...
 
 set "DIST=%~dp0dist"
 set "WORK=%~dp0build"
 set "HELPER_DIST=%~dp0helper_dist"
 set "HELPER_WORK=%~dp0helper_build"
-set "GENERATED=%~dp0generated"
 
 if exist "%WORK%" rmdir /s /q "%WORK%"
 if exist "%HELPER_WORK%" rmdir /s /q "%HELPER_WORK%"
 if exist "%HELPER_DIST%" rmdir /s /q "%HELPER_DIST%"
-if exist "%GENERATED%" rmdir /s /q "%GENERATED%"
 if exist "%DIST%" (
     rmdir /s /q "%DIST%" 2>nul
     if exist "%DIST%" (
@@ -57,19 +55,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-for %%V in (console stage studio) do (
-    set "FHDS_BUILD_VARIANT=%%V"
+uvx --from "pyinstaller>=6.11.1" --with customtkinter --with textual --with hidapi --with psutil --with dotenv --with pystray --with pillow --with numpy --with sounddevice pyinstaller "%~dp0fhds.spec" --distpath "%DIST%" --workpath "%WORK%" --noconfirm --clean
+if errorlevel 1 (
     echo.
-    echo Building %%V variant ...
-    uvx --from "pyinstaller>=6.11.1" --with customtkinter --with textual --with hidapi --with psutil --with dotenv --with pystray --with pillow --with numpy --with sounddevice pyinstaller "%~dp0fhds.spec" --distpath "%DIST%" --workpath "%WORK%\%%V" --noconfirm --clean
-    if errorlevel 1 (
-        echo.
-        echo %%V variant build FAILED.
-        popd
-        exit /b 1
-    )
+    echo Application build FAILED.
+    popd
+    exit /b 1
 )
-set "FHDS_BUILD_VARIANT="
 
 REM MARK: updater refuses assets without a matching published SHA-256 file.
 for %%F in ("%DIST%\*.exe") do (
@@ -80,6 +72,6 @@ copy /y "LICENSE" "%DIST%\LICENSE" >nul
 
 echo.
 echo Build OK. Executables and SHA-256 files:
-dir /b "%DIST%\FH-DualSense-Enhanced-R%VER%-Miku-*.exe*"
+dir /b "%DIST%\FH-DualSense-Enhanced-R%VER%.exe*"
 popd
 endlocal

@@ -17,7 +17,6 @@ from modules.config.preferences import _release_version
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
-from modules.gui.variants import current_variant
 
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
@@ -98,7 +97,6 @@ class TriggerTUI(App):
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
         self._update_service = UpdateService(
             settings,
-            variant=current_variant().key,
             supported=self_update_supported(),
         )
         cleanup_previous_update()

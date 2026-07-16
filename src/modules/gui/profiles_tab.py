@@ -22,14 +22,18 @@ class ProfilesTab(ctk.CTkFrame):
         self._share_entry: ctk.CTkEntry | None = None
         self._build()
         self._refresh_list()
+        app.register_refresh(self._refresh_list)
 
     def _build(self):
         W.PageHeader(self, t("Profiles"),
                      t("Save and switch named snapshots of your settings.")
                      ).pack(fill="x", pady=(0, T.PAD_MD))
 
-        grid = ctk.CTkFrame(self, fg_color="transparent")
-        grid.pack(fill="both", expand=True)
+        self._scroll = W.FastScroll(self)
+        self._scroll.pack(fill="both", expand=True)
+
+        grid = ctk.CTkFrame(self._scroll, fg_color="transparent", height=330)
+        grid.pack(fill="x")
         grid.grid_columnconfigure(0, weight=3, uniform="cols")
         grid.grid_columnconfigure(1, weight=2, uniform="cols")
         grid.grid_rowconfigure(0, weight=1)
@@ -79,11 +83,13 @@ class ProfilesTab(ctk.CTkFrame):
         W.PrimaryButton(right, t("Save profile"), self._on_save
                         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
+        W.DangerButton(
+            right, t("Restore factory defaults"), self.app.request_factory_reset
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+
         W.Warning(
             right,
-            t("The Default profile resets on every launch to pick up new "
-              "features and tuning. System tab settings are preserved. Save "
-              "a named profile to keep your own tuning."),
+            t("Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot."),
             wrap=self.app.px(320),
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
 
@@ -92,7 +98,7 @@ class ProfilesTab(ctk.CTkFrame):
                ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
         # --- Share card (spans full width) ---------------------------------
-        share = W.Card(self)
+        share = W.Card(self._scroll)
         share.pack(fill="x", pady=(T.PAD_MD, 0))
         W.H2(share, t("Share profile")).pack(
             anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_XS))
@@ -152,6 +158,8 @@ class ProfilesTab(ctk.CTkFrame):
             log.warning("Profile name is empty.")
             return
         final = profiles.save_profile(name, self.settings)
+        if final:
+            self.app.mark_default_saved()
         self.entry_name.delete(0, "end")
         self._refresh_list()
         if final and final != name:

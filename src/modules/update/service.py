@@ -24,9 +24,8 @@ def _current_version() -> int:
 
 
 class UpdateService:
-    def __init__(self, settings, *, variant: str, client=None, supported: bool = True):
+    def __init__(self, settings, *, client=None, supported: bool = True):
         self.settings = settings
-        self.variant = variant
         self.supported = bool(supported)
         self.client = client or GitHubReleaseClient()
         self._lock = threading.Lock()
@@ -90,9 +89,7 @@ class UpdateService:
     def _check_impl(self, *, background: bool) -> None:
         self._set(phase=UpdatePhase.CHECKING, message="Checking for updates")
         try:
-            release = self.client.latest(
-                current_version=_current_version(), variant=self.variant
-            )
+            release = self.client.latest(current_version=_current_version())
         except Exception as exc:
             log.warning("Update check failed: %s", exc)
             self._set(phase=UpdatePhase.ERROR, message=str(exc), last_checked_at=time.time())
@@ -197,13 +194,9 @@ class UpdateService:
                 raise ValueError("pending update checksum is invalid")
             if release.version <= _current_version():
                 raise ValueError("pending update is stale")
-            expected_marker = {
-                "console": "mikuconsole",
-                "stage": "mikustage",
-                "studio": "mikustudio",
-            }.get(self.variant, "")
-            if not expected_marker or expected_marker not in release.asset_name.lower().replace("-", ""):
-                raise ValueError("pending update belongs to another UI variant")
+            expected_name = f"FH-DualSense-Enhanced-R{release.version}.exe"
+            if release.asset_name != expected_name or staged.name != expected_name:
+                raise ValueError("pending update does not use the canonical asset name")
             self._last_sha256 = digest
             self._snapshot = UpdateSnapshot(
                 phase=UpdatePhase.READY,

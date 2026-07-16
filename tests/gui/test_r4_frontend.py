@@ -2,7 +2,7 @@ import ast
 import runpy
 from pathlib import Path
 
-from modules.gui.variants import VARIANTS, current_variant
+from modules.gui.controls_tab import responsive_column_count
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,25 +26,30 @@ def _constant_translation_keys() -> set[str]:
     return keys
 
 
-def test_three_frontend_variants_share_one_runtime_selector(monkeypatch):
-    assert tuple(VARIANTS) == ("console", "stage", "studio")
-    assert VARIANTS["console"].navigation == "side"
-    assert VARIANTS["stage"].navigation == "top"
-    assert VARIANTS["studio"].compact_nav is True
+def test_console_is_the_only_gui_shell_and_windows_asset_is_canonical():
+    main = (ROOT / "src/modules/gui/main.py").read_text(encoding="utf-8")
+    spec = (ROOT / "packaging/windows/fhds.spec").read_text(encoding="utf-8")
+    build = (ROOT / "packaging/windows/build_exe.bat").read_text(encoding="utf-8")
 
-    for key, expected in VARIANTS.items():
-        monkeypatch.setenv("FHDS_UI_VARIANT", key)
-        assert current_variant() == expected
+    assert not (ROOT / "src/modules/gui/variants.py").exists()
+    assert "Miku Console" in main
+    assert "current_variant" not in main
+    assert "FHDS_BUILD_VARIANT" not in spec
+    assert "ui_variant.txt" not in spec
+    assert 'EXE_NAME = f"FH-DualSense-Enhanced-{PUBLIC_VERSION}"' in spec
+    assert "FH-DualSense-Enhanced-R%VER%.exe" in build
+    assert "FH-DualSense-Update-Helper.exe" in spec
 
-    monkeypatch.setenv("FHDS_UI_VARIANT", "unknown")
-    assert current_variant() == VARIANTS["console"]
+
+def test_driving_layout_switches_to_one_column_before_cards_clip():
+    assert responsive_column_count(1040) == 2
+    assert responsive_column_count(720) == 2
+    assert responsive_column_count(719) == 1
 
 
-def test_windows_spec_bundles_variant_marker_and_update_helper_once_per_exe():
+def test_windows_spec_bundles_update_helper_once_per_exe():
     spec = (ROOT / "packaging/windows/fhds.spec").read_text(encoding="utf-8")
 
-    assert "FHDS_BUILD_VARIANT" in spec
-    assert "ui_variant.txt" in spec
     assert "FH-DualSense-Update-Helper.exe" in spec
     assert "src/modules/gui/main.py" not in spec
     assert "main.py" in spec

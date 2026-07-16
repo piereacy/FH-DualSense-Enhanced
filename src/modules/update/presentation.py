@@ -5,6 +5,17 @@ from collections.abc import Callable
 from .model import UpdatePhase, UpdateSnapshot
 
 
+def has_update_notice(snapshot: UpdateSnapshot) -> bool:
+    """Whether the persistent white navigation dot should be visible."""
+    return snapshot.release is not None and snapshot.phase in {
+        UpdatePhase.AVAILABLE,
+        UpdatePhase.DOWNLOADING,
+        UpdatePhase.VERIFYING,
+        UpdatePhase.READY,
+        UpdatePhase.ERROR,
+    }
+
+
 def localized_status(
     snapshot: UpdateSnapshot,
     translate: Callable[[str], str],

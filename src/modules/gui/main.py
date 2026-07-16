@@ -30,6 +30,7 @@ from lang import set_language, t
 from modules import forzahorizon, loop, make_backend
 from modules.about import APP_NAME
 from modules.config import preferences, profiles
+from modules.config.profile_session import ProfileSession
 from modules.config.preferences import _release_version
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
@@ -38,8 +39,8 @@ from modules.update.install import cleanup_previous_update, self_update_supporte
 
 from . import theme as T
 from . import widgets as W
-from .tray import TrayController
 from .controls_tab import ControlsTab
+from .dialogs import FactoryResetDialog, UnsavedProfileDialog
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
 from .lighting_tab import LightingTab
@@ -47,7 +48,7 @@ from .overview_tab import OverviewTab
 from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
 from .system_tab import SystemTab
-from .variants import current_variant
+from .tray import TrayController
 
 log = logging.getLogger("fhds")
 
@@ -70,18 +71,6 @@ NAV_LABELS = {
     "Language": "Language",
     "Logs": "Logs",
 }
-NAV_SHORT_LABELS = {
-    "Overview": "Overview",
-    "Driving": "Drive",
-    "Haptics": "Haptics",
-    "Lighting": "Lights",
-    "Profiles": "Profiles",
-    "System": "System",
-    "Language": "Lang",
-    "Logs": "Logs",
-}
-
-
 class _QueueLogHandler(logging.Handler):
     """Worker threads push records here; the Tk loop drains them."""
 
@@ -99,7 +88,6 @@ class _QueueLogHandler(logging.Handler):
 class TriggerGUI:
     def __init__(self, settings):
         self.settings = settings
-        self.variant = current_variant()
         set_language(settings.language)
 
         # Runtime state
@@ -109,6 +97,8 @@ class TriggerGUI:
         self._listener_cm = None
         self._listener = None
         self._tearing_down = False
+        self._close_dialog = None
+        self._reset_dialog = None
         self._refreshing = False
         self._refresh_callbacks: list = []
         self._log_queue: queue.Queue = queue.Queue(maxsize=4000)
@@ -116,9 +106,9 @@ class TriggerGUI:
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
         self._update_service = UpdateService(
             settings,
-            variant=self.variant.key,
             supported=self_update_supported(),
         )
+        self._profile_session = ProfileSession(settings)
         cleanup_previous_update()
 
         # Theme + DPI
@@ -132,11 +122,16 @@ class TriggerGUI:
 
         # Window
         self.root = ctk.CTk()
-        self.root.title(f"{APP_NAME} · {self.variant.label}")
+        self._wheel_router = W.install_wheel_router(self.root)
+        self.root.title(f"{APP_NAME} · Miku Console")
         self._set_window_icon()
         self._center_window()
-        self._tray = TrayController(self.root, on_show=self._show_window, on_quit=self._quit)
-        self.root.protocol("WM_DELETE_WINDOW", self._quit)
+        self._tray = TrayController(
+            self.root,
+            on_show=self._show_window,
+            on_quit=lambda: self.request_close("tray"),
+        )
+        self.root.protocol("WM_DELETE_WINDOW", lambda: self.request_close("window"))
         self.root.bind("<Unmap>", self._on_unmap)
 
         # Layout
@@ -257,7 +252,7 @@ class TriggerGUI:
             dpi = 1.0
         sw_u = sw / dpi
         sh_u = sh / dpi
-        base_w, base_h = self.variant.window_width, 700
+        base_w, base_h = 1040, 700
         w_u = int(min(base_w, sw_u * 0.85))
         h_u = int(min(base_h, sh_u * 0.85))
         w_phys = int(w_u * dpi)
@@ -301,59 +296,38 @@ class TriggerGUI:
         body = ctk.CTkFrame(self.root, corner_radius=0, fg_color="transparent")
         body.pack(side="top", fill="both", expand=True)
 
-        if self.variant.navigation == "top":
-            nav_host = ctk.CTkFrame(
-                body, height=54, corner_radius=0, fg_color=T.BG_DEEP
-            )
-            nav_host.pack(side="top", fill="x")
-            nav_host.pack_propagate(False)
-            nav_box = ctk.CTkFrame(nav_host, fg_color="transparent")
-            nav_box.pack(fill="both", expand=True, padx=T.PAD_MD, pady=T.PAD_SM)
-            nav_side = "left"
-        else:
-            nav_host = ctk.CTkFrame(
-                body,
-                width=self.variant.sidebar_width,
-                corner_radius=0,
-                fg_color=T.BG_DEEP,
-            )
-            nav_host.pack(side="left", fill="y")
-            nav_host.pack_propagate(False)
-            nav_box = ctk.CTkFrame(nav_host, fg_color="transparent")
-            nav_box.pack(side="top", fill="x", pady=(T.PAD_MD, 0))
-            nav_side = "top"
+        nav_host = ctk.CTkFrame(
+            body, width=T.SIDEBAR_W, corner_radius=0, fg_color=T.BG_DEEP,
+        )
+        nav_host.pack(side="left", fill="y")
+        nav_host.pack_propagate(False)
+        nav_box = ctk.CTkFrame(nav_host, fg_color="transparent")
+        nav_box.pack(side="top", fill="x", pady=(T.PAD_MD, 0))
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
-        self._nav_tooltips = []
+        self._nav_badges: dict[str, ctk.CTkLabel] = {}
         for key in NAV_ITEMS:
             label = t(NAV_LABELS[key])
-            if self.variant.compact_nav:
-                text = f"{T.ICON[key]}  {t(NAV_SHORT_LABELS[key])}"
-                anchor = "center"
-                width = self.variant.sidebar_width - 12
-            elif self.variant.navigation == "top":
-                text = f"{T.ICON[key]}  {t(NAV_SHORT_LABELS[key])}"
-                anchor = "center"
-                width = 0
-            else:
-                text = f"  {T.ICON[key]}   {label}"
-                anchor = "w" if nav_side == "top" else "center"
-                width = 0
+            holder = ctk.CTkFrame(nav_box, fg_color="transparent")
+            holder.pack(side="top", fill="x", padx=T.PAD_XS, pady=2)
             btn = ctk.CTkButton(
-                nav_box, text=text, anchor=anchor, width=width,
+                holder, text=f"  {T.ICON[key]}   {label}", anchor="w", width=0,
                 height=36, corner_radius=6,
                 fg_color="transparent", hover_color=T.BG_HOVER,
                 text_color=T.TEXT_MUTED,
                 font=ctk.CTkFont(size=T.FS_BODY),
                 command=lambda k=key: self._select_nav(k),
             )
-            if nav_side == "top":
-                btn.pack(side="top", fill="x", padx=T.PAD_XS, pady=2)
-            else:
-                btn.pack(side="left", fill="x", expand=True, padx=T.PAD_XS, pady=2)
+            btn.pack(fill="x")
             self._nav_buttons[key] = btn
-            if self.variant.compact_nav:
-                self._nav_tooltips.append(W.Tooltip(btn, label))
+            if key == "System":
+                badge = ctk.CTkLabel(
+                    holder, text="●", width=12, height=12,
+                    text_color="white", font=ctk.CTkFont(size=8), cursor="hand2",
+                )
+                badge.bind("<Button-1>", lambda _event: self._select_nav("System"))
+                badge.place_forget()
+                self._nav_badges[key] = badge
 
         self._content = ctk.CTkFrame(body, corner_radius=0, fg_color=T.BG_MAIN)
         self._content.pack(side="left", fill="both", expand=True)
@@ -407,7 +381,7 @@ class TriggerGUI:
 
     def _on_close(self):
         # Kept for backend-triggered shutdown (e.g. exit-detection).
-        self._quit()
+        self.request_close("backend")
 
     def _hide_to_tray(self):
         if not self._tray.start():
@@ -437,7 +411,54 @@ class TriggerGUI:
         except tk.TclError:
             pass
 
+    def request_close(self, reason: str = "user", before_exit=None):
+        """Route every graceful GUI exit through the named-profile prompt."""
+        if self._tearing_down or self._close_dialog is not None:
+            return
+        self._show_window()
+        if self._profile_session.needs_named_save(self.settings):
+            def _save(name: str) -> bool:
+                final = profiles.save_profile(name, self.settings)
+                if not final:
+                    return False
+                self._profile_session.accept_current_default(self.settings)
+                self._close_dialog = None
+                self._refresh_profile()
+                self._finish_close(before_exit)
+                return True
+
+            def _discard():
+                self._close_dialog = None
+                self._finish_close(before_exit)
+
+            def _cancel():
+                self._close_dialog = None
+
+            self._close_dialog = UnsavedProfileDialog(
+                self.root,
+                suggested_name=profiles.next_profile_name(),
+                on_save=_save,
+                on_discard=_discard,
+                on_cancel=_cancel,
+            )
+            return
+        self._finish_close(before_exit)
+
+    def _finish_close(self, before_exit=None):
+        if before_exit is not None:
+            try:
+                before_exit()
+            except Exception as exc:
+                log.warning("Pre-exit action failed: %s", exc)
+                self.toast(t("Could not start update: {error}").format(error=exc))
+                return
+        self._perform_quit()
+
     def _quit(self):
+        """Compatibility entry point for callers outside the window protocol."""
+        self.request_close("legacy")
+
+    def _perform_quit(self):
         try:
             self._tray.stop()
         except Exception:
@@ -447,6 +468,33 @@ class TriggerGUI:
             self.root.destroy()
         except tk.TclError:
             pass
+
+    def mark_default_saved(self):
+        self._profile_session.accept_current_default(self.settings)
+
+    def request_factory_reset(self):
+        if self._tearing_down or self._reset_dialog is not None:
+            return
+        self._show_window()
+
+        def _confirm() -> bool:
+            if not preferences.restore_factory(self.settings):
+                return False
+            self._profile_session.accept_current_default(self.settings)
+            set_language(self.settings.language)
+            self.refresh_setting_widgets()
+            self._refresh_profile()
+            self._reset_dialog = None
+            log.info("All settings restored to factory defaults.")
+            self.toast(t("Factory defaults restored. Restart to refresh the interface language."))
+            return True
+
+        def _cancel():
+            self._reset_dialog = None
+
+        self._reset_dialog = FactoryResetDialog(
+            self.root, on_confirm=_confirm, on_cancel=_cancel
+        )
 
     def _teardown(self):
         if self._tearing_down:
@@ -575,7 +623,19 @@ class TriggerGUI:
         if self._tearing_down:
             return
         self._refresh_status()
+        self._refresh_update_badge()
         self.root.after(1000, self._tick_status)
+
+    def _refresh_update_badge(self):
+        from modules.update.presentation import has_update_notice
+
+        badge = self._nav_badges.get("System")
+        if badge is None:
+            return
+        if has_update_notice(self._update_service.snapshot()):
+            badge.place(relx=1.0, rely=0.5, x=-12, anchor="e")
+        else:
+            badge.place_forget()
 
     def _refresh_status(self):
         ds = self._ds

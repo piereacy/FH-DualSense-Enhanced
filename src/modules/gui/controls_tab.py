@@ -45,12 +45,19 @@ TRIGGER_CONTROLS = [
 ]
 
 
+def responsive_column_count(width: int, threshold: int = 720) -> int:
+    return 2 if width >= threshold else 1
+
+
 class ControlsTab(ctk.CTkFrame):
     def __init__(self, parent, app):
         super().__init__(parent, fg_color="transparent")
         self.app = app
         self.settings = app.settings
         self._switches: dict[str, ctk.CTkSwitch] = {}
+        self._cards: list[ctk.CTkFrame] = []
+        self._columns = 0
+        self._layout_after = None
         self._build()
         app.register_refresh(self._refresh_widgets)
 
@@ -59,23 +66,15 @@ class ControlsTab(ctk.CTkFrame):
                      t("Toggle individual trigger effects. Changes save instantly.")
                      ).pack(fill="x", pady=(0, T.PAD_MD))
 
-        grid = ctk.CTkFrame(self, fg_color="transparent")
-        grid.pack(fill="both", expand=True)
-        for col in range(2):
-            grid.grid_columnconfigure(col, weight=1, uniform="cols")
-        row_count = (len(TRIGGER_CONTROLS) + 1) // 2
-        for row in range(row_count):
-            grid.grid_rowconfigure(row, weight=1)
+        self._scroll = W.FastScroll(self)
+        self._scroll.pack(fill="both", expand=True)
+        self._grid = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        self._grid.pack(fill="x", expand=True)
+        self._grid.bind("<Configure>", self._schedule_layout)
 
-        for index, (title, toggles) in enumerate(TRIGGER_CONTROLS):
-            row, col = divmod(index, 2)
-            card = W.Card(grid)
-            card.grid(row=row, column=col,
-                      padx=(0 if col == 0 else T.PAD_MD // 2,
-                            T.PAD_MD // 2 if col == 0 else 0),
-                      pady=(0 if row == 0 else T.PAD_MD // 2,
-                            T.PAD_MD // 2 if row == 0 else 0),
-                      sticky="nsew")
+        for title, toggles in TRIGGER_CONTROLS:
+            card = W.Card(self._grid)
+            self._cards.append(card)
             W.H2(card, t(title)).pack(anchor="w", padx=T.PAD_MD,
                                       pady=(T.PAD_MD, T.PAD_SM))
             for attr, label in toggles:
@@ -87,6 +86,32 @@ class ControlsTab(ctk.CTkFrame):
                 self._switches[attr] = sw
             ctk.CTkFrame(card, fg_color="transparent", height=T.PAD_SM
                          ).pack()  # bottom breathing room
+        self.after_idle(self._apply_responsive_layout)
+
+    def _schedule_layout(self, _event=None):
+        if self._layout_after is not None:
+            self.after_cancel(self._layout_after)
+        self._layout_after = self.after_idle(self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self):
+        self._layout_after = None
+        width = max(self._grid.winfo_width(), self.winfo_width())
+        columns = responsive_column_count(width, self.app.px(720))
+        if columns == self._columns:
+            return
+        self._columns = columns
+        self._grid.grid_columnconfigure(0, weight=1, uniform="controls")
+        self._grid.grid_columnconfigure(1, weight=1 if columns == 2 else 0,
+                                        uniform="controls" if columns == 2 else "")
+        for index, card in enumerate(self._cards):
+            card.grid_forget()
+            row, col = divmod(index, columns)
+            card.grid(
+                row=row, column=col, sticky="nsew",
+                padx=(0, T.PAD_MD // 2) if columns == 2 and col == 0
+                else ((T.PAD_MD // 2, 0) if columns == 2 else (0, 0)),
+                pady=(0, T.PAD_MD),
+            )
 
     def _on_toggle(self, attr: str):
         if self.app._refreshing:

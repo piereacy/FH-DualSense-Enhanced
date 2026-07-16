@@ -136,8 +136,9 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "Windows 独立 EXE（推荐）" in workflow
     assert "win_start.bat" in workflow
     assert "ZUV / Linux 备用方式" in workflow
-    for suffix in ("Miku-Console", "Miku-Stage", "Miku-Studio"):
-        assert suffix in workflow
+    assert "FH-DualSense-Enhanced-{0}.exe" in workflow
+    assert "Miku-Stage" not in workflow
+    assert "Miku-Studio" not in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
     assert "Enhanced R4 中文说明" in workflow
     assert "握把换挡冲击" in workflow
@@ -152,9 +153,9 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     linux_spec = _source("packaging/linux/fhds.spec")
 
     assert "name=EXE_NAME" in spec
-    for suffix in ("Miku-Console", "Miku-Stage", "Miku-Studio"):
-        assert suffix in spec
-    assert "FH-DualSense-Enhanced-R%VER%-Miku-*.exe" in build
+    assert "Miku-Stage" not in spec
+    assert "Miku-Studio" not in spec
+    assert "FH-DualSense-Enhanced-R%VER%.exe" in build
     assert "FH-DualSense-Update-Helper.exe" in spec
     assert "FH-DualSense-Update-Helper" in build
     assert "$p+'.sha256'" in build
@@ -182,8 +183,8 @@ def test_readme_uses_same_page_three_language_navigation():
     assert 'href="docs/ReadmeEN.md">English</a>' not in chinese
     assert 'href="docs/ReadmeJA.md">日本語</a>' not in chinese
 
-    assert "按喜欢的布局下载" in chinese
-    assert "FH-DualSense-Enhanced-R4-Miku-Console.exe" in chinese
+    assert "唯一的 Windows 主程序" in chinese
+    assert "FH-DualSense-Enhanced-R4.exe" in chinese
     assert "win_start.bat" in chinese
     assert "manual" in english.lower() and ZUV_NAME in english
     assert "手動" in japanese and ZUV_NAME in japanese
@@ -239,9 +240,9 @@ def test_readmes_describe_r4_features_and_public_artifact_names():
     japanese = _source("docs/ReadmeJA.md")
 
     for text in (chinese, english, japanese):
-        assert "FH-DualSense-Enhanced-R4-Miku-Console.exe" in text
-        assert "Miku-Stage" in text
-        assert "Miku-Studio" in text
+        assert "FH-DualSense-Enhanced-R4.exe" in text
+        assert "Miku-Stage" not in text
+        assert "Miku-Studio" not in text
         assert "wheelspin" in text.lower()
         assert "ABS wall" in text
         assert "R4-preview" in text

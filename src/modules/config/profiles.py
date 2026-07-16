@@ -21,6 +21,10 @@ def load_profiles() -> dict:
     }
 
 
+def active_name() -> str:
+    return load_profiles().get("active", "") or ""
+
+
 def list_profile_names(store: dict) -> list:
     """All profile names with Default pinned to the top."""
     names = list(store.get("profiles", {}).keys())
@@ -38,11 +42,11 @@ def _unique(name: str, taken: dict) -> str:
     return f"{name}{i}"
 
 
-def _write_store(profs: dict, active: str) -> None:
+def _write_store(profs: dict, active: str) -> bool:
     raw = preferences._read()
     raw["profiles"] = profs
     raw["active_profile"] = active
-    preferences._write(raw)
+    return preferences._write(raw)
 
 
 def _defaults() -> dict:
@@ -59,8 +63,16 @@ def save_profile(name: str, s) -> str:
     store = load_profiles()
     final = _unique(name, store["profiles"])
     store["profiles"][final] = preferences._profile_fields(s)
-    _write_store(store["profiles"], final)
-    return final
+    return final if _write_store(store["profiles"], final) else ""
+
+
+def next_profile_name(prefix: str = "profile") -> str:
+    """Return profile1, profile2, ... using the first available number."""
+    taken = load_profiles()["profiles"]
+    index = 1
+    while f"{prefix}{index}" in taken:
+        index += 1
+    return f"{prefix}{index}"
 
 
 def apply_profile(name: str, s) -> bool:
@@ -68,8 +80,9 @@ def apply_profile(name: str, s) -> bool:
     snap = store["profiles"].get(name)
     if snap is None:
         return False
+    if not _write_store(store["profiles"], name):
+        return False
     preferences._apply_snap(s, snap, preferences._profile_fields(s))
-    _write_store(store["profiles"], name)
     return True
 
 
@@ -84,8 +97,7 @@ def delete_profile(name: str) -> bool:
         # Prefer Default so the canonical profile stays selected.
         active = _DEFAULT if _DEFAULT in profs else next(
             iter(sorted(profs.keys(), key=str.lower)), "")
-    _write_store(profs, active)
-    return True
+    return _write_store(profs, active)
 
 
 def rename_profile(old: str, new: str) -> str:
@@ -102,8 +114,7 @@ def rename_profile(old: str, new: str) -> str:
     # Preserve insertion order so the list doesn't reshuffle.
     profs_new = {(final if k == old else k): v for k, v in profs.items()}
     active = final if store["active"] == old else store["active"]
-    _write_store(profs_new, active)
-    return final
+    return final if _write_store(profs_new, active) else ""
 
 
 # MARK: share codes --------------------------------------------------------
@@ -145,5 +156,4 @@ def import_profile(code: str) -> str:
     store = load_profiles()
     final = _unique(name, store["profiles"])
     store["profiles"][final] = {**defaults, **cleaned}
-    _write_store(store["profiles"], store["active"])
-    return final
+    return final if _write_store(store["profiles"], store["active"]) else ""

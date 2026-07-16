@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 
 from . import paths
+from .system_language import detect_system_language
 
 log = logging.getLogger("fhds")
 
@@ -28,7 +29,7 @@ PYPROJECT = paths.PYPROJECT
 DEFAULT_PROFILE_NAME = "Default"
 
 # System fields — shared across profiles and preserved across launches.
-# Everything else lives in the active profile and is wiped from Default each launch.
+# Everything else lives in the active profile.
 GLOBAL_FIELDS = frozenset({
     "udp_port",
     "udp_forward",
@@ -121,7 +122,7 @@ def _read() -> dict:
         return {}
 
 
-def _write(raw: dict) -> None:
+def _write(raw: dict) -> bool:
     raw["version"] = _version()
     # MARK: atomic write - avoid corrupt file on power loss / mid-write crash
     try:
@@ -129,8 +130,14 @@ def _write(raw: dict) -> None:
         tmp = PATH.with_suffix(PATH.suffix + ".tmp")
         tmp.write_text(json.dumps(raw, indent=2), encoding="utf-8")
         tmp.replace(PATH)
+        return True
     except OSError as e:
         log.warning("Could not save preferences: %s", e)
+        try:
+            tmp.unlink(missing_ok=True)
+        except (OSError, UnboundLocalError):
+            pass
+        return False
 
 
 def _migrate_legacy(raw: dict, s) -> None:
@@ -261,12 +268,12 @@ def load(s) -> None:
     can prompt the user before any destructive recovery.
     """
     raw = _read_raw()
+    first_run = not raw
+    if first_run and hasattr(s, "language"):
+        s.language = detect_system_language()
     raw = _ensure_active(raw, s)
     _migrate_r3_redline_split(raw, s)
     _migrate_r3_grip_gear_shift(raw, s)
-    # Reset Default on every launch so updates ship new tuning automatically;
-    # named profiles and globals are preserved.
-    raw["profiles"][DEFAULT_PROFILE_NAME] = _profile_fields(type(s)())
     _write(raw)
     snap = dict(raw["globals"])
     snap.update(raw["profiles"][raw["active_profile"]])
@@ -288,22 +295,54 @@ def reset_file() -> None:
             log.warning("Could not delete %s: %s", PATH.name, e)
 
 
-def save(s) -> None:
+def save(s) -> bool:
     # MARK: never let preferences I/O crash the UI event handler
     try:
         raw = _ensure_active(_read(), s)
         raw["profiles"][raw["active_profile"]] = _profile_fields(s)
         raw["globals"].update(_global_fields(s))
-        _write(raw)
+        return _write(raw)
     except Exception as e:
         log.warning("preferences.save failed: %s", e)
+        return False
 
 
-def reset(s) -> None:
-    """Restore the active profile to class defaults; mutate s in place so the
-    running loop picks them up on its next frame. Global fields are left intact."""
+def restore_factory(s, *, language: str | None = None) -> bool:
+    """Restore all settings and Default while preserving named profiles.
+
+    A byte-for-byte backup is written before the replacement. The in-memory
+    Settings object is mutated only after the atomic write succeeds.
+    """
     defaults = type(s)()
-    for k in _profile_fields(s):
-        if hasattr(defaults, k):
-            setattr(s, k, getattr(defaults, k))
-    save(s)
+    if hasattr(defaults, "language"):
+        defaults.language = language or detect_system_language()
+
+    raw = _ensure_active(_read(), s)
+    named = {
+        name: snapshot
+        for name, snapshot in raw.get("profiles", {}).items()
+        if name != DEFAULT_PROFILE_NAME
+    }
+    raw["profiles"] = {DEFAULT_PROFILE_NAME: _profile_fields(defaults), **named}
+    raw["active_profile"] = DEFAULT_PROFILE_NAME
+    raw["globals"] = _global_fields(defaults)
+
+    if PATH.exists():
+        backup = PATH.with_suffix(PATH.suffix + ".bak")
+        try:
+            backup.write_bytes(PATH.read_bytes())
+        except OSError as e:
+            log.warning("Could not back up preferences before factory restore: %s", e)
+            return False
+    if not _write(raw):
+        return False
+
+    snap = dict(raw["globals"])
+    snap.update(raw["profiles"][DEFAULT_PROFILE_NAME])
+    _apply_snap(s, snap, _fields(s))
+    return True
+
+
+def reset(s) -> bool:
+    """Compatibility alias for the full factory restore."""
+    return restore_factory(s)

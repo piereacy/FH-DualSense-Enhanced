@@ -220,7 +220,6 @@ class SettingsTab(ctk.CTkFrame):
         self._switches: dict[str, ctk.CTkSwitch] = {}
         self._sliders: dict[str, ctk.CTkSlider] = {}
         self._entries: dict[str, ctk.CTkEntry] = {}
-        self._reset_armed = False
         self._reset_btn: ctk.CTkButton | None = None
         self._experimental_open = False
         self._experimental_btn: ctk.CTkButton | None = None
@@ -448,17 +447,7 @@ class SettingsTab(ctk.CTkFrame):
         self._push_live(attr, new)
 
     def _on_reset(self):
-        if not self._reset_armed:
-            self._reset_armed = True
-            if self._reset_btn:
-                self._reset_btn.configure(text=t("Click again to confirm reset"))
-            return
-        self._reset_armed = False
-        if self._reset_btn:
-            self._reset_btn.configure(text=t("Reset to defaults"))
-        preferences.reset(self.settings)
-        self.app.refresh_setting_widgets()
-        log.info("Settings reset to defaults.")
+        self.app.request_factory_reset()
 
     def _push_live(self, attr: str, value):
         ds = getattr(self.app, "_ds", None)

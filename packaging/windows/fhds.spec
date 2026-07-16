@@ -9,7 +9,6 @@ Build:
     packaging\\windows\\build_exe.bat
 """
 
-import os
 from pathlib import Path
 import re
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
@@ -17,15 +16,6 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 SRC = Path(SPECPATH).resolve().parents[1] / "src"
 ROOT = SRC.parent
 ICON = SRC / "data" / "icon.ico"
-VARIANT_KEY = os.environ.get("FHDS_BUILD_VARIANT", "console").strip().lower()
-VARIANT_SUFFIXES = {
-    "console": "Miku-Console",
-    "stage": "Miku-Stage",
-    "studio": "Miku-Studio",
-}
-if VARIANT_KEY not in VARIANT_SUFFIXES:
-    raise ValueError(f"Unknown FHDS_BUILD_VARIANT: {VARIANT_KEY}")
-VARIANT_SUFFIX = VARIANT_SUFFIXES[VARIANT_KEY]
 
 # MARK: read version from pyproject.toml and emit a Windows VERSIONINFO file
 def _read_version() -> str:
@@ -41,7 +31,7 @@ def _version_tuple(v: str) -> tuple:
 
 VERSION = _read_version()
 PUBLIC_VERSION = f"R{VERSION}"
-EXE_NAME = f"FH-DualSense-Enhanced-{PUBLIC_VERSION}-{VARIANT_SUFFIX}"
+EXE_NAME = f"FH-DualSense-Enhanced-{PUBLIC_VERSION}"
 VTUP = _version_tuple(VERSION)
 VERSION_FILE = Path(SPECPATH) / "version_info.txt"
 VERSION_FILE.write_text(f"""# UTF-8
@@ -55,7 +45,7 @@ VSVersionInfo(
     StringFileInfo([
       StringTable('040904B0', [
         StringStruct('CompanyName', 'FH-DualSense-Enhanced Contributors'),
-        StringStruct('FileDescription', 'Enhanced Forza Horizon DualSense haptics - {VARIANT_SUFFIX}'),
+        StringStruct('FileDescription', 'Enhanced Forza Horizon DualSense haptics - Miku Console'),
         StringStruct('FileVersion', '{PUBLIC_VERSION}'),
         StringStruct('InternalName', '{EXE_NAME}'),
         StringStruct('LegalCopyright', '(C) 2025 Hamza Yesilmen (HamzaYslmn). Attribution & Sponsor License.'),
@@ -69,10 +59,6 @@ VSVersionInfo(
 )
 """, encoding="utf-8")
 
-VARIANT_DIR = Path(SPECPATH) / "generated" / VARIANT_KEY
-VARIANT_DIR.mkdir(parents=True, exist_ok=True)
-VARIANT_FILE = VARIANT_DIR / "ui_variant.txt"
-VARIANT_FILE.write_text(VARIANT_KEY + "\n", encoding="utf-8")
 UPDATE_HELPER = Path(SPECPATH) / "helper_dist" / "FH-DualSense-Update-Helper.exe"
 if not UPDATE_HELPER.is_file():
     raise FileNotFoundError(
@@ -86,7 +72,6 @@ datas = [
     (str(SRC / "lang"), "lang"),
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "docs" / "THIRD_PARTY_NOTICES.md"), "docs"),
-    (str(VARIANT_FILE), "data"),
     (str(UPDATE_HELPER), "data"),
 ]
 datas += collect_data_files("customtkinter")

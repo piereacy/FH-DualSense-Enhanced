@@ -31,7 +31,9 @@ Starting with R2, this project uses its own concise `R` version series to avoid 
 - Revving and burnouts while stationary still produce appropriate feedback.
 - Road material contributes only while the car moves or the tires create physical excitation.
 - USB and Bluetooth support.
-- Miku Console, Miku Stage, and Miku Studio share the same backend, pages, settings, and profile format; only their layout differs.
+- The app uses one Miku Console interface with wheel scrolling, nested-scroll routing, and a responsive one-column driving page for narrow windows.
+- `Default` autosaves and survives restarts. Exit can preserve it as a named profile, while factory restore keeps existing named profiles.
+- First launch follows the system display language, and a persistent white dot beside System & Updates indicates an available update.
 - Standalone Windows EXEs provide in-app update checks, download, SHA-256 verification, restart-to-install, and rollback. ZUV remains an optional compatibility and development path.
 - Advanced traction, ABS, redline, and collision controls live under a collapsed Experimental section. Grip gear-shift tuning is a normal setting.
 
@@ -53,12 +55,9 @@ Small differences can depend on the PC, controller firmware, and Bluetooth adapt
 ### Recommended Windows method: standalone EXE
 
 1. Open the [latest Release](https://github.com/piereacy/FH-DualSense-Enhanced/releases/latest).
-2. Download any one of these layouts. All three have identical functionality and profile compatibility:
-   - `FH-DualSense-Enhanced-R4-Miku-Console.exe`: full text sidebar and the safest narrow-window layout.
-   - `FH-DualSense-Enhanced-R4-Miku-Stage.exe`: horizontal top navigation and a wider workspace.
-   - `FH-DualSense-Enhanced-R4-Miku-Studio.exe`: compact navigation rail and a tuning-oriented workspace.
+2. Download the single Windows application: `FH-DualSense-Enhanced-R4.exe`.
 3. Run the EXE directly. Python, BAT, ZUV, and uv are not required; settings live in the adjacent `data` folder.
-4. System & Updates can check, download, verify, and restart to install. Automatic checks are on by default; background downloads are off. Only the asset matching the current Miku layout is accepted.
+4. System & Updates can check, download, verify, and restart to install. Automatic checks are on by default; background downloads are off. Only the canonical `FH-DualSense-Enhanced-R<n>.exe` asset is accepted.
 
 The detached helper restores the old EXE if replacement fails and never silently asks for administrator rights. Source, Linux, and ZUV runs do not offer Windows EXE replacement.
 

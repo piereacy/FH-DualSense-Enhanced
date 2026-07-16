@@ -25,7 +25,10 @@ class OverviewTab(ctk.CTkFrame):
             t("Controller, telemetry, profile, and update status at a glance."),
         ).pack(fill="x", pady=(0, T.PAD_MD))
 
-        status = ctk.CTkFrame(self, fg_color="transparent")
+        scroll = W.FastScroll(self)
+        scroll.pack(fill="both", expand=True)
+
+        status = ctk.CTkFrame(scroll, fg_color="transparent")
         status.pack(fill="x")
         for col in range(2):
             status.grid_columnconfigure(col, weight=1, uniform="overview")
@@ -43,31 +46,35 @@ class OverviewTab(ctk.CTkFrame):
             status, 3, t("Updates"), t("Update status: idle"), t("Built-in updater")
         )
 
-        quick = W.Card(self)
+        quick = W.Card(scroll)
         quick.pack(fill="x", pady=(T.PAD_MD, 0))
         W.H2(quick, t("Quick access")).pack(
             anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
         )
         row = ctk.CTkFrame(quick, fg_color="transparent")
         row.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+        row.grid_columnconfigure((0, 1), weight=1, uniform="quick")
         W.PrimaryButton(
             row, text=t("Driving feedback"), command=lambda: self.app._select_nav("Driving")
-        ).pack(side="left", padx=(0, T.PAD_SM))
+        ).grid(row=0, column=0, sticky="ew", padx=(0, T.PAD_XS), pady=(0, T.PAD_XS))
         W.SecondaryButton(
             row, text=t("Grip haptics"), command=lambda: self.app._select_nav("Haptics")
-        ).pack(side="left", padx=(0, T.PAD_SM))
+        ).grid(row=0, column=1, sticky="ew", padx=(T.PAD_XS, 0), pady=(0, T.PAD_XS))
         W.SecondaryButton(
             row, text=t("System and updates"), command=lambda: self.app._select_nav("System")
-        ).pack(side="left")
+        ).grid(row=1, column=0, sticky="ew", padx=(0, T.PAD_XS), pady=(T.PAD_XS, 0))
+        W.DangerButton(
+            row, text=t("Restore defaults"), command=self.app.request_factory_reset
+        ).grid(row=1, column=1, sticky="ew", padx=(T.PAD_XS, 0), pady=(T.PAD_XS, 0))
 
-        note = W.Card(self)
+        note = W.Card(scroll)
         note.pack(fill="x", pady=(T.PAD_MD, 0))
         W.H2(note, t("R4 workspace")).pack(
             anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
         )
         W.Hint(
             note,
-            t("Every interface variant uses the same settings, haptic engine, and controller backend."),
+            t("Miku Console uses the shared settings, haptic engine, and controller backend."),
             wrap=self.app.px(760),
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 

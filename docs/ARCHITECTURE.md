@@ -66,15 +66,17 @@ flowchart LR
 - 管理共享 `UsbAudioHaptics` 生命周期。
 - 在退出时依次停止 loop、音频、listener 和手柄。
 
-GUI 的 Tk widget 只由主线程访问。后台日志进入最多 4000 条的 queue，再由 Tk 定时读取。最小化到托盘由 `settings.minimize_to_tray` 控制，关闭窗口始终退出；游戏关闭后退出由 loop 中的 `settings.exit_on_game_close` 控制。托盘实现位于 `src/modules/gui/tray.py`。
+GUI 的 Tk widget 只由主线程访问。后台日志进入最多 4000 条的 queue，再由 Tk 定时读取。最小化到托盘由 `settings.minimize_to_tray` 控制；窗口关闭、托盘退出、游戏关闭、遥测超时和更新重启都进入 `TriggerGUI.request_close()`，再由同一 teardown 顺序退出。托盘实现位于 `src/modules/gui/tray.py`。
 
-Enhanced R4 的 GUI 通过 `src/modules/gui/variants.py` 选择三种壳层：Console 是完整左侧导航，Stage 是顶部导航，Studio 是带 Tooltip 的紧凑导航轨。构建时 `FHDS_BUILD_VARIANT` 生成内置 `data/ui_variant.txt`；源码预览可用 `FHDS_UI_VARIANT`。三种壳层只改变导航位置、宽度和标签形式，均实例化同一组 Tab、同一个 `Settings`、后端线程和保存回调。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。
+Enhanced R4 只保留 Miku Console 左侧导航壳层。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。长页面使用 `widgets.FastScroll` 注册到根窗口 `WheelRouter`：路由器按指针命中的最近祖先选择内层滚动画布，内层到达目标方向边界后才转交外层。驾驶反馈页的卡片保持自然高度，内容宽度低于阈值时只重新排列为单列，不重建开关。Per-Monitor v2 DPI awareness 和 CustomTkinter scaling 保持不变，裁切由滚动边界和响应式布局解决。
 
 ### 3.3 Windows 独立 EXE 更新器
 
-`src/modules/update/` 与触觉后端相互独立。`GitHubReleaseClient` 从 `piereacy/FH-DualSense-Enhanced` 的 Releases API 中筛选非 draft、非 prerelease 且 tag 严格匹配 `R<n>` 的版本，只接受与当前 Miku 方案完全同名的 EXE 和配套 `.sha256`。API、校验文件和 EXE 都有限制大小与网络超时；下载先写 `.part`，完成后检查实际长度、SHA-256 和 `MZ` 头。
+`src/modules/update/` 与触觉后端相互独立。`GitHubReleaseClient` 从 `piereacy/FH-DualSense-Enhanced` 的 Releases API 中筛选非 draft、非 prerelease 且 tag 严格匹配 `R<n>` 的版本，只接受规范资产 `FH-DualSense-Enhanced-R<n>.exe` 和配套 `.sha256`。API、校验文件和 EXE 都有限制大小与网络超时；下载先写 `.part`，完成后检查实际长度、SHA-256 和 `MZ` 头。
 
 `UpdateService` 在后台线程维护 `IDLE -> CHECKING -> AVAILABLE|UP_TO_DATE|ERROR -> DOWNLOADING -> VERIFYING -> READY -> INSTALLING` 快照，GUI/TUI 只轮询不可变状态。自动检查默认开启并在启动约 10 秒后执行一次；后台下载默认关闭，安装始终需要用户点击“重启并安装”。当前实现没有跨启动的 24 小时检查节流，也不在应用内展开 Release body，只提供打开 Release 链接。
+
+GUI 根据同一快照决定“系统与更新”导航白点。只有快照持有新 Release 且处于可用、下载、校验、待安装或错误状态时显示；进入页面不会清除。更新安装的 Helper 调度被延迟到统一退出提示完成之后，调度失败时主程序保持运行。
 
 Windows 不能覆盖正在运行的主程序。`src/modules/update/install.py` 因此写入绝对路径、PID 与哈希的计划文件，复制内置 `FH-DualSense-Update-Helper.exe` 并退出。Helper 使用 Win32 `OpenProcess`/`WaitForSingleObject` 等待旧进程，先把旧 EXE 改名为 `.old`，再移动新文件并启动；失败时恢复 `.old`。入口由 `self_update_supported()` 限制为 `sys.frozen` 的 Windows 进程，源码、Linux 和 ZUV 界面的更新按钮被禁用。
 
@@ -239,11 +241,14 @@ Enhanced R4 普通设置分别显示 R2 扳机键红线、握把红线、tractio
 
 - `GLOBAL_FIELDS` 保存 UDP、重连、启动 pulse、后台行为、语言、更新、手柄选择和 DSX 等应用级设置。
 - 其余简单类型字段属于当前 Profile。
-- `Default` Profile 每次启动都从当前 `Settings()` 默认值重新生成，便于发布新的默认调校。
-- 命名 Profile 和 globals 在启动间保留。
+- `Default` 与命名 Profile 都会自动保存并跨启动保留，启动过程不再用 `Settings()` 覆盖 `Default`。
+- 第一次生成有效配置时，`system_language.detect_system_language()` 把 Windows 显示语言映射到现有 `en/de/ja/ru/tr/zh/zh_tw` 目录；已有配置继续使用用户选择。
+- `ProfileSession` 只在内存中保存 GUI 启动时的 `Default` Profile 快照。当前仍为 `Default` 且 Profile 字段发生变化时，统一退出入口才提示另存命名 Profile；global-only 变化和当前命名 Profile 不提示。
+- 恢复出厂会先备份现有 JSON 为 `.bak`，保留全部命名 Profile，重建 `Default` 和 globals，切回 `Default` 并重新检测系统语言。只有原子写入成功后才修改运行中的 `Settings`。
 - 旧命名 Profile 保留原 `rev_limit_*` 扳机参数；缺失的 R4 字段按当前默认值补齐，因此所有新增扳机层与灯效默认关闭，握把换挡仍默认关闭。已经显式保存的值不会被覆盖。
 - 早期内部版本 `3` 预览曾复用 `rev_limit_*` 作为握把参数。缺少新握把 marker 的预览 Profile 会执行一次拆分迁移：已知 `10/96` 预览默认恢复为扳机 `30/12` 并采用新握把 `10/192`；自定义值复制给握把且继续保留在扳机侧。已有新字段时迁移保持幂等。
 - 写入先生成 `.tmp` 再 replace，降低中途损坏风险。
+- 写入函数返回成功状态，Profile CRUD 不在写入失败时伪报成功或提前修改运行对象。
 - 损坏文件可备份为 `.bak` 后重建。
 
 `src/modules/config/profiles.py` 提供命名 Profile CRUD，以及以 `FHDS:` 开头的 zlib + URL-safe base64 分享码。分享码只保存偏离默认值的字段，导入时丢弃未知字段并补齐当前默认值。
@@ -257,6 +262,7 @@ Enhanced R4 普通设置分别显示 R2 扳机键红线、握把红线、tractio
 - UDP bind 失败会在 GUI/TUI 显示端口占用状态。
 - controller、mixer 和 haptics 路由分别捕获异常，握把失败不应阻塞扳机输出。
 - GUI 使用 queue log handler，TUI 使用 Textual bridge，headless 使用 console logging。
+- GUI 的 `ProfileSession` 关闭提示不是未落盘警告：`Default` 已经即时写盘，它提供的是退出前创建可复用命名快照的机会。强制结束进程、崩溃或断电无法显示该提示。
 - 多处硬件清理和 UI teardown 使用 best-effort exception suppression，避免退出失败，但也可能隐藏设备特有问题。
 
 ## 10. 环境变量和外部依赖
@@ -265,8 +271,6 @@ Enhanced R4 普通设置分别显示 R2 扳机键红线、握把红线、tractio
 | --- | --- |
 | `IS_ZUV` | 由 ZUV loader 设置，应用只打印检测状态 |
 | `UPDATE_REPO` | 本地 ZUV 构建脚本的可选更新仓库 |
-| `FHDS_UI_VARIANT` | 源码运行时预览 `console`、`stage` 或 `studio`；非法值回退到 Console |
-| `FHDS_BUILD_VARIANT` | Windows spec 构建时写入固定界面方案和 EXE 名称 |
 | `HIDHIDE_CLI` | 指向 HidHideCLI 的探测路径，不执行该文件 |
 | `PYSTRAY_BACKEND` | Linux tray backend；Wayland 下默认设为 `appindicator` |
 | `PYTHONHOME`、`PYTHONPATH`、`PYTHONNOUSERSITE`、`UV_PYTHON_PREFERENCE` | launcher 隔离 host Python 并要求 uv managed Python |
@@ -281,8 +285,9 @@ Enhanced R4 普通设置分别显示 R2 扳机键红线、握把红线、tractio
 - native HID 和 DSX 共享 `open/close/set/connected` 最小接口，loop 不应按具体类分支，能力差异通过 `is_dsx` 和 transport 表达。
 - HID 报告中的 offsets、flags、左右映射和 BT CRC 是协议边界，不应因代码美化而改变。
 - GUI/TUI 与 backend 分线程，Tk widget 不得在 worker thread 直接更新。
-- 三种 Miku GUI 是同一产品的构建时布局选择，不是三个功能分支；配置格式、页面字段和更新目标必须保持一致。
-- 更新 Helper 是唯一允许替换运行中 EXE 的路径；主程序不得自行覆盖 `sys.executable`，也不得跨 Miku 方案更新。
+- Miku Console 是唯一 GUI 壳层；不得重新引入构建时界面分叉、界面 marker 或多资产更新契约。
+- 更新 Helper 是唯一允许替换运行中 EXE 的路径；主程序不得自行覆盖 `sys.executable`，更新目标必须使用规范文件名。
+- `Default` 持久化和 named/global 字段边界属于配置兼容协议；新默认值不能通过启动时强制覆盖已经保存的用户值。
 - Profile 的 global 和 per-profile 边界是兼容性协议，修改字段归属需要迁移和 round-trip 测试。
 - 许可证和第三方声明属于发布要求，不是可选 UI 文案。
 

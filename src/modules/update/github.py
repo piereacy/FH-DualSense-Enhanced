@@ -15,11 +15,6 @@ MAX_API_BYTES = 2 * 1024 * 1024
 MAX_CHECKSUM_BYTES = 64 * 1024
 MAX_EXE_BYTES = 300 * 1024 * 1024
 TAG_RE = re.compile(r"^R(\d+)$", re.IGNORECASE)
-VARIANT_NAMES = {
-    "console": "Miku-Console",
-    "stage": "Miku-Stage",
-    "studio": "Miku-Studio",
-}
 
 
 class UpdateError(RuntimeError):
@@ -51,7 +46,7 @@ class GitHubReleaseClient:
         self.api_url = api_url
         self.timeout = float(timeout)
 
-    def latest(self, *, current_version: int, variant: str) -> UpdateRelease | None:
+    def latest(self, *, current_version: int) -> UpdateRelease | None:
         with _request(self.api_url, timeout=self.timeout, max_bytes=MAX_API_BYTES) as response:
             raw = response.read(MAX_API_BYTES + 1)
         if len(raw) > MAX_API_BYTES:
@@ -65,13 +60,13 @@ class GitHubReleaseClient:
 
         candidates: list[UpdateRelease] = []
         for item in payload:
-            release = self._parse_release(item, variant)
+            release = self._parse_release(item)
             if release is not None and release.version > int(current_version):
                 candidates.append(release)
         return max(candidates, key=lambda release: release.version, default=None)
 
     @staticmethod
-    def _parse_release(item, variant: str) -> UpdateRelease | None:
+    def _parse_release(item) -> UpdateRelease | None:
         if not isinstance(item, dict) or item.get("draft") or item.get("prerelease"):
             return None
         tag = str(item.get("tag_name", ""))
@@ -79,10 +74,7 @@ class GitHubReleaseClient:
         if not match:
             return None
         version = int(match.group(1))
-        suffix = VARIANT_NAMES.get(variant)
-        if suffix is None:
-            return None
-        expected = f"FH-DualSense-Enhanced-R{version}-{suffix}.exe"
+        expected = f"FH-DualSense-Enhanced-R{version}.exe"
         assets = item.get("assets")
         if not isinstance(assets, list):
             return None
@@ -176,4 +168,3 @@ class GitHubReleaseClient:
         if not match:
             raise UpdateError("checksum file does not contain SHA-256")
         return match.group(1).lower()
-

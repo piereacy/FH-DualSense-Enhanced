@@ -294,6 +294,30 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Save settings before exit?": "Сохранить настройки перед выходом?",
+    "Save your tuning before exit?": "Сохранить настройку перед выходом?",
+    "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
+        "Default уже автоматически сохранил изменения. Сохраните именованный профиль для повторного использования.",
+    "Save as named profile and exit": "Сохранить как именованный профиль и выйти",
+    "Exit directly": "Выйти без сохранения профиля",
+    "Cancel": "Отмена",
+    "Profile name cannot be empty.": "Имя профиля не может быть пустым.",
+    "Could not save the profile. Please try again.": "Не удалось сохранить профиль. Повторите попытку.",
+    "Restore factory defaults": "Восстановить заводские настройки",
+    "Restore all factory defaults?": "Восстановить все заводские настройки?",
+    "This resets haptics, system settings, language, and Default. Named profiles are kept.":
+        "Будут сброшены тактильные эффекты, системные настройки, язык и Default. Именованные профили сохранятся.",
+    "Restore defaults": "Восстановить настройки",
+    "Could not restore defaults. Check the log and try again.": "Не удалось восстановить настройки. Проверьте журнал и повторите попытку.",
+    "Factory defaults restored. Restart to refresh the interface language.":
+        "Заводские настройки восстановлены. Перезапустите программу для обновления языка интерфейса.",
+    "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
+        "Default сохраняется автоматически и остаётся после перезапуска. Для повторного использования сохраните именованный профиль.",
+    "Miku Console uses the shared settings, haptic engine, and controller backend.":
+        "Miku Console использует общие настройки, тактильный движок и бэкенд контроллера.",
+})
+
+STRINGS.update({
     "Overview": "Обзор", "Drive": "Вождение", "Driving feedback": "Обратная связь вождения",
     "Grip haptics": "Тактильная отдача рукояток", "Lights": "Подсветка", "Lang": "Язык",
     "System and updates": "Система и обновления",

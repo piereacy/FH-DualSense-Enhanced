@@ -276,13 +276,10 @@ class SystemTab(SettingsTab):
         if snapshot.phase is UpdatePhase.AVAILABLE:
             self.app._update_service.download()
         elif snapshot.phase is UpdatePhase.READY:
-            try:
-                self.app._update_service.install_on_exit()
-            except Exception as exc:
-                log.warning("Could not start update install: %s", exc)
-                self.app.toast(t("Could not start update: {error}").format(error=exc))
-                return
-            self.app._quit()
+            self.app.request_close(
+                "update",
+                before_exit=self.app._update_service.install_on_exit,
+            )
 
     def _open_update_release(self):
         release = self.app._update_service.snapshot().release

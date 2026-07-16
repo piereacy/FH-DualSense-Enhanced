@@ -283,6 +283,30 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Save settings before exit?": "退出前保存设置？",
+    "Save your tuning before exit?": "退出前保存你的调校？",
+    "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
+        "Default 已自动保存这些更改。保存为命名配置可以保留一份可重复使用的快照。",
+    "Save as named profile and exit": "保存为命名配置并退出",
+    "Exit directly": "直接退出",
+    "Cancel": "取消",
+    "Profile name cannot be empty.": "配置名称不能为空。",
+    "Could not save the profile. Please try again.": "无法保存配置，请重试。",
+    "Restore factory defaults": "还原默认设置",
+    "Restore all factory defaults?": "还原全部默认设置？",
+    "This resets haptics, system settings, language, and Default. Named profiles are kept.":
+        "这会重置触觉、系统设置、语言和 Default，但会保留命名配置。",
+    "Restore defaults": "还原默认设置",
+    "Could not restore defaults. Check the log and try again.": "无法还原默认设置，请查看日志后重试。",
+    "Factory defaults restored. Restart to refresh the interface language.":
+        "已还原默认设置。重启程序后会刷新界面语言。",
+    "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
+        "Default 会自动保存并跨重启保留。需要可重复使用的快照时，请保存为命名配置。",
+    "Miku Console uses the shared settings, haptic engine, and controller backend.":
+        "Miku Console 使用统一的设置、触觉引擎和手柄后端。",
+})
+
+STRINGS.update({
     # --- R4 navigation, overview, profiles, and built-in updater ---
     "Overview": "总览",
     "Drive": "驾驶",

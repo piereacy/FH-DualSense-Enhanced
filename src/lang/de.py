@@ -320,6 +320,30 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Save settings before exit?": "Einstellungen vor dem Beenden speichern?",
+    "Save your tuning before exit?": "Abstimmung vor dem Beenden speichern?",
+    "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
+        "Default hat diese Änderungen automatisch gespeichert. Speichere ein benanntes Profil als wiederverwendbare Momentaufnahme.",
+    "Save as named profile and exit": "Als benanntes Profil speichern und beenden",
+    "Exit directly": "Direkt beenden",
+    "Cancel": "Abbrechen",
+    "Profile name cannot be empty.": "Der Profilname darf nicht leer sein.",
+    "Could not save the profile. Please try again.": "Das Profil konnte nicht gespeichert werden. Bitte erneut versuchen.",
+    "Restore factory defaults": "Werkseinstellungen wiederherstellen",
+    "Restore all factory defaults?": "Alle Werkseinstellungen wiederherstellen?",
+    "This resets haptics, system settings, language, and Default. Named profiles are kept.":
+        "Dies setzt Haptik, Systemeinstellungen, Sprache und Default zurück. Benannte Profile bleiben erhalten.",
+    "Restore defaults": "Standardwerte wiederherstellen",
+    "Could not restore defaults. Check the log and try again.": "Standardwerte konnten nicht wiederhergestellt werden. Protokoll prüfen und erneut versuchen.",
+    "Factory defaults restored. Restart to refresh the interface language.":
+        "Werkseinstellungen wiederhergestellt. Zum Aktualisieren der Oberflächensprache neu starten.",
+    "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
+        "Default speichert automatisch und bleibt nach Neustarts erhalten. Für eine wiederverwendbare Momentaufnahme ein benanntes Profil speichern.",
+    "Miku Console uses the shared settings, haptic engine, and controller backend.":
+        "Miku Console nutzt die gemeinsamen Einstellungen, die Haptik-Engine und das Controller-Backend.",
+})
+
+STRINGS.update({
     "Overview": "Übersicht", "Drive": "Fahren", "Driving feedback": "Fahrfeedback",
     "Grip haptics": "Griff-Haptik", "Lights": "Licht", "Lang": "Sprache",
     "System and updates": "System und Updates",

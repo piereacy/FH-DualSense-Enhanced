@@ -13,14 +13,14 @@ import pytest
 from modules.update import github
 from modules.update.github import GitHubReleaseClient, UpdateError
 from modules.update.model import UpdatePhase, UpdateRelease
-from modules.update.presentation import localized_status
+from modules.update.presentation import has_update_notice, localized_status
 from modules.update.service import UpdateService
 from modules.config.settings import Settings
 from modules.update import install
 
 
-def release_payload(version=4, variant="Miku-Console", *, checksum=True):
-    name = f"FH-DualSense-Enhanced-R{version}-{variant}.exe"
+def release_payload(version=4, *, checksum=True):
+    name = f"FH-DualSense-Enhanced-R{version}.exe"
     assets = [
         {
             "name": name,
@@ -46,20 +46,22 @@ def release_payload(version=4, variant="Miku-Console", *, checksum=True):
     }
 
 
-def test_release_parser_selects_matching_variant_and_requires_checksum():
-    parsed = GitHubReleaseClient._parse_release(release_payload(), "console")
+def test_release_parser_selects_canonical_asset_and_requires_checksum():
+    parsed = GitHubReleaseClient._parse_release(release_payload())
     assert parsed is not None
     assert parsed.version == 4
-    assert parsed.asset_name.endswith("Miku-Console.exe")
-    assert GitHubReleaseClient._parse_release(release_payload(checksum=False), "console") is None
-    assert GitHubReleaseClient._parse_release(release_payload(), "stage") is None
+    assert parsed.asset_name == "FH-DualSense-Enhanced-R4.exe"
+    assert GitHubReleaseClient._parse_release(release_payload(checksum=False)) is None
+    legacy = release_payload()
+    legacy["assets"][0]["name"] = "FH-DualSense-Enhanced-R4-Miku-Console.exe"
+    assert GitHubReleaseClient._parse_release(legacy) is None
 
 
 @pytest.mark.parametrize("tag", ["4", "v4", "R4-beta", "R4.0"])
 def test_release_parser_rejects_non_release_tags(tag):
     payload = release_payload()
     payload["tag_name"] = tag
-    assert GitHubReleaseClient._parse_release(payload, "console") is None
+    assert GitHubReleaseClient._parse_release(payload) is None
 
 
 class FakeResponse:
@@ -88,7 +90,7 @@ def test_download_verifies_sha256_and_pe_header(monkeypatch, tmp_path):
         tag="R4",
         body="",
         html_url="https://example.test/R4",
-        asset_name="FH-DualSense-Enhanced-R4-Miku-Console.exe",
+        asset_name="FH-DualSense-Enhanced-R4.exe",
         asset_url="https://example.test/app.exe",
         asset_size=len(exe),
         checksum_url="https://example.test/app.exe.sha256",
@@ -139,9 +141,9 @@ class FakeClient:
 def test_update_service_reports_available(monkeypatch, tmp_path):
     from modules.update import service
 
-    release = GitHubReleaseClient._parse_release(release_payload(), "console")
+    release = GitHubReleaseClient._parse_release(release_payload())
     monkeypatch.setattr(service.paths, "DATA", tmp_path)
-    updater = UpdateService(Settings(), variant="console", client=FakeClient(release))
+    updater = UpdateService(Settings(), client=FakeClient(release))
     updater._check_impl(background=False)
     snapshot = updater.snapshot()
     assert snapshot.phase is UpdatePhase.AVAILABLE
@@ -152,22 +154,27 @@ def test_update_service_reports_up_to_date(monkeypatch, tmp_path):
     from modules.update import service
 
     monkeypatch.setattr(service.paths, "DATA", tmp_path)
-    updater = UpdateService(Settings(), variant="console", client=FakeClient())
+    updater = UpdateService(Settings(), client=FakeClient())
     updater._check_impl(background=False)
     assert updater.snapshot().phase is UpdatePhase.UP_TO_DATE
 
 
 def test_update_status_presentation_localizes_phase_and_release_tag():
     translate = lambda value: f"T:{value}"
-    release = GitHubReleaseClient._parse_release(release_payload(), "console")
+    release = GitHubReleaseClient._parse_release(release_payload())
 
     assert localized_status(
-        UpdateService(Settings(), variant="console", client=FakeClient()).snapshot(),
+        UpdateService(Settings(), client=FakeClient()).snapshot(),
         translate,
     ) == "T:Update status: idle"
-    available = UpdateService(Settings(), variant="console", client=FakeClient(release))
+    available = UpdateService(Settings(), client=FakeClient(release))
     available._check_impl(background=False)
     assert localized_status(available.snapshot(), translate) == "T:Update available: R4"
+    assert has_update_notice(available.snapshot()) is True
+
+    up_to_date = UpdateService(Settings(), client=FakeClient())
+    up_to_date._check_impl(background=False)
+    assert has_update_notice(up_to_date.snapshot()) is False
 
 
 def test_unsupported_runtime_cannot_start_or_install_updates(tmp_path, monkeypatch):
@@ -176,7 +183,6 @@ def test_unsupported_runtime_cannot_start_or_install_updates(tmp_path, monkeypat
     monkeypatch.setattr(service.paths, "DATA", tmp_path)
     updater = UpdateService(
         Settings(),
-        variant="console",
         client=FakeClient(),
         supported=False,
     )
@@ -204,7 +210,7 @@ def test_update_helper_atomically_replaces_target_and_keeps_rollback(tmp_path, m
     helper = runpy.run_path(
         str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
     )
-    target = tmp_path / "FH-DualSense-Enhanced-R4-Miku-Console.exe"
+    target = tmp_path / "FH-DualSense-Enhanced-R4.exe"
     staged = tmp_path / "staged.exe"
     plan = tmp_path / "install-plan.json"
     target.write_bytes(b"old")

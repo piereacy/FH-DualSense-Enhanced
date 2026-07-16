@@ -283,6 +283,30 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Save settings before exit?": "Çıkmadan önce ayarlar kaydedilsin mi?",
+    "Save your tuning before exit?": "Çıkmadan önce ince ayar kaydedilsin mi?",
+    "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
+        "Default bu değişiklikleri otomatik olarak kaydetti. Yeniden kullanılabilir bir kopya için adlandırılmış profil kaydedin.",
+    "Save as named profile and exit": "Adlandırılmış profil olarak kaydet ve çık",
+    "Exit directly": "Doğrudan çık",
+    "Cancel": "İptal",
+    "Profile name cannot be empty.": "Profil adı boş olamaz.",
+    "Could not save the profile. Please try again.": "Profil kaydedilemedi. Lütfen yeniden deneyin.",
+    "Restore factory defaults": "Fabrika ayarlarını geri yükle",
+    "Restore all factory defaults?": "Tüm fabrika ayarları geri yüklensin mi?",
+    "This resets haptics, system settings, language, and Default. Named profiles are kept.":
+        "Dokunsal geri bildirim, sistem ayarları, dil ve Default sıfırlanır. Adlandırılmış profiller korunur.",
+    "Restore defaults": "Varsayılanları geri yükle",
+    "Could not restore defaults. Check the log and try again.": "Varsayılanlar geri yüklenemedi. Günlüğü kontrol edip yeniden deneyin.",
+    "Factory defaults restored. Restart to refresh the interface language.":
+        "Fabrika ayarları geri yüklendi. Arayüz dilini yenilemek için uygulamayı yeniden başlatın.",
+    "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
+        "Default otomatik kaydedilir ve yeniden başlatmalarda korunur. Yeniden kullanılabilir kopya için adlandırılmış profil kaydedin.",
+    "Miku Console uses the shared settings, haptic engine, and controller backend.":
+        "Miku Console ortak ayarları, dokunsal motoru ve kontrolcü arka ucunu kullanır.",
+})
+
+STRINGS.update({
     "Overview": "Genel bakış", "Drive": "Sürüş", "Driving feedback": "Sürüş geri bildirimi",
     "Grip haptics": "Tutma kolu dokunsalı", "Lights": "Işıklar", "Lang": "Dil",
     "System and updates": "Sistem ve güncellemeler",

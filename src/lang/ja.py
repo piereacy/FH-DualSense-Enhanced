@@ -283,6 +283,30 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Save settings before exit?": "終了前に設定を保存しますか？",
+    "Save your tuning before exit?": "終了前に調整内容を保存しますか？",
+    "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
+        "変更内容は Default に自動保存済みです。再利用できるスナップショットとして名前付きプロファイルに保存できます。",
+    "Save as named profile and exit": "名前付きプロファイルに保存して終了",
+    "Exit directly": "そのまま終了",
+    "Cancel": "キャンセル",
+    "Profile name cannot be empty.": "プロファイル名を入力してください。",
+    "Could not save the profile. Please try again.": "プロファイルを保存できませんでした。もう一度お試しください。",
+    "Restore factory defaults": "初期設定に戻す",
+    "Restore all factory defaults?": "すべて初期設定に戻しますか？",
+    "This resets haptics, system settings, language, and Default. Named profiles are kept.":
+        "触覚、システム設定、言語、Default をリセットします。名前付きプロファイルは保持されます。",
+    "Restore defaults": "初期設定に戻す",
+    "Could not restore defaults. Check the log and try again.": "初期設定に戻せませんでした。ログを確認して再試行してください。",
+    "Factory defaults restored. Restart to refresh the interface language.":
+        "初期設定に戻しました。再起動すると表示言語が更新されます。",
+    "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
+        "Default は自動保存され、再起動後も保持されます。再利用する場合は名前付きプロファイルに保存してください。",
+    "Miku Console uses the shared settings, haptic engine, and controller backend.":
+        "Miku Console は共通の設定、触覚エンジン、コントローラーバックエンドを使用します。",
+})
+
+STRINGS.update({
     "Overview": "概要", "Drive": "走行", "Driving feedback": "走行フィードバック",
     "Grip haptics": "グリップ触覚", "Lights": "ライト", "Lang": "言語",
     "System and updates": "システムと更新",
