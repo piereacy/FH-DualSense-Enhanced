@@ -128,6 +128,7 @@ bash packaging/linux/build_elf.sh
 - GUI 的窗口关闭、托盘退出、游戏关闭、遥测超时和更新重启必须走统一退出入口；本会话改过 `Default` 的 Profile 字段时才能提示另存命名 Profile，纯 global 变更和当前命名 Profile 不提示。
 - 修改 Profile 默认值时必须同步 `tests/fixtures/community_defaults.json`、`tests/test_community_defaults.py`、README 和 Release 正文；除非迁移设计明确要求，不得覆盖命名 Profile 中已经显式保存的值。
 - GitHub 根 `README.md` 固定为精简的英文用户指南，简体中文与日语分别位于 `docs/ReadmeZH.md`、`docs/ReadmeJA.md`；不要恢复三语同页或 `docs/ReadmeEN.md`。三份页面只保留核心功能、下载、必需游戏设置、连接说明、常见故障和许可证，不要加入小设置、内部算法或开发构建手册。README 不把 “Miku Console” 当作产品概念，但该限制不代表删除现有青绿色视觉设计。必需设置必须同时写明 Steam Input 保持开启、Forza 游戏内振动关闭。
+- 三语 README 必须用四到六个用户可感知类别，明确说明当前 Enhanced 版本相比 `Forza-Horizon-DualSense-Python 1.6.2` 的累计核心增强。该清单只能依据当前生产代码、自动测试或已记录的真实硬件结果，不得混入内部参数、逐项开关、仅设计或推测能力。GitHub Release body 另行说明当前版本相比上一稳定 Enhanced 版本的增量，不能把两种比较口径混写。
 - 保留 `LICENSE` 要求的署名、原项目链接和 Sponsor 链接，以及 `docs/THIRD_PARTY_NOTICES.md` 中的 HorizonHaptics 归属。
 - 不要把尚未通过测试或实机验证的行为写成已验证或已发布。以生产代码、自动测试和硬件记录分别标注事实层级。
 - 术语必须消除歧义：版本阶段写 `Enhanced R<n>`，手柄右扳机写 `R2 扳机键`；不要单独写无法判断含义的 `R2`。
