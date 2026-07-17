@@ -4,18 +4,17 @@
 
 - 最后更新：2026-07-17，Asia/Shanghai。
 - 仓库：`piereacy/FH-DualSense-Enhanced`。
-- 当前工作树：`work/hamza/.worktrees/r4-ui-updater-haptics`。
-- 当前分支：`feat/r4-ui-updater-haptics`。
-- 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `4`，公开候选名称 `Enhanced R4`。
-- 当前公开稳定版仍是 Enhanced R3。Enhanced R4 尚未 tag、推送或发布，不得移动或覆盖 R3 tag。
-- GitHub 默认分支 `main` 已通过独立提交 `b2bb4ca` 更新精简三语 README，没有合并 R4 业务代码。
-- GitHub `main` 又通过独立提交 `e57e7c1` 删除 README 中的旧界面代号卖点，并把关闭 Forza 游戏内振动改为必需设置；现有青绿色界面设计仍保留。
-- 当前阶段：Enhanced R4 的触觉、灯效、内置更新器、最终桌面前端和独立“关于与许可证”页面已经进入生产代码。最终 Windows 候选 EXE 已完成本地构建与自动验证，正在准备推送、仓库独立化和发布。
-- 本轮界面与配置实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
+- 当前工作树：`work/hamza`。
+- 当前分支：`main`，与 `origin/main` 同步。
+- 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `4`，公开稳定名称 `Enhanced R4`。
+- 当前公开稳定版：[`FH-DualSense-Enhanced R4`](https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R4)，发布时间 `2026-07-17T07:33:04Z`；`R4` tag 与 `main` 均指向提交 `e7184c2`。
+- GitHub 仓库已经脱离原项目 fork network；GitHub API 已确认 `isFork=false`、`parent=null`，原有 R1/R2/R3 Release 和 2 个 Star 均保留。
+- 当前阶段：Enhanced R4 的触觉、灯效、内置更新器、单一桌面前端、独立“关于与许可证”页面、双语 Release 和发布资产均已完成并发布。
+- 发布后校验缺陷已经修复：首次 R4 CI 因 runner 缺少 `Get-FileHash` 生成了不完整 sidecar；该 Release 已删除并在修复提交上重建，最终线上 `.sha256` 为 95 bytes 且与 EXE 精确匹配。
 
 ## 当前开发重心
 
-当前开发重心是完成独立“关于与许可证”页面、清理用户可见的旧界面代号、重新验证 Windows EXE，并按用户授权发布 Enhanced R4。现有青绿色主题和布局继续保留。
+Enhanced R4 发布收尾已经完成，当前没有未提交的业务实现。下一阶段应先收集 R4 真实用户反馈，再按优先级处理红线振动调校、自动更新节流与签名能力、前端细节优化；开始新版本前应由用户明确下一公开版本号。现有青绿色主题和单一界面边界继续保留。
 
 ## 最近完成的功能
 
@@ -56,10 +55,10 @@
 
 - 根 `README.md` 现在是 96 行英文默认首页；`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 是各 96 行的独立简体中文和日语页面，三者顶部可互相切换。
 - 已删除重复的 `docs/ReadmeEN.md`，也删除三语同页锚点、后台行为等小设置、算法与报文说明、版本历史和开发构建命令。
-- README 使用通用资产名 `FH-DualSense-Enhanced-R<n>.exe`，没有把尚未发布的 R4 写成当前稳定下载。
+- README 使用通用资产名 `FH-DualSense-Enhanced-R<n>.exe`，因此发布 R4 后不需要把固定版本号写死在三个语言页面中。
 - README 与契约测试在 R4 分支提交为 `311c268`；移植到 `main` 后生成 `b2bb4ca` 并已推送到 `origin/main`。
 - 三语 README 已移除旧界面代号功能卖点，并用 `IMPORTANT` 明确 Steam Input 保持开启、Forza 游戏内振动必须关闭。R4 分支提交为 `12478e4`，`main` 提交为 `e57e7c1`。
-- 旧一轮未修改窗口标题、主题、总览页、翻译目录、Release workflow 或 Windows 文件描述；当前发布收尾正在中性化窗口与文件描述，并保留青绿色视觉设计。
+- 最终窗口标题、总览页、翻译目录、Release workflow 和 Windows 文件描述均已使用正式项目名；青绿色视觉设计保留。
 
 ### R4 既有触觉和灯效
 
@@ -68,16 +67,16 @@
 
 ## 正在进行的工作
 
-- 本地最终候选位于 `packaging/windows/dist/FH-DualSense-Enhanced-R4.exe`，配套 `.sha256` 已生成并匹配。
-- Enhanced R4 尚未发布；用户已经授权完成验证后推送、使 GitHub 仓库脱离 fork network、建立 `R4` tag 并创建中英双语 Release。
+- 没有正在进行且尚未提交的业务代码。
+- R4 发布后的真实 Forza、不同显示缩放和后续自动更新替换仍属于验收/观察项，不应写成已经完成。
 
 ## 尚未完成的工作
 
 1. 在 100% 和 150% Windows 显示缩放下逐档目视检查；本轮只在 125% 缩放下完成目视确认。
 2. 用户对 Default 跨重启、退出另存、恢复默认和更新白点的完整交互验收。
 3. 用户对 Enhanced R4 触觉、灯效和 Bluetooth 手感的真实 Forza 验收。本轮界面修复没有进行手柄或游戏测试。
-4. 真实 Enhanced R4 到下一稳定版的更新替换；需要后续存在可用 Release 资产才能端到端验证。
-5. 本地 Linux ELF 构建和真实 Linux DualSense 验证。
+4. 真实 Enhanced R4 到下一稳定版的更新替换；需要后续存在高于 R4 的稳定 Release 才能端到端验证。
+5. 本地 Linux ELF 构建和真实 Linux DualSense 验证；R4 的 GitHub Actions Linux ELF 构建已经通过。
 
 ## 当前已知 Bug 和待确认风险
 
@@ -86,6 +85,8 @@
 - 下载校验包含规范文件名、大小、SHA-256 与 `MZ` 头，但没有解析 PE 版本资源或验证代码签名。
 - GUI/TUI 不在应用内展开 Release body，只提供查看 Release 的入口。
 - 当前没有已发布的下一稳定版资产，因此更新 Helper 的真实跨版本替换仍待确认。
+- 仓库脱离 fork network 后，两次 `R4` tag push 都没有创建 Actions run；工作流本身为 active 且 Actions 已启用，最终发布通过 `workflow_dispatch channel=stable` 成功完成。未来稳定 tag 的自动触发是否恢复仍待确认。
+- GitHub Actions 提示 `actions/checkout@v4`、`actions/upload-artifact@v4`、`actions/download-artifact@v4`、`astral-sh/setup-uv@v5` 和 `softprops/action-gh-release@v2` 的 Node.js 20 运行时已弃用并被强制切到 Node.js 24；当前 R4 构建成功，但应在后续维护中升级对应 action major version。
 - 不同 DualSense 固件或 Bluetooth adapter 仍可能拒绝 398 字节 `0x36` 并回退 compatible rumble，社区发生率待确认。
 - 游戏原生振动或 Steam Input 可能掩盖本项目的碰撞方向；Enhanced R4 仍不接管菜单、CG、上车过场等原生振动。
 - 同时运行两个实例会争用默认 UDP 端口 `5300`。
@@ -95,6 +96,7 @@
 - 遥测仍使用无类型 `dict`；GUI/TUI 设置声明仍有重复，主要依赖测试防止漂移。
 - `wheelspin_*` 内部字段名与 traction/grip UI 术语不一致，直接重命名会破坏 Profile 和 share-code 兼容。
 - 更新器缺少 24 小时节流、PE 版本解析、代码签名和应用内 Release 摘要。
+- 稳定 Release 的 tag push 自动触发在仓库独立化后尚未恢复验证，当前有 `workflow_dispatch stable` 恢复入口。
 - `src/lang/` 仍保留旧 ZUV sentinel 的未使用翻译键。
 - USB audio endpoint 依赖名称 heuristic，没有用户选择和多 host API fallback。
 - DSX 无 ACK、不提供本项目 body haptics，也不接收灯效。
@@ -109,14 +111,14 @@
 - 当前单一 Console 边界。不要恢复 Stage、Studio 或基于构建产物的页面分叉。
 - Windows updater 的规范单资产、`.sha256`、Helper 和 `.old` 回滚边界。
 - `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名、原项目与第三方声明。
-- 已发布 Enhanced R1、R2、R3 的 tag、Release 和资产。
+- 已发布 Enhanced R1、R2、R3、R4 的 tag、Release 和资产；不得移动、覆盖或删除。
 
 ## 最近涉及的关键文件
 
-- GUI：`src/modules/gui/main.py`、`dialogs.py`、`widgets.py`、`controls_tab.py`、`overview_tab.py`、`profiles_tab.py`、`settings_tab.py`、`system_tab.py`。
+- GUI：`src/modules/gui/main.py`、`about_tab.py`、`dialogs.py`、`widgets.py`、`controls_tab.py`、`overview_tab.py`、`profiles_tab.py`、`settings_tab.py`、`system_tab.py`。
 - 配置：`src/modules/config/preferences.py`、`profiles.py`、`profile_session.py`、`system_language.py`。
 - 更新器：`src/modules/update/github.py`、`service.py`、`presentation.py`。
-- 构建和发布：`packaging/windows/fhds.spec`、`packaging/windows/build_exe.bat`、`.github/workflows/release.yml`。
+- 构建和发布：`packaging/windows/fhds.spec`、`packaging/windows/build_exe.bat`、`packaging/windows/write_sha256.py`、`.github/workflows/release.yml`。
 - 测试：`tests/gui/test_r4_frontend.py`、`tests/gui/test_scroll_routing.py`、`tests/test_profile_persistence.py`、`tests/test_system_language.py`、`tests/test_updater.py`、`tests/test_enhanced_distribution.py`。
 - 用户文档：`README.md`、`docs/ReadmeZH.md`、`docs/ReadmeJA.md`；`docs/ReadmeEN.md` 已删除。
 - 长期文档：`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DECISIONS.md`。
@@ -124,32 +126,29 @@
 
 ## 当前 Git 工作区状态
 
-- 分支：`feat/r4-ui-updater-haptics`。
-- 本轮实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
-- 独立关于页设计提交：`7172afb docs: design standalone about page`。
-- 独立关于页、正式命名与双语 Release 正文提交：`653d23e feat: add standalone about page`。
-- README 设计提交：`43a0486 docs: design concise split-language README`。
-- R4 分支 README 提交：`311c268 docs: simplify split-language README`。
-- GitHub `main` README 提交：`b2bb4ca docs: simplify split-language README`，已推送。
-- README 振动警告设计提交：`c434841 docs: design neutral README vibration warning`。
-- R4 分支振动警告提交：`12478e4 docs: require in-game vibration off`。
-- GitHub `main` 振动警告提交：`e57e7c1 docs: require in-game vibration off`，已推送。
-- 本文件提交并完成最终状态检查后，工作树应保持清洁。
+- 分支：`main`，发布前远端与本地均为 `e7184c27203d120c0fd6e02f4abf8a92dd2901b6`。
+- R4 功能合并提交：`1596b6f merge: integrate Enhanced R4`。
+- 发布校验修复：`f987cc7 fix: validate release checksum sidecar`。
+- 双语校验说明：`e7184c2 docs: note R4 checksum validation`。
+- annotated tag `R4` 解引用后指向 `e7184c2`；Release workflow run `29563348374` 全部成功。
+- 本文件提交并推送后，`main` 将领先 `R4` tag 一个仅含状态交接文档的提交，这是预期状态。
 - 构建产物、截图、缓存和用户偏好文件没有加入 Git。
 
 ## 已执行的测试和验证结果
 
-- 当前最终候选全量测试：`uv run --project src pytest -q`，结果 `300 passed in 4.73s`。
+- 最终发布代码全量测试：`uv run --project src pytest -q`，结果 `301 passed in 7.46s`。
+- 校验修复定向测试：`tests/test_enhanced_distribution.py`、`tests/test_updater.py`、`tests/test_about_and_release.py`，结果 `42 passed in 3.55s`；双语正文更新后 `tests/test_enhanced_distribution.py` 再次为 `20 passed in 4.17s`。
 - README 重构后 R4 分支全量测试：`294 passed in 4.66s`；相对链接检查通过。
 - README 提交移植到稳定 R3 `main` 后全量测试：`242 passed in 4.31s`；GitHub API 已确认英文根首页、中日文页面和 `docs/ReadmeEN.md` 删除均已生效。
 - 强制振动警告更新后 R4 分支全量测试：`295 passed in 4.58s`；稳定 R3 `main` 全量测试：`243 passed in 3.87s`。GitHub API 已确认三语警告和 README 中无旧界面代号。
-- 字节码检查：`src/.venv/Scripts/python.exe -m compileall -q src/modules src/lang`，通过。
+- 字节码检查：`python -m compileall -q src/modules src/lang` 与 `python -m py_compile packaging/windows/write_sha256.py`，通过。
 - 空白检查：`git diff --check`，通过；仅有 Git 的 LF/CRLF 提示。
 - 125% Windows 显示缩放目视检查：驾驶反馈页卡片保持自然高度，右侧滚动条可用，底部内容位于滚动区域内，没有再被卡片裁切。
 - 合成滚轮冒烟：鼠标位于子级开关时，单次标准滚轮使页面移动约 36 px；嵌套边界和 slider 保护由 `tests/gui/test_scroll_routing.py` 覆盖。
 - 退出弹窗目视检查：中文标题、说明、默认 `profile1` 输入框及三个操作按钮均完整显示。
-- 最终 Windows 构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R4.exe`，大小 `46,321,844` bytes，SHA-256 `2dcc88b0f8270726255e8453177273b112ed10df4c8c49e3ef9fbaf18d050925`。
-- 配套 `.sha256` 与实际文件匹配；`FileVersion` 和 `ProductVersion` 为 `R4`，`OriginalFilename` 为 `FH-DualSense-Enhanced-R4.exe`。
+- 修复后本地 Windows 离线构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R4.exe`，大小 `46,322,911` bytes，SHA-256 `ba0cb7920bc4d3b0333571328053437cf3c0409abd20b7cadac1a2fbcd977ccf`；95-byte sidecar 与实际文件匹配，`--help` 退出码为 `0`。
+- 最终 GitHub Release EXE 已重新下载独立验证：大小 `45,994,910` bytes，SHA-256 `df31c2edf49d235665348748847aa214a27a78f3b5dac69e87991e73ba019f49`；线上 95-byte sidecar 包含同一哈希，`FileVersion` 和 `ProductVersion` 为 `R4`，`OriginalFilename` 为 `FH-DualSense-Enhanced-R4.exe`。
+- GitHub Actions run `29563348374` 的 `prepare`、`bundle`、`exe`、`elf`、`release` 全部成功；新增 `Verify EXE checksum sidecar` 步骤通过。最终 R4 Release 为 Latest、非 Draft、非 Prerelease，包含 8 个资产及信息对等的完整中文/英文正文。
 - PyInstaller archive 包含 `data/FH-DualSense-Update-Helper.exe`、`modules.gui.about_tab` 和 `modules.tui.about_tab`，不包含 `ui_variant` 或 `variants`；`--help` 退出码为 `0`。
 - 最终冻结 GUI 已完成隐藏和普通启动冒烟，均未产生新 crash log 或残留进程；当前自动化桌面环境未从进程 API 取得 Tk 窗口标题，因此独立关于页的最终可见布局仍未人工点击检查。窗口标题由源码与契约测试确认。
 - Enhanced R4 真实 USB/Bluetooth Forza 测试：本轮未执行。
@@ -160,9 +159,10 @@
 
 - 100% 与 150% 显示缩放的逐档人工目视检查尚未执行。
 - 真实手柄、Forza 遥测、触觉和灯效验证尚未执行。
-- Linux ELF 构建尚未执行。
+- 本地 Linux ELF 构建和真实 Linux 运行尚未执行；GitHub Actions 的 Linux ELF 构建已成功。
 - 下一稳定版尚不存在，因此真实自动更新替换尚未执行。
-- 第一次本地构建因 PyPI TLS 握手中断而失败；确认 PyInstaller 和依赖已存在于 uv 缓存后，以 `UV_OFFLINE=1` 重建成功。没有失败的代码测试、编译检查或最终构建步骤。
+- 第一次本地构建因 PyPI TLS 握手中断而失败；确认 PyInstaller 和依赖已存在于 uv 缓存后，以 `UV_OFFLINE=1` 重建成功。
+- 首次 R4 CI 的 sidecar 缺少哈希，根因是 runner 的 Windows PowerShell 没有 `Get-FileHash` 且旧 BAT 未传播错误；首次 Release 已删除。最终发布改用 `packaging/windows/write_sha256.py`，并由 CI 上传前复核，问题已经解决。
 
 ## 下一次会话开始时优先阅读
 
@@ -175,4 +175,4 @@
 7. `src/modules/gui/main.py`、`src/modules/gui/widgets.py`、`src/modules/config/preferences.py`
 8. `git status --short --branch`、`git diff` 和最近 10 条提交
 
-下一次会话建议首先处理的具体任务：若 Enhanced R4 发布流程尚未完成，优先核对 fork 脱离结果、CI、Release 资产和中英双语正文；若已经完成，则处理自动更新 24 小时节流、红线振动调校或后续前端优化。保留现有青绿色视觉设计，不恢复界面变体。
+下一次会话建议首先处理的具体任务：先确认用户希望优先调校红线振动、实现自动更新 24 小时节流，还是继续前端细节优化；涉及新公开版本时先确定版本号。保留现有青绿色视觉设计，不恢复界面变体。若触碰发布流程，先调查独立仓库的 tag push 为什么未创建 Actions run，并保留 `workflow_dispatch stable` 恢复入口。

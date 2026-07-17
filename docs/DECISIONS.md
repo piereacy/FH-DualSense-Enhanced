@@ -2,9 +2,22 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-07-17：Release 的 SHA-256 sidecar 必须跨平台生成并在上传前复核
+
+- 状态：生产脚本、契约测试和 GitHub Actions 硬校验已实现；修复后的 Enhanced R4 Release 已发布并重新下载验证。
+- 背景：首次 R4 CI 在 `windows-latest` 中调用 `Get-FileHash` 失败，但旧 BAT 继续写出了只含文件名的 30-byte sidecar，导致工作流表面成功而内置更新器必然拒绝资产。
+- 决定：`packaging/windows/write_sha256.py` 使用 Python 标准库流式计算哈希，以固定 ASCII 格式写入 `<64 hex>  <filename>\n`。`build_exe.bat` 在生成失败时返回非零；Release workflow 在上传前以 `--check` 重新计算并严格比较 sidecar，失败即阻止 Release。
+- 后果：Windows 发布不得重新依赖 `Get-FileHash`、`certutil` 输出文本或其他随 runner/语言环境变化的系统命令。每次发布验收必须从 GitHub Release 重新下载 EXE 与 sidecar，独立比较哈希；本地构建成功不能替代线上资产验证。
+
+## 2026-07-17：GitHub 仓库脱离 fork network，许可归属保持不变
+
+- 状态：GitHub API 已确认 `piereacy/FH-DualSense-Enhanced` 为 `isFork=false`、`parent=null`；R1-R4 Release、Git 历史和既有 Star 保留。
+- 决定：项目作为独立仓库继续发布，不重写 Git 历史，也不移除原项目归属。`LICENSE`、独立“关于与许可证”页面和第三方声明继续保留作者署名、原项目链接、Sponsor 链接及 HorizonHaptics 等参考来源。
+- 后果：后续自动更新、README、脚本和 Release 只指向 `piereacy/FH-DualSense-Enhanced`；独立仓库身份不改变许可证义务，也不能把上游或参考项目的工作声称为本项目原创。
+
 ## 2026-07-17：许可证信息独立成页，界面代号退回内部设计记录
 
-- 状态：GUI/TUI 生产代码和定向测试已实现；完整验证与 Enhanced R4 发布正在进行。
+- 状态：GUI/TUI 生产代码、完整自动验证与 Enhanced R4 发布均已完成。
 - 背景：“关于与许可证”此前附着在“握把触觉”页面底部，使许可证与触觉调校形成错误的信息层级；总览页另有一个没有状态、设置或动作的 R4 工作台。用户同时要求正式产品不再显示内部界面代号。
 - 决定：GUI 左侧导航和 TUI 页签均在“日志”之后新增独立“关于与许可证”页面，继续显示 `LICENSE` 要求的原作者署名、原项目和 Sponsor 链接；触觉设置页移除该卡片，总览页删除无功能工作台。窗口标题、翻译、Windows `FileDescription`、README、Release 和普通技术文档只使用 `FH-DualSense-Enhanced`。
 - 设计来源：现有青绿色主题继续保留，其内部设计来源可在老三样中称为 Miku Console；这只是设计理念记录，不是产品名、构建变体或用户可见字符串。Git 历史不重写。
@@ -12,15 +25,15 @@
 
 ## 2026-07-17：README 必须明确列出相对上游 1.6.2 的累计增强
 
-- 状态：比较口径、老三样约束和三语 README 功能清单均已完成；Enhanced R4 尚未发布。
-- 背景：现有 README 虽然说明项目基于 `Forza-Horizon-DualSense-Python 1.6.2`，但功能亮点没有明确区分上游原有能力、Enhanced 各版本的累计增强和当前 Release 的本版新增，用户无法快速判断 fork 的实际价值。
+- 状态：比较口径、老三样约束、三语 README 功能清单与 Enhanced R4 发布均已完成。
+- 背景：现有 README 虽然说明项目基于 `Forza-Horizon-DualSense-Python 1.6.2`，但功能亮点没有明确区分上游原有能力、Enhanced 各版本的累计增强和当前 Release 的本版新增，用户无法快速判断增强项目的实际价值。
 - 决定：三语 README 必须以四到六个用户可感知类别，说明当前 Enhanced 版本相比上游 `1.6.2` 的累计核心增强。Release body 则继续说明当前版本相比上一稳定 Enhanced 版本的增量。
 - 证据边界：累计增强只能来自生产代码、自动测试或已有真实硬件记录；不能写入仅设计、推测或尚未实现的能力，也不展开内部字段、滤波参数、HID 字节和逐项实验开关。
 - 后果：讨论 Enhanced R4 时必须分别形成“Enhanced R4 相比上游 1.6.2”和“Enhanced R4 相比 Enhanced R3”两份清单。README 使用前者，R4 Release body 使用后者；三种语言同步同一组事实。
 
 ## 2026-07-17：R4 新增扳机反馈统一收进实验性功能
 
-- 状态：生产代码、翻译、GUI/TUI 分组契约和自动测试已完成；Enhanced R4 尚未发布。
+- 状态：生产代码、翻译、GUI/TUI 分组契约、自动测试与 Enhanced R4 发布均已完成。
 - 背景：涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理均为 Enhanced R4 新增且默认关闭的反馈。原界面把六个开关放在普通“驾驶反馈”卡片、把参数分散在普通设置与实验性区域，容易让用户误认为这些效果已经成熟并自行启用。
 - 决定：从 GUI/TUI 普通 L2/R2 控制页移除六个开关；开关与全部基础、进阶参数按动态阻力、碰撞反馈和路面反馈三组统一放入默认折叠的“实验性功能”，继续显示“不建议自行调节”的提示。
 - 兼容：字段名、Profile/share-code 格式、即时保存、效果优先级和运行算法不变；六个开关继续默认 `False`，已有命名 Profile 的显式值不被覆盖。抓地力、GT7 风格 ABS 墙、基础刹车/油门阻力、红线和握把换挡等成熟功能继续留在普通页面。灯效不属于扳机反馈，保留独立页面。

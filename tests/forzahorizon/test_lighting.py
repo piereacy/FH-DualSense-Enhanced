@@ -20,7 +20,7 @@ def test_lighting_does_not_claim_controller_fields_by_default():
     )
 
 
-def test_tachometer_uses_miku_gradient_and_flashes_at_redline():
+def test_tachometer_uses_teal_gradient_and_flashes_at_redline():
     settings = Settings()
     settings.enable_tachometer_lightbar = True
     controller = LightingController()
