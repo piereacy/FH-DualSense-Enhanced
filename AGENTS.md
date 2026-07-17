@@ -114,6 +114,7 @@ bash packaging/linux/build_elf.sh
 
 - 所有可调参数集中在 `src/modules/config/settings.py`。新增系统级设置时同步更新 `preferences.GLOBAL_FIELDS`；车辆手感参数默认应保持 Profile 级。
 - GUI 和 TUI 的同类设置必须同时更新，并补齐 `src/lang/` 中所有非英语语言目录的翻译或明确回退行为。
+- Enhanced R4 的涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理属于实验性扳机反馈。六个开关及全部参数必须只出现在 GUI/TUI 默认折叠的“实验性功能”中，并继续默认关闭；未经新的产品决定不得移回普通“驾驶反馈”页面。
 - UDP 热路径必须继续使用 `UDPListener.recv_latest()` 丢弃积压包，不能改为逐包处理旧遥测。
 - `src/modules/loop.py` 只在 `(left, right, rumble, visual)` 状态改变时调用普通手柄状态输出；USB 和 Bluetooth HD haptics 目标仍需要逐遥测帧更新，并由各自的音频周期持续渲染。
 - Body haptics 关闭时不得占用 compatible rumble flags 或 motor bytes。Bluetooth fallback 的 rumble 释放帧不能被后续 trigger-only 帧吞掉；HD haptics 停止或断开前必须排队或写入全零 `0x36` 采样块。
