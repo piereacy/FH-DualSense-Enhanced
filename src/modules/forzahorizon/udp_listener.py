@@ -7,12 +7,34 @@ to stale telemetry.
 import logging
 import socket
 import struct
+import threading
+import time
+from dataclasses import dataclass
+from enum import StrEnum
 
 from .udp_forward import UDPForwarder
 
 log = logging.getLogger("fhds.udp")
 
 PACKET_SIZE = 324
+
+
+class TelemetryPhase(StrEnum):
+    """Observable receive state for status surfaces."""
+
+    WAITING = "waiting"
+    RECEIVING = "receiving"
+    LOST = "lost"
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetrySnapshot:
+    phase: TelemetryPhase
+    packet_count: int
+    last_packet_age_s: float | None
+    source_host: str
+    source_port: int | None
+    listen_port: int
 
 
 def parse_packet(p: bytes) -> dict:
@@ -127,13 +149,64 @@ class UDPListener:
     """
 
     def __init__(self, host: str, port: int, timeout: float = 0.5,
-                 forward_to: str = "", forward_enabled: bool = True):
+                 forward_to: str = "", forward_enabled: bool = True,
+                 *, clock=None):
         self.host = host
         self.port = port
         self.timeout = timeout
         self.sock: socket.socket | None = None
+        self.lost = False
         self._warned_sizes: set[int] = set()
         self._fwd = UDPForwarder(forward_to, forward_enabled)
+        self._clock = clock or time.monotonic
+        self._state_lock = threading.Lock()
+        self._packet_count = 0
+        self._last_packet_at: float | None = None
+        self._source_host = ""
+        self._source_port: int | None = None
+
+    def snapshot(self, *, now: float | None = None) -> TelemetrySnapshot:
+        """Return a consistent, read-only view without touching the socket."""
+        timestamp = self._clock() if now is None else now
+        with self._state_lock:
+            count = self._packet_count
+            last = self._last_packet_at
+            source_host = self._source_host
+            source_port = self._source_port
+        age = None if last is None else max(0.0, timestamp - last)
+        if count == 0:
+            phase = TelemetryPhase.WAITING
+        elif age is not None and age <= 1.0:
+            phase = TelemetryPhase.RECEIVING
+        else:
+            phase = TelemetryPhase.LOST
+        return TelemetrySnapshot(
+            phase=phase,
+            packet_count=count,
+            last_packet_age_s=age,
+            source_host=source_host,
+            source_port=source_port,
+            listen_port=self.port,
+        )
+
+    def _record_valid_packet(self, addr) -> None:
+        with self._state_lock:
+            self._packet_count += 1
+            self._last_packet_at = self._clock()
+            self._source_host = str(addr[0]) if addr else ""
+            self._source_port = int(addr[1]) if addr and len(addr) > 1 else None
+
+    def _accept_datagram(self, pkt: bytes, addr) -> bool:
+        if len(pkt) == PACKET_SIZE:
+            self._record_valid_packet(addr)
+            return True
+        if len(pkt) not in self._warned_sizes:
+            self._warned_sizes.add(len(pkt))
+            log.warning(
+                "Unexpected %d-byte packet from %s:%d (expected %d - may be from another app, or a new FH format)",
+                len(pkt), addr[0], addr[1], PACKET_SIZE,
+            )
+        return False
 
     def _open_dual_stack(self) -> socket.socket | None:
         try:
@@ -194,22 +267,18 @@ class UDPListener:
         forwarding = self._fwd.active
         if forwarding:
             self._fwd.send(pkt)
+        latest = (pkt, addr) if self._accept_datagram(pkt, addr) else None
         self.sock.setblocking(False)
         try:
             while True:
                 pkt, addr = self.sock.recvfrom(1500)
                 if forwarding:
                     self._fwd.send(pkt)
+                if self._accept_datagram(pkt, addr):
+                    latest = (pkt, addr)
         except (BlockingIOError, OSError):
             pass
         finally:
             self.sock.setblocking(True)
             self.sock.settimeout(self.timeout)
-        if len(pkt) != PACKET_SIZE:
-            if len(pkt) not in self._warned_sizes:
-                self._warned_sizes.add(len(pkt))
-                log.warning(
-                    "Unexpected %d-byte packet from %s:%d (expected %d - may be from another app, or a new FH format)",
-                    len(pkt), addr[0], addr[1], PACKET_SIZE,
-                )
-        return pkt, addr
+        return latest if latest is not None else (None, None)

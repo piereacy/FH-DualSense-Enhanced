@@ -57,6 +57,17 @@ def test_release_parser_selects_canonical_asset_and_requires_checksum():
     assert GitHubReleaseClient._parse_release(legacy) is None
 
 
+def test_frozen_r4_client_can_select_the_canonical_r5_release(monkeypatch):
+    payload = json.dumps([release_payload(4), release_payload(5)]).encode("utf-8")
+    monkeypatch.setattr(github, "_request", lambda *_args, **_kwargs: FakeResponse(payload))
+
+    release = GitHubReleaseClient().latest(current_version=4)
+
+    assert release is not None
+    assert release.tag == "R5"
+    assert release.asset_name == "FH-DualSense-Enhanced-R5.exe"
+
+
 @pytest.mark.parametrize("tag", ["4", "v4", "R4-beta", "R4.0"])
 def test_release_parser_rejects_non_release_tags(tag):
     payload = release_payload()

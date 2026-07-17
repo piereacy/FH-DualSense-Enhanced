@@ -92,6 +92,8 @@ class TriggerTUI(App):
         self._ds = None
         self._listener_cm = None
         self._listener = None
+        self._backend_error = ""
+        self._udp_error = ""
         self._status_timer = None
         self._tearing_down = False
         self._usb_audio = UsbAudioHaptics()
@@ -181,6 +183,8 @@ class TriggerTUI(App):
             self._listener_cm = forzahorizon.UDPListener(
                 s.udp_host, s.udp_port, s.udp_timeout, s.udp_forward_to, s.udp_forward)
             self._listener = self._listener_cm.__enter__()
+            self._backend_error = ""
+            self._udp_error = ""
             log.info("Listening on %s:%d", s.udp_host, s.udp_port)
             log.info("In game: HUD & Gameplay -> Data Out: ON, IP %s, Port %d", s.udp_host, s.udp_port)
             if s.use_dsx:
@@ -188,11 +192,13 @@ class TriggerTUI(App):
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
         except OSError as exc:
+            self._udp_error = str(exc) or type(exc).__name__
             # MARK: friendly UDP bind error - usually port in use
             log.exception("UDP bind failed on %s:%d", s.udp_host, s.udp_port)
             msg = t("UDP port {port} is in use. Close the other listener or change the port in the System tab.").format(port=s.udp_port)
             self.query_one("#status", Static).update(msg)
         except Exception as exc:
+            self._backend_error = str(exc) or type(exc).__name__
             log.exception("Backend startup failed")
             self.query_one("#status", Static).update(t("Backend failed: {error}").format(error=exc))
 
@@ -227,6 +233,7 @@ class TriggerTUI(App):
             # MARK: suppress pulse on hot-swap - avoid confusing the user mid-session
             self._ds = make_backend(s, False)
             self._ds.open()
+            self._backend_error = ""
             if s.use_dsx:
                 log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
             else:
@@ -234,6 +241,7 @@ class TriggerTUI(App):
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
         except Exception as exc:
+            self._backend_error = str(exc) or type(exc).__name__
             log.exception("Backend restart failed")
             self.query_one("#status", Static).update(t("Backend failed: {error}").format(error=exc))
 
@@ -248,6 +256,16 @@ class TriggerTUI(App):
     def refresh_status(self):
         controller = self._ds if self._listener is not None else None
         self._usb_audio_lifecycle.sync(controller, self.settings)
+        if self._backend_error:
+            self.query_one("#status", Static).update(
+                f"[bold red]{t('Controller backend error')}[/]"
+            )
+            return
+        if self._udp_error:
+            self.query_one("#status", Static).update(
+                f"[bold red]{t('UDP bind failed')}[/]"
+            )
+            return
         connected = bool(self._ds and self._ds.connected)
         if self.settings.use_dsx:
             state = (f"[bold dodgerblue]{t('DSX: active')}[/]" if connected

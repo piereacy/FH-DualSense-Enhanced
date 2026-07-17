@@ -3,10 +3,55 @@
 import logging
 import os
 import time
+from dataclasses import dataclass
 
 import psutil
 
 log = logging.getLogger("fhds")
+
+
+@dataclass(frozen=True, slots=True)
+class GameProcess:
+    name: str
+    exe: str
+    pid: int | None
+
+
+def find_game_process(
+    name_contains=("forza",),
+    *,
+    exact_name: str = "",
+) -> GameProcess | None:
+    """Return a matching process while tolerating protected/vanishing entries."""
+    needles = tuple(n.lower() for n in name_contains)
+    exact = exact_name.lower()
+    try:
+        iterator = psutil.process_iter(["name", "exe"])
+    except Exception as e:
+        log.warning("process_iter failed: %s", e)
+        return None
+    for process in iterator:
+        try:
+            name = process.info.get("name") or ""
+            exe = process.info.get("exe") or ""
+            exe_base = os.path.basename(exe)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
+            continue
+        except Exception:
+            continue
+        if exact:
+            if name.lower() != exact and exe_base.lower() != exact:
+                continue
+        else:
+            haystack = (name + " " + exe_base).lower()
+            if not any(needle in haystack for needle in needles):
+                continue
+        try:
+            pid = int(process.pid)
+        except (AttributeError, TypeError, ValueError):
+            pid = None
+        return GameProcess(name=name or exe_base, exe=exe, pid=pid)
+    return None
 
 
 class ProcessWatcher:
@@ -17,24 +62,8 @@ class ProcessWatcher:
         self._matched = None  # actual process name we locked onto
 
     def _find(self) -> str | None:
-        # MARK: per-process try/except - psutil can raise on protected/vanishing procs
-        try:
-            iterator = psutil.process_iter(["name", "exe"])
-        except Exception as e:
-            log.warning("process_iter failed: %s", e)
-            return None
-        for p in iterator:
-            try:
-                name = p.info.get("name") or ""
-                exe_base = os.path.basename(p.info.get("exe") or "")
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
-                continue
-            except Exception:
-                continue
-            haystack = (name + " " + exe_base).lower()
-            if any(needle in haystack for needle in self.needles):
-                return name or exe_base
-        return None
+        found = find_game_process(self.needles)
+        return found.name if found is not None else None
 
     def should_exit(self) -> bool:
         """True once the watched process has been seen and then disappeared.

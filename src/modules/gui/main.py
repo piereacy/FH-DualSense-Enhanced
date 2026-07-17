@@ -98,6 +98,8 @@ class TriggerGUI:
         self._ds = None
         self._listener_cm = None
         self._listener = None
+        self._backend_error = ""
+        self._udp_error = ""
         self._tearing_down = False
         self._close_dialog = None
         self._reset_dialog = None
@@ -550,9 +552,18 @@ class TriggerGUI:
             preferences.load(s)
             self._ds = make_backend(s, s.enable_startup_pulse)
             self._ds.open()
+            self._backend_error = ""
+        except Exception as exc:
+            self._backend_error = str(exc) or type(exc).__name__
+            log.exception("Controller backend startup failed")
+            self._refresh_status()
+            self.overview_tab.refresh()
+            return
+        try:
             self._listener_cm = forzahorizon.UDPListener(
                 s.udp_host, s.udp_port, s.udp_timeout, s.udp_forward_to, s.udp_forward)
             self._listener = self._listener_cm.__enter__()
+            self._udp_error = ""
             log.info("Listening on %s:%d", s.udp_host, s.udp_port)
             log.info("In game: HUD & Gameplay -> Data Out: ON, IP %s, Port %d",
                      s.udp_host, s.udp_port)
@@ -560,12 +571,16 @@ class TriggerGUI:
                 log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
-        except OSError:
+        except OSError as exc:
+            self._udp_error = str(exc) or type(exc).__name__
             log.exception("UDP bind failed on %s:%d", s.udp_host, s.udp_port)
-            self.status_pill.set_label(t("UDP port {port} in use").format(port=s.udp_port))
+            self._refresh_status()
+            self.overview_tab.refresh()
         except Exception as exc:
-            log.exception("Backend startup failed")
-            self.status_pill.set_label(t("Backend failed: {error}").format(error=exc))
+            self._udp_error = str(exc) or type(exc).__name__
+            log.exception("Telemetry listener startup failed")
+            self._refresh_status()
+            self.overview_tab.refresh()
 
     def _run_loop(self):
         try:
@@ -600,6 +615,7 @@ class TriggerGUI:
             # MARK: suppress pulse on hot-swap
             self._ds = make_backend(s, False)
             self._ds.open()
+            self._backend_error = ""
             if s.use_dsx:
                 log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
             else:
@@ -607,10 +623,11 @@ class TriggerGUI:
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
         except Exception as exc:
+            self._backend_error = str(exc) or type(exc).__name__
             log.exception("Backend restart failed")
             try:
-                self.root.after(0, lambda: self.status_pill.set_label(
-                    t("Backend failed: {error}").format(error=exc)))
+                self.root.after(0, lambda error=exc: self.status_pill.set_label(
+                    t("Backend failed: {error}").format(error=error)))
             except (RuntimeError, tk.TclError):
                 pass
 
@@ -628,6 +645,7 @@ class TriggerGUI:
             return
         self._refresh_status()
         self._refresh_update_badge()
+        self.overview_tab.refresh()
         self.root.after(1000, self._tick_status)
 
     def _refresh_update_badge(self):
@@ -642,6 +660,16 @@ class TriggerGUI:
             badge.place_forget()
 
     def _refresh_status(self):
+        if self._backend_error:
+            self.status_pill.set_dot_color(T.RED)
+            self.status_pill.set_label(t("Controller backend error"))
+            return
+        if self._udp_error:
+            self.status_pill.set_dot_color(T.RED)
+            self.status_pill.set_label(t("UDP port {port} in use").format(
+                port=self.settings.udp_port
+            ))
+            return
         ds = self._ds
         if self.settings.use_dsx:
             if ds and ds.connected:

@@ -290,6 +290,50 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Controller backend error": "コントローラーバックエンドエラー",
+    "DSX enabled": "DSX 有効", "DSX unavailable": "DSX 利用不可",
+    "Target {target}; fire-and-forget UDP has no acknowledgement": "送信先 {target}。一方向 UDP のため応答確認はありません",
+    "Waiting for controller": "コントローラーを待機中", "Retrying every {seconds:g} seconds": "{seconds:g} 秒ごとに再試行",
+    "Automatic reconnect is off": "自動再接続は無効です", "UDP bind failed": "UDP のバインドに失敗",
+    "Starting listener": "リスナーを起動中", "UDP port {port}; enable Forza Data Out": "UDP ポート {port}。Forza Data Out を有効にしてください",
+    "Receiving telemetry": "テレメトリ受信中", "Packet {count} from {source}": "{source} からパケット {count} を受信",
+    "Telemetry lost": "テレメトリが途切れました", "Last packet {seconds:.1f} seconds ago on UDP {port}": "最後のパケットは {seconds:.1f} 秒前、UDP {port}",
+    "Profile unavailable": "プロファイルを利用できません", "Waiting for automatic check": "自動確認を待機中",
+    "Update checks disabled": "更新確認は無効です", "Use Check now in System and updates": "システムと更新で「今すぐ確認」を使用してください",
+    "Downloaded {progress:.0f}%": "ダウンロード済み {progress:.0f}%",
+    "FH6 Chinese text + English voice": "FH6 中国語テキスト + 英語音声",
+    "Windows Steam only. Detection is automatic, but files change only after you press a button and confirm.": "Windows Steam 版のみ。検出は自動ですが、ボタンを押して確認するまでファイルは変更されません。",
+    "Scanning for FH6": "FH6 を検索中", "Changing FH6 language files": "FH6 の言語ファイルを変更中",
+    "Please wait. Do not start FH6 until the operation finishes.": "お待ちください。処理が完了するまで FH6 を起動しないでください。",
+    "Install folder: not found": "インストール先: 見つかりません", "Install folder: {path}": "インストール先: {path}",
+    "Steam language: unknown": "Steam 言語: 不明", "Steam language: {language}": "Steam 言語: {language}", "unknown": "不明",
+    "Enable Chinese text + English voice": "中国語テキスト + 英語音声を有効化",
+    "Restore original language files": "元の言語ファイルを復元", "Repair original language files": "元の言語ファイルを修復",
+    "Rescan": "再スキャン", "Choose folder": "フォルダーを選択", "Choose the Forza Horizon 6 install folder": "Forza Horizon 6 のインストール先を選択",
+    "FH6 install folder": "FH6 インストール先", "Use folder": "このフォルダーを使用", "Press again to confirm": "もう一度押して確認",
+    "No safe action available": "安全に実行できる操作はありません", "Press the action button again to confirm. No files change on the first press.": "確認するには操作ボタンをもう一度押してください。最初の押下ではファイルは変更されません。",
+    "FH6 language files updated": "FH6 の言語ファイルを更新しました", "FH6 language change failed": "FH6 の言語変更に失敗しました",
+    "FH6 installation not found": "FH6 のインストールが見つかりません", "Run FH6 at least once, then rescan or choose its install folder.": "FH6 を一度以上起動してから再スキャンするか、インストール先を選択してください。",
+    "Original language files": "元の言語ファイル", "CHS.zip is Chinese and EN.zip is English.": "CHS.zip は中国語、EN.zip は英語です。",
+    "Chinese text + English voice enabled": "中国語テキスト + 英語音声が有効です",
+    "File contents are swapped. Steam updates may restore the original files.": "ファイル内容は入れ替わっています。Steam の更新で元のファイルに戻る場合があります。",
+    "Interrupted language swap detected": "中断された言語入れ替えを検出",
+    "No automatic repair was performed. Confirm repair to restore the original layout.": "自動修復は行っていません。元の配置に戻すには修復を確認してください。",
+    "Language files are missing": "言語ファイルがありません", "Verify the FH6 game files in Steam, then rescan.": "Steam で FH6 のゲームファイルを確認してから再スキャンしてください。",
+    "Language files are not recognized": "言語ファイルを識別できません", "The archives were left unchanged because their contents could not be identified safely.": "内容を安全に識別できなかったため、アーカイブは変更されていません。",
+    "Language archive is damaged": "言語アーカイブが破損しています", "Verify the FH6 game files in Steam before trying again.": "再試行する前に Steam で FH6 のゲームファイルを確認してください。",
+    "Close Forza Horizon 6 before changing language files.": "言語ファイルを変更する前に Forza Horizon 6 を終了してください。",
+    "Set the FH6 language to English in Steam Properties first.": "先に Steam のプロパティで FH6 の言語を英語に設定してください。",
+    "Steam language could not be verified. Continuing requires an extra confirmation.": "Steam の言語を確認できませんでした。続行には追加の確認が必要です。",
+    "Enable Chinese text + English voice?": "中国語テキスト + 英語音声を有効にしますか?",
+    "Restore original FH6 language files?": "FH6 の元の言語ファイルを復元しますか?", "Repair interrupted FH6 language swap?": "中断された FH6 の言語入れ替えを修復しますか?",
+    "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Steam updates or file verification may restore the original files.": "FHDS は CHS.zip と EN.zip の名前を入れ替えます。先に FH6 を終了してください。Steam の更新やファイル確認で元に戻る場合があります。",
+    "FHDS will exchange the archive names again and restore Chinese to CHS.zip and English to EN.zip. Close FH6 first.": "FHDS はアーカイブ名を再度入れ替え、中国語を CHS.zip、英語を EN.zip に戻します。先に FH6 を終了してください。",
+    "FHDS found an interrupted two-file swap. It will only move the identified Chinese and English archives back to their original names.": "FHDS は中断された2ファイルの入れ替えを検出しました。識別済みの中国語と英語のアーカイブだけを元の名前に戻します。",
+    "Steam language could not be verified as English. Continue only if FH6 is set to English in Steam.": "Steam の言語が英語であることを確認できませんでした。Steam で FH6 を英語に設定している場合のみ続行してください。",
+})
+
+STRINGS.update({
     "Save settings before exit?": "終了前に設定を保存しますか？",
     "Save your tuning before exit?": "終了前に調整内容を保存しますか？",
     "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
@@ -351,4 +395,14 @@ STRINGS.update({
     "The Default profile resets on every launch to pick up new features and tuning. System tab settings are preserved. Save a named profile to keep your own tuning.": "Default プロファイルは、新機能と調整を取り込むため起動時に更新されます。システム設定は保持されます。独自の調整を残すには名前付きプロファイルを保存してください。",
     "Live application output. Increase verbosity for debugging.": "アプリのリアルタイムログです。調査時は詳細度を上げてください。",
     "Level": "レベル", "latched": "接続保持",
+})
+
+STRINGS.update({
+    "Finding FH6...": "FH6 を検索中...",
+    "Launch FH6": "FH6 を起動",
+    "Starting FH6...": "FH6 を起動中...",
+    "FH6 is running": "FH6 は実行中です",
+    "FH6 not found": "FH6 が見つかりません",
+    "Could not launch FH6: {error}": "FH6 を起動できませんでした: {error}",
+    "Sent FH6 launch request to Steam": "Steam に FH6 の起動リクエストを送信しました",
 })

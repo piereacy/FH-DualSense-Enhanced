@@ -209,6 +209,10 @@ class Settings:
     check_for_updates: bool = True            # built-in updater checks GitHub in the background
     auto_download_updates: bool = False       # download only; installation still requires confirmation
 
+    # MARK: System - FH6 installation
+    # Validated Windows Steam game root. Discovery is read-only; archive swaps are button-only.
+    fh6_install_path: str = ""
+
     # MARK: System - DSX
     # When on, triggers go to DualSenseX over UDP instead of HID. Lets DSX (Steam)
     # own the controller without HID fighting it. Toggling restarts the backend.

@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "4"
-CURRENT_RELEASE_VERSION = "R4"
+CURRENT_INTERNAL_VERSION = "5"
+CURRENT_RELEASE_VERSION = "R5"
 
 
 def _source(path: str) -> str:
@@ -160,12 +160,17 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R4 中文说明" in workflow
-    assert "Enhanced R4 English notes" in workflow
-    assert "关于与许可证" in workflow
-    assert "About and licenses is now a dedicated page" in workflow
-    assert "握把换挡冲击" in workflow
-    assert "默认关闭 R2 扳机键红线、开启握把红线" in workflow
+    assert "Enhanced R5 中文说明" in workflow
+    assert "Enhanced R5 English notes" in workflow
+    assert "总览页的实时状态链路" in workflow
+    assert "总览快速入口还新增“启动 FH6”按钮" in workflow
+    assert "新的水墨风 DualSense 赛车图标" in workflow
+    assert "中文文字 + 英文语音" in workflow
+    assert "Overview Quick Access also adds a Launch FH6 button" in workflow
+    assert "new ink-wash DualSense racing icon" in workflow
+    assert "steam://run/2483190" in workflow
+    assert "Automatic work is read-only" in workflow
+    assert "three-step rename" in workflow
     assert "You must disable in-game vibration in Forza" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow
@@ -337,7 +342,7 @@ def test_readmes_require_in_game_vibration_off_but_keep_steam_input_on():
     assert "握把フィードバックが正常に動作しません" in japanese
 
 
-def test_release_identity_uses_public_r4_and_internal_pep440_version():
+def test_release_identity_uses_public_r5_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 
@@ -358,7 +363,7 @@ def test_selected_icon_is_used_by_all_application_surfaces():
     png = ROOT / "src/data/icon.png"
 
     assert hashlib.sha256(icon.read_bytes()).hexdigest().upper() == (
-        "FF195DE9560D31D3A5646206D73B55844F69FF3BDB99618CAA2414ACF423852B"
+        "EDC4EBE4678D6A93B444E32CCE6689073FC0A59E12880E659383AE4F306B8AE4"
     )
     with Image.open(icon) as image:
         assert sorted(image.info["sizes"]) == [

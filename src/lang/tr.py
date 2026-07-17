@@ -290,6 +290,50 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Controller backend error": "Kontrolcü arka uç hatası",
+    "DSX enabled": "DSX etkin", "DSX unavailable": "DSX kullanılamıyor",
+    "Target {target}; fire-and-forget UDP has no acknowledgement": "Hedef {target}; tek yönlü UDP onay göndermez",
+    "Waiting for controller": "Kontrolcü bekleniyor", "Retrying every {seconds:g} seconds": "Her {seconds:g} saniyede yeniden deneniyor",
+    "Automatic reconnect is off": "Otomatik yeniden bağlanma kapalı", "UDP bind failed": "UDP bağlama başarısız",
+    "Starting listener": "Dinleyici başlatılıyor", "UDP port {port}; enable Forza Data Out": "UDP bağlantı noktası {port}; Forza Data Out'u etkinleştirin",
+    "Receiving telemetry": "Telemetri alınıyor", "Packet {count} from {source}": "{source} kaynağından {count}. paket",
+    "Telemetry lost": "Telemetri kesildi", "Last packet {seconds:.1f} seconds ago on UDP {port}": "Son paket {seconds:.1f} saniye önce UDP {port} üzerinden alındı",
+    "Profile unavailable": "Profil kullanılamıyor", "Waiting for automatic check": "Otomatik denetleme bekleniyor",
+    "Update checks disabled": "Güncelleme denetimleri kapalı", "Use Check now in System and updates": "Sistem ve güncellemelerde Şimdi denetle seçeneğini kullanın",
+    "Downloaded {progress:.0f}%": "%{progress:.0f} indirildi",
+    "FH6 Chinese text + English voice": "FH6 Çince metin + İngilizce ses",
+    "Windows Steam only. Detection is automatic, but files change only after you press a button and confirm.": "Yalnızca Windows Steam. Algılama otomatiktir; dosyalar ancak düğmeye basıp onayladıktan sonra değişir.",
+    "Scanning for FH6": "FH6 aranıyor", "Changing FH6 language files": "FH6 dil dosyaları değiştiriliyor",
+    "Please wait. Do not start FH6 until the operation finishes.": "Lütfen bekleyin. İşlem bitene kadar FH6'yı başlatmayın.",
+    "Install folder: not found": "Kurulum klasörü: bulunamadı", "Install folder: {path}": "Kurulum klasörü: {path}",
+    "Steam language: unknown": "Steam dili: bilinmiyor", "Steam language: {language}": "Steam dili: {language}", "unknown": "bilinmiyor",
+    "Enable Chinese text + English voice": "Çince metin + İngilizce sesi etkinleştir",
+    "Restore original language files": "Özgün dil dosyalarını geri yükle", "Repair original language files": "Özgün dil dosyalarını onar",
+    "Rescan": "Yeniden tara", "Choose folder": "Klasör seç", "Choose the Forza Horizon 6 install folder": "Forza Horizon 6 kurulum klasörünü seç",
+    "FH6 install folder": "FH6 kurulum klasörü", "Use folder": "Klasörü kullan", "Press again to confirm": "Onaylamak için yeniden bas",
+    "No safe action available": "Güvenli işlem yok", "Press the action button again to confirm. No files change on the first press.": "Onaylamak için işlem düğmesine yeniden basın. İlk basışta hiçbir dosya değişmez.",
+    "FH6 language files updated": "FH6 dil dosyaları güncellendi", "FH6 language change failed": "FH6 dil değişikliği başarısız",
+    "FH6 installation not found": "FH6 kurulumu bulunamadı", "Run FH6 at least once, then rescan or choose its install folder.": "FH6'yı en az bir kez çalıştırın, ardından yeniden tarayın veya kurulum klasörünü seçin.",
+    "Original language files": "Özgün dil dosyaları", "CHS.zip is Chinese and EN.zip is English.": "CHS.zip Çince, EN.zip İngilizcedir.",
+    "Chinese text + English voice enabled": "Çince metin + İngilizce ses etkin",
+    "File contents are swapped. Steam updates may restore the original files.": "Dosya içerikleri değiştirildi. Steam güncellemeleri özgün dosyaları geri yükleyebilir.",
+    "Interrupted language swap detected": "Yarıda kalan dil değişimi algılandı",
+    "No automatic repair was performed. Confirm repair to restore the original layout.": "Otomatik onarım yapılmadı. Özgün düzeni geri yüklemek için onarımı onaylayın.",
+    "Language files are missing": "Dil dosyaları eksik", "Verify the FH6 game files in Steam, then rescan.": "Steam'de FH6 oyun dosyalarını doğrulayın ve yeniden tarayın.",
+    "Language files are not recognized": "Dil dosyaları tanınmadı", "The archives were left unchanged because their contents could not be identified safely.": "İçerikleri güvenle tanımlanamadığı için arşivler değiştirilmedi.",
+    "Language archive is damaged": "Dil arşivi hasarlı", "Verify the FH6 game files in Steam before trying again.": "Yeniden denemeden önce Steam'de FH6 oyun dosyalarını doğrulayın.",
+    "Close Forza Horizon 6 before changing language files.": "Dil dosyalarını değiştirmeden önce Forza Horizon 6'yı kapatın.",
+    "Set the FH6 language to English in Steam Properties first.": "Önce Steam Özellikleri'nde FH6 dilini İngilizce yapın.",
+    "Steam language could not be verified. Continuing requires an extra confirmation.": "Steam dili doğrulanamadı. Devam etmek ek onay gerektirir.",
+    "Enable Chinese text + English voice?": "Çince metin + İngilizce ses etkinleştirilsin mi?",
+    "Restore original FH6 language files?": "Özgün FH6 dil dosyaları geri yüklensin mi?", "Repair interrupted FH6 language swap?": "Yarıda kalan FH6 dil değişimi onarılsın mı?",
+    "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Steam updates or file verification may restore the original files.": "FHDS, CHS.zip ile EN.zip adlarını değiştirecek. Önce FH6'yı kapatın. Steam güncellemeleri veya dosya doğrulaması özgün dosyaları geri yükleyebilir.",
+    "FHDS will exchange the archive names again and restore Chinese to CHS.zip and English to EN.zip. Close FH6 first.": "FHDS arşiv adlarını yeniden değiştirerek Çinceyi CHS.zip'e, İngilizceyi EN.zip'e geri yükleyecek. Önce FH6'yı kapatın.",
+    "FHDS found an interrupted two-file swap. It will only move the identified Chinese and English archives back to their original names.": "FHDS yarıda kalan iki dosyalı bir değişim buldu. Yalnızca tanımlanan Çince ve İngilizce arşivleri özgün adlarına taşıyacak.",
+    "Steam language could not be verified as English. Continue only if FH6 is set to English in Steam.": "Steam dilinin İngilizce olduğu doğrulanamadı. Yalnızca FH6 Steam'de İngilizce ayarlıysa devam edin.",
+})
+
+STRINGS.update({
     "Save settings before exit?": "Çıkmadan önce ayarlar kaydedilsin mi?",
     "Save your tuning before exit?": "Çıkmadan önce ince ayar kaydedilsin mi?",
     "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
@@ -351,4 +395,14 @@ STRINGS.update({
     "The Default profile resets on every launch to pick up new features and tuning. System tab settings are preserved. Save a named profile to keep your own tuning.": "Default profili yeni özellikleri ve ayarları almak için her açılışta yenilenir. Sistem sekmesi ayarları korunur. Kendi ayarınızı tutmak için adlandırılmış profil kaydedin.",
     "Live application output. Increase verbosity for debugging.": "Canlı uygulama günlüğü. Hata ayıklamak için ayrıntı düzeyini artırın.",
     "Level": "Düzey", "latched": "bağlantı tutuluyor",
+})
+
+STRINGS.update({
+    "Finding FH6...": "FH6 aranıyor...",
+    "Launch FH6": "FH6'yı başlat",
+    "Starting FH6...": "FH6 başlatılıyor...",
+    "FH6 is running": "FH6 çalışıyor",
+    "FH6 not found": "FH6 bulunamadı",
+    "Could not launch FH6: {error}": "FH6 başlatılamadı: {error}",
+    "Sent FH6 launch request to Steam": "FH6 başlatma isteği Steam'e gönderildi",
 })

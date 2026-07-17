@@ -144,3 +144,32 @@ class FactoryResetDialog(_Modal):
     def _cancel(self):
         self._on_cancel()
         self._close()
+
+
+class ConfirmationDialog(_Modal):
+    """Generic explicit confirmation for button-triggered file operations."""
+
+    def __init__(
+        self,
+        parent,
+        *,
+        heading: str,
+        message: str,
+        confirm_label: str,
+        on_confirm: Callable[[], None],
+    ):
+        self._on_confirm = on_confirm
+        super().__init__(parent, title=heading, width=540, height=250)
+
+        W.H1(self, heading).pack(
+            anchor="w", padx=T.PAD_LG, pady=(T.PAD_LG, T.PAD_SM)
+        )
+        W.Body(self, message, wraplength=480).pack(anchor="w", padx=T.PAD_LG)
+        buttons = ctk.CTkFrame(self, fg_color="transparent")
+        buttons.pack(side="bottom", fill="x", padx=T.PAD_LG, pady=T.PAD_LG)
+        W.PrimaryButton(buttons, confirm_label, self._confirm).pack(side="left")
+        W.GhostButton(buttons, t("Cancel"), self._cancel).pack(side="right")
+
+    def _confirm(self):
+        self._close()
+        self._on_confirm()

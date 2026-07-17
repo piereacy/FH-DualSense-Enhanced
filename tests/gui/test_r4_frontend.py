@@ -10,19 +10,23 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _constant_translation_keys() -> set[str]:
     keys = set()
-    for folder in (ROOT / "src/modules/gui", ROOT / "src/modules/tui"):
-        for path in folder.glob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id == "t"
-                    and node.args
-                    and isinstance(node.args[0], ast.Constant)
-                    and isinstance(node.args[0].value, str)
-                ):
-                    keys.add(node.args[0].value)
+    sources = list((ROOT / "src/modules/gui").glob("*.py"))
+    sources.extend((ROOT / "src/modules/tui").glob("*.py"))
+    sources.append(
+        ROOT / "src/modules/forzahorizon/fh6_language_presentation.py"
+    )
+    for path in sources:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"t", "translate"}
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                keys.add(node.args[0].value)
     return keys
 
 

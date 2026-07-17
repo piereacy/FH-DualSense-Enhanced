@@ -301,6 +301,49 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Controller backend error": "Ошибка модуля контроллера", "DSX enabled": "DSX включён", "DSX unavailable": "DSX недоступен",
+    "Target {target}; fire-and-forget UDP has no acknowledgement": "Адрес {target}; односторонний UDP не подтверждает доставку",
+    "Waiting for controller": "Ожидание контроллера", "Retrying every {seconds:g} seconds": "Повтор каждые {seconds:g} с",
+    "Automatic reconnect is off": "Автоподключение отключено", "UDP bind failed": "Не удалось привязать UDP",
+    "Starting listener": "Запуск приёмника", "UDP port {port}; enable Forza Data Out": "UDP-порт {port}; включите Forza Data Out",
+    "Receiving telemetry": "Приём телеметрии", "Packet {count} from {source}": "Пакет {count} от {source}",
+    "Telemetry lost": "Телеметрия потеряна", "Last packet {seconds:.1f} seconds ago on UDP {port}": "Последний пакет {seconds:.1f} с назад через UDP {port}",
+    "Profile unavailable": "Профиль недоступен", "Waiting for automatic check": "Ожидание автоматической проверки",
+    "Update checks disabled": "Проверка обновлений отключена", "Use Check now in System and updates": "Нажмите Проверить сейчас в разделе Система и обновления",
+    "Downloaded {progress:.0f}%": "Загружено {progress:.0f}%",
+    "FH6 Chinese text + English voice": "FH6: китайский текст + английская озвучка",
+    "Windows Steam only. Detection is automatic, but files change only after you press a button and confirm.": "Только Windows Steam. Обнаружение автоматическое, но файлы меняются лишь после нажатия кнопки и подтверждения.",
+    "Scanning for FH6": "Поиск FH6", "Changing FH6 language files": "Изменение языковых файлов FH6",
+    "Please wait. Do not start FH6 until the operation finishes.": "Подождите. Не запускайте FH6 до завершения операции.",
+    "Install folder: not found": "Папка установки: не найдена", "Install folder: {path}": "Папка установки: {path}",
+    "Steam language: unknown": "Язык Steam: неизвестен", "Steam language: {language}": "Язык Steam: {language}", "unknown": "неизвестен",
+    "Enable Chinese text + English voice": "Включить китайский текст + английскую озвучку",
+    "Restore original language files": "Восстановить исходные языковые файлы", "Repair original language files": "Исправить исходные языковые файлы",
+    "Rescan": "Сканировать снова", "Choose folder": "Выбрать папку", "Choose the Forza Horizon 6 install folder": "Выберите папку установки Forza Horizon 6",
+    "FH6 install folder": "Папка установки FH6", "Use folder": "Использовать папку", "Press again to confirm": "Нажмите ещё раз для подтверждения",
+    "No safe action available": "Нет безопасного действия", "Press the action button again to confirm. No files change on the first press.": "Для подтверждения снова нажмите кнопку действия. Первое нажатие не меняет файлы.",
+    "FH6 language files updated": "Языковые файлы FH6 обновлены", "FH6 language change failed": "Не удалось изменить язык FH6",
+    "FH6 installation not found": "Установка FH6 не найдена", "Run FH6 at least once, then rescan or choose its install folder.": "Запустите FH6 хотя бы один раз, затем повторите поиск или выберите папку установки.",
+    "Original language files": "Исходные языковые файлы", "CHS.zip is Chinese and EN.zip is English.": "CHS.zip содержит китайский, EN.zip содержит английский.",
+    "Chinese text + English voice enabled": "Китайский текст + английская озвучка включены",
+    "File contents are swapped. Steam updates may restore the original files.": "Содержимое файлов поменяно местами. Обновление Steam может восстановить исходные файлы.",
+    "Interrupted language swap detected": "Обнаружена прерванная смена языка",
+    "No automatic repair was performed. Confirm repair to restore the original layout.": "Автоматическое исправление не выполнялось. Подтвердите исправление для возврата исходного расположения.",
+    "Language files are missing": "Языковые файлы отсутствуют", "Verify the FH6 game files in Steam, then rescan.": "Проверьте файлы FH6 в Steam и повторите поиск.",
+    "Language files are not recognized": "Языковые файлы не распознаны", "The archives were left unchanged because their contents could not be identified safely.": "Архивы не изменены, поскольку их содержимое нельзя было безопасно распознать.",
+    "Language archive is damaged": "Языковой архив повреждён", "Verify the FH6 game files in Steam before trying again.": "Перед новой попыткой проверьте файлы FH6 в Steam.",
+    "Close Forza Horizon 6 before changing language files.": "Закройте Forza Horizon 6 перед изменением языковых файлов.",
+    "Set the FH6 language to English in Steam Properties first.": "Сначала выберите английский язык FH6 в свойствах Steam.",
+    "Steam language could not be verified. Continuing requires an extra confirmation.": "Язык Steam не удалось проверить. Для продолжения нужно дополнительное подтверждение.",
+    "Enable Chinese text + English voice?": "Включить китайский текст + английскую озвучку?",
+    "Restore original FH6 language files?": "Восстановить исходные языковые файлы FH6?", "Repair interrupted FH6 language swap?": "Исправить прерванную смену языка FH6?",
+    "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Steam updates or file verification may restore the original files.": "FHDS поменяет местами имена CHS.zip и EN.zip. Сначала закройте FH6. Обновление Steam или проверка файлов могут восстановить исходные файлы.",
+    "FHDS will exchange the archive names again and restore Chinese to CHS.zip and English to EN.zip. Close FH6 first.": "FHDS снова поменяет имена архивов и вернёт китайский в CHS.zip, а английский в EN.zip. Сначала закройте FH6.",
+    "FHDS found an interrupted two-file swap. It will only move the identified Chinese and English archives back to their original names.": "FHDS обнаружил прерванную перестановку двух файлов и вернёт под исходными именами только распознанные китайский и английский архивы.",
+    "Steam language could not be verified as English. Continue only if FH6 is set to English in Steam.": "Не удалось подтвердить английский язык Steam. Продолжайте только если FH6 в Steam настроена на английский.",
+})
+
+STRINGS.update({
     "Save settings before exit?": "Сохранить настройки перед выходом?",
     "Save your tuning before exit?": "Сохранить настройку перед выходом?",
     "Default already autosaved these changes. Save a named profile to keep a reusable snapshot.":
@@ -362,4 +405,14 @@ STRINGS.update({
     "The Default profile resets on every launch to pick up new features and tuning. System tab settings are preserved. Save a named profile to keep your own tuning.": "Профиль Default обновляется при каждом запуске, чтобы получать новые функции и настройки. Параметры раздела системы сохраняются. Создайте именованный профиль для своих настроек.",
     "Live application output. Increase verbosity for debugging.": "Текущий журнал приложения. Для диагностики увеличьте подробность.",
     "Level": "Уровень", "latched": "удержание связи",
+})
+
+STRINGS.update({
+    "Finding FH6...": "Поиск FH6...",
+    "Launch FH6": "Запустить FH6",
+    "Starting FH6...": "Запуск FH6...",
+    "FH6 is running": "FH6 уже запущена",
+    "FH6 not found": "FH6 не найдена",
+    "Could not launch FH6: {error}": "Не удалось запустить FH6: {error}",
+    "Sent FH6 launch request to Steam": "Запрос на запуск FH6 отправлен в Steam",
 })

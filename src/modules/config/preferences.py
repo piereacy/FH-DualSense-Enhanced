@@ -43,6 +43,7 @@ GLOBAL_FIELDS = frozenset({
     "game_poll_interval_s",
     "check_for_updates",
     "auto_download_updates",
+    "fh6_install_path",
     "language",
     "controller_lock_serial",
     "use_dsx",
