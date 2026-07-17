@@ -229,6 +229,7 @@ def test_readmes_stay_concise_and_avoid_implementation_details():
     for text in (chinese, english, japanese):
         assert len(text.splitlines()) <= 120
         assert "FH-DualSense-Enhanced-R<n>.exe" in text
+        assert "Miku Console" not in text
         assert "Miku-Stage" not in text
         assert "Miku-Studio" not in text
         assert "wheelspin" in text.lower()
@@ -247,6 +248,27 @@ def test_readmes_stay_concise_and_avoid_implementation_details():
         "1.6.2.post1",
     ):
         assert detail not in combined
+
+
+def test_readmes_require_in_game_vibration_off_but_keep_steam_input_on():
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
+    japanese = _source("docs/ReadmeJA.md")
+
+    for text in (english, chinese, japanese):
+        assert "> [!IMPORTANT]" in text
+
+    assert "Keep Steam Input enabled" in english
+    assert "turn **Vibration** off" in english
+    assert "grip feedback will not work correctly" in english
+
+    assert "Steam Input 必须保持开启" in chinese
+    assert "必须在 Forza 游戏设置中关闭“振动”" in chinese
+    assert "握把反馈无法正常工作" in chinese
+
+    assert "Steam Input は有効のまま" in japanese
+    assert "「振動」は必ず無効" in japanese
+    assert "握把フィードバックが正常に動作しません" in japanese
 
 
 def test_release_identity_uses_public_r2_and_internal_pep440_version():
