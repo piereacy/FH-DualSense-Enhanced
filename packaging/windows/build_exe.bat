@@ -64,8 +64,15 @@ if errorlevel 1 (
 )
 
 REM MARK: updater refuses assets without a matching published SHA-256 file.
-for %%F in ("%DIST%\*.exe") do (
-    powershell -NoProfile -Command "$p='%%~fF'; $h=(Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash.ToLowerInvariant(); [IO.File]::WriteAllText($p+'.sha256', $h+'  '+[IO.Path]::GetFileName($p), [Text.Encoding]::ASCII)"
+REM Use Python instead of Get-FileHash because that cmdlet is absent on some
+REM windows-latest runner images even though Windows PowerShell is available.
+set "APP_EXE=%DIST%\FH-DualSense-Enhanced-R%VER%.exe"
+uv run --no-project python "%~dp0write_sha256.py" "%APP_EXE%"
+if errorlevel 1 (
+    echo.
+    echo SHA-256 sidecar generation FAILED.
+    popd
+    exit /b 1
 )
 copy /y "docs\THIRD_PARTY_NOTICES.md" "%DIST%\THIRD_PARTY_NOTICES.md" >nul
 copy /y "LICENSE" "%DIST%\LICENSE" >nul

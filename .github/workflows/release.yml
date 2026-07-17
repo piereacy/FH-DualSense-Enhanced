@@ -133,6 +133,14 @@ jobs:
           & "$Env:GITHUB_WORKSPACE\packaging\windows\build_exe.bat"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify EXE checksum sidecar
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem "$Env:GITHUB_WORKSPACE\packaging\windows\dist\FH-DualSense-Enhanced-R*.exe")
+          if ($files.Count -ne 1) { throw "Expected one canonical R-series EXE, found $($files.Count)" }
+          uv run --no-project python "$Env:GITHUB_WORKSPACE\packaging\windows\write_sha256.py" --check $files[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: actions/upload-artifact@v4
         with:
           name: exe

@@ -1,5 +1,7 @@
-import runpy
 import hashlib
+import runpy
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -178,12 +180,26 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     assert "FH-DualSense-Enhanced-R%VER%.exe" in build
     assert "FH-DualSense-Update-Helper.exe" in spec
     assert "FH-DualSense-Update-Helper" in build
-    assert "$p+'.sha256'" in build
+    assert "write_sha256.py" in build
+    assert "powershell -NoProfile -Command" not in build
     assert "PUBLIC_VERSION = f\"R{VERSION}\"" in spec
     assert "StringStruct('FileVersion', '{PUBLIC_VERSION}')" in spec
     assert "StringStruct('ProductVersion', '{PUBLIC_VERSION}')" in spec
     assert 'name="FH-DualSense-Enhanced"' in linux_spec
     assert "FH-DualSense-Enhanced-R$VER" in _source("packaging/linux/build_elf.sh")
+
+
+def test_windows_checksum_writer_emits_and_verifies_updater_sidecar(tmp_path):
+    executable = tmp_path / "FH-DualSense-Enhanced-R4.exe"
+    executable.write_bytes(b"MZ" + b"release-payload")
+    writer = ROOT / "packaging/windows/write_sha256.py"
+
+    subprocess.run([sys.executable, writer, executable], check=True)
+    sidecar = executable.with_name(executable.name + ".sha256")
+    digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+    assert sidecar.read_bytes() == f"{digest}  {executable.name}\n".encode("ascii")
+
+    subprocess.run([sys.executable, writer, "--check", executable], check=True)
 
 
 def test_readme_defaults_to_english_with_separate_language_pages():
