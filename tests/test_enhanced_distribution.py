@@ -138,6 +138,7 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "Miku-Stage" not in workflow
     assert "Miku-Studio" not in workflow
+    assert "Miku Console" not in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
     assert "Enhanced R4 中文说明" in workflow
     assert "握把换挡冲击" in workflow
@@ -231,6 +232,25 @@ def test_readmes_are_original_enhanced_project_documentation():
     assert "ファイアウォール" in japanese
     assert "握把触覚" in japanese
     assert "1.6.2.post1" not in combined
+
+
+def test_readmes_explicitly_compare_enhanced_with_upstream_1_6_2():
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
+    japanese = _source("docs/ReadmeJA.md")
+
+    sections = (
+        (english, "## What Enhanced adds over upstream 1.6.2", "## Download"),
+        (chinese, "## 相比上游 1.6.2 的增强", "## 下载"),
+        (japanese, "## アップストリーム 1.6.2 からの拡張", "## ダウンロード"),
+    )
+    for text, heading, next_heading in sections:
+        assert heading in text
+        body = text.split(heading, 1)[1].split(next_heading, 1)[0]
+        bullets = [line for line in body.splitlines() if line.startswith("- ")]
+        assert 4 <= len(bullets) <= 6
+        assert "Bluetooth" in body
+        assert "1.6.2" not in body
 
 
 def test_readmes_stay_concise_and_avoid_implementation_details():

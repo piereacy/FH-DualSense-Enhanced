@@ -206,7 +206,7 @@ jobs:
           body: |
             ## Enhanced R4 中文说明
 
-            Enhanced R4 将界面统一为初音未来青绿色的 `Miku Console`，只提供一个标准 Windows EXE。驾驶反馈页改为可滚动和响应式布局，在 Windows 100%、125% 与 150% 显示缩放下都能查看完整卡片；鼠标滚轮会跟随指针所在的滚动区域，嵌套页面到达边界后再交给外层滚动。
+            Enhanced R4 将界面统一为单一响应式桌面前端，只提供一个标准 Windows EXE。驾驶反馈页改为可滚动和响应式布局，以适应常见显示缩放与窗口尺寸；鼠标滚轮会跟随指针所在的滚动区域，嵌套页面到达边界后再交给外层滚动。
 
             `Default` 配置现在会自动保存并跨重启保留。关闭窗口、托盘退出、游戏关闭和更新重启都会使用同一退出流程：本会话修改过 `Default` 的手感参数时，可保存为默认填入 `profile1`、`profile2` 的命名配置后退出，也可直接退出或取消。恢复出厂设置会保留命名配置，重置全部手感和系统设置，并重新检测 Windows 显示语言。首次启动同样会自动选择支持的系统语言，之后仍可手动切换。
 
@@ -216,7 +216,7 @@ jobs:
 
             红线握把反馈改为非线性感知增益，默认强度提高到 `220/255`，low 比例提高到 `45%`，脉冲宽度提高到 `70%`，并加入可调的进入冲击。默认关闭 R2 扳机键红线、开启握把红线；握把默认仍在左侧。可选握把换挡冲击继续默认关闭。
 
-            新增的可选功能默认全部关闭，避免改变既有 Profile 手感：涡轮增压 R2 扳机键阻力、横纵向 G 力 R2 扳机键阻力、L2/R2 独立碰撞冲击、松开扳机键时的路面与减速带纹理、转速灯条和挡位 Player LEDs。每项都可独立开关和调节。碰撞检测由扳机与握把共享同一个事件，避免同一遥测帧被重复判定。
+            新增的实验性扳机功能默认全部关闭，避免改变既有 Profile 手感：涡轮增压 R2 扳机键阻力、横纵向 G 力 R2 扳机键阻力、L2/R2 独立碰撞冲击、松开扳机键时的路面与减速带纹理。它们连同全部参数统一收纳在默认折叠的“实验性功能”中。转速灯条和挡位 Player LEDs 同样默认关闭，但保留在独立灯光页面。碰撞检测由扳机与握把共享同一个事件，避免同一遥测帧被重复判定。
 
             USB 与 Bluetooth 继续使用同一套左右 PCM 语义。Bluetooth `0x36` 路径增加 soft limiter 和带误差反馈的 int8 量化器，尽量保留低幅路面细节和叠加瞬态；灯条和 Player LEDs 同样写入 USB、Bluetooth `0x31` 与 Bluetooth HD haptics `0x36` 的状态区。如果当前连接拒绝 `0x36`，程序仍会回退到 compatible rumble，扳机不受影响。
 
@@ -230,9 +230,9 @@ jobs:
 
             ## Enhanced R4 highlights
 
-            Enhanced R4 uses one Miku Console GUI and one canonical Windows executable. It adds responsive scrolling, persistent Default autosave, a named-profile exit prompt, full factory restore, first-run system-language detection, and a persistent update badge. The updater keeps SHA-256 verification, restart replacement, and rollback.
+            Enhanced R4 uses one responsive desktop GUI and one canonical Windows executable. It adds responsive scrolling, persistent Default autosave, a named-profile exit prompt, full factory restore, first-run system-language detection, and a persistent update badge. The updater keeps SHA-256 verification, restart replacement, and rollback.
 
-            New opt-in effects include turbo and G-force R2-trigger resistance, independent L2/R2 collision jolts, idle-trigger road texture, a tachometer lightbar, and gear Player LEDs. Bluetooth HD haptics now uses soft limiting and error-feedback int8 quantization to retain more low-level detail. All new effects are disabled by default and do not remove existing traction, GT7-style ABS wall, material bands, grip haptics, or compatible fallback behavior.
+            New experimental trigger effects include turbo and G-force R2-trigger resistance, independent L2/R2 collision jolts, and idle-trigger road texture. They are disabled by default and grouped under the collapsed Experimental features area with their tuning parameters. The tachometer lightbar and gear Player LEDs are also opt-in. Bluetooth HD haptics now uses soft limiting and error-feedback int8 quantization to retain more low-level detail. Existing traction, GT7-style ABS wall, material bands, grip haptics, and compatible fallback behavior remain available.
 
             ## ZUV / Linux 备用方式
 
@@ -240,7 +240,7 @@ jobs:
 
             ## 必要设置
 
-            启用 Steam Input 和 DualSense vibration，然后在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`。先启动 FH-DualSense-Enhanced，再启动游戏。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300；只在短暂排查时关闭防火墙，随后立即恢复。验证本项目的方向碰撞时，关闭游戏内振动可避免 Steam Input 原生 rumble 掩盖左右差异。本项目仍不会接管或完整复现菜单、CG 和上车过场的游戏原生振动。
+            启用 Steam Input 和 DualSense vibration，然后在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`。必须关闭 Forza 游戏内振动，否则原生 rumble 会争用并掩盖本项目的握把反馈。先启动 FH-DualSense-Enhanced，再启动游戏。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300；只在短暂排查时关闭防火墙，随后立即恢复。本项目仍不会接管或完整复现菜单、CG 和上车过场的游戏原生振动。
 
             ---
             > - 设置保存在程序旁边的 `data/user_preferences.json`，更新后继续保留。
