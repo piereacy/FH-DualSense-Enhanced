@@ -9,7 +9,6 @@ import threading
 import customtkinter as ctk
 
 from lang import t
-from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
 from modules.config import preferences
 
 from . import theme as T
@@ -52,6 +51,8 @@ SETTING_SECTIONS = [
         ("grip_redline_ratio", "Grip trigger near redline at", 0.0, 1.0, ""),
         ("grip_redline_freq", "Grip pulse rate (Hz)", 1, 20, ""),
         ("grip_redline_amp", "Grip pulse strength", 0, 255, ""),
+        ("grip_redline_duty_cycle", "Grip pulse width", 0.20, 0.85, ""),
+        ("grip_redline_attack_strength", "Grip entry impact", 0.0, 1.0, ""),
     ]),
     ("Traction/grip feedback", [
         ("wheelspin_amp", "Grip feedback strength", 0, 255, ""),
@@ -83,6 +84,33 @@ SETTING_SECTIONS = [
 ]
 
 EXPERIMENTAL_SECTIONS = [
+    ("Experimental dynamic resistance", [
+        ("enable_boost_resistance", "Turbo boost resistance", None, None, ""),
+        ("boost_resistance_threshold", "Boost activation threshold", 0.0, 10.0, ""),
+        ("boost_resistance_force", "Boost extra resistance", 0, 255, ""),
+        ("enable_gforce_resistance", "G-force resistance", None, None, ""),
+        ("gforce_resistance_force", "G-force extra resistance", 0, 255, ""),
+        ("gforce_lateral_weight", "Lateral G weight", 0.0, 2.0, ""),
+        ("gforce_longitudinal_weight", "Longitudinal G weight", 0.0, 2.0, ""),
+        ("gforce_full_scale", "G force at maximum resistance", 0.1, 5.0, ""),
+        ("gforce_attack_ms", "G-force attack smoothing (ms)", 1.0, 500.0, ""),
+        ("gforce_release_ms", "G-force release smoothing (ms)", 1.0, 1000.0, ""),
+    ]),
+    ("Experimental collision trigger feedback", [
+        ("enable_collision_trigger_l2", "L2 collision trigger jolt", None, None, ""),
+        ("enable_collision_trigger_r2", "R2 collision trigger jolt", None, None, ""),
+        ("collision_trigger_freq", "Collision trigger frequency (Hz)", 0, 255, ""),
+        ("collision_trigger_amp", "Collision trigger strength", 0, 255, ""),
+        ("collision_trigger_duration_ms", "Collision trigger duration (ms)", 0.0, 500.0, ""),
+    ]),
+    ("Experimental road texture trigger feedback", [
+        ("enable_trigger_surface_l2", "L2 idle road texture", None, None, ""),
+        ("enable_trigger_surface_r2", "R2 idle road texture", None, None, ""),
+        ("trigger_surface_freq", "Road texture frequency (Hz)", 0, 255, ""),
+        ("trigger_surface_amp", "Road texture strength", 0, 255, ""),
+        ("trigger_rumble_strip_freq", "Rumble strip frequency (Hz)", 0, 255, ""),
+        ("trigger_rumble_strip_amp", "Rumble strip strength", 0, 255, ""),
+    ]),
     ("ABS advanced tuning", [
         ("abs_brake_threshold", "Minimum brake input", 0, 255, ""),
         ("abs_min_speed_kmh", "Minimum speed (km/h)", 0.0, 500.0, ""),
@@ -119,6 +147,7 @@ EXPERIMENTAL_SECTIONS = [
         ("grip_redline_gain", "Grip signal gain", 0.0, 2.0, ""),
         ("grip_redline_low_ratio", "Low-frequency pulse ratio", 0.0, 1.0, ""),
         ("grip_redline_background_duck", "Redline background level", 0.0, 1.0, ""),
+        ("grip_redline_attack_duration_ms", "Grip entry impact duration (ms)", 0.0, 500.0, ""),
     ]),
     ("Collision haptics advanced tuning", [
         ("collision_haptics_jerk_threshold", "Collision jerk threshold", 0.0, 50.0, ""),
@@ -184,9 +213,8 @@ class SettingsTab(ctk.CTkFrame):
     """Header + scrollable sectioned list. System tab subclasses this."""
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
-    SHOW_ABOUT = True
     SHOW_EXPERIMENTAL = True
-    PAGE_TITLE = "Settings"
+    PAGE_TITLE = "Grip haptics and tuning"
     PAGE_SUBTITLE = "All changes save instantly."
 
     def __init__(self, parent, app):
@@ -196,7 +224,6 @@ class SettingsTab(ctk.CTkFrame):
         self._switches: dict[str, ctk.CTkSwitch] = {}
         self._sliders: dict[str, ctk.CTkSlider] = {}
         self._entries: dict[str, ctk.CTkEntry] = {}
-        self._reset_armed = False
         self._reset_btn: ctk.CTkButton | None = None
         self._experimental_open = False
         self._experimental_btn: ctk.CTkButton | None = None
@@ -217,8 +244,6 @@ class SettingsTab(ctk.CTkFrame):
             self._build_section_card(section, fields)
         if self.SHOW_EXPERIMENTAL:
             self._build_experimental_card()
-        if self.SHOW_ABOUT:
-            self._build_about_card()
         if self.SHOW_RESET:
             self._reset_btn = W.DangerButton(self._scroll, t("Reset to defaults"),
                                              command=self._on_reset)
@@ -251,28 +276,6 @@ class SettingsTab(ctk.CTkFrame):
             self._experimental_body.pack(fill="x", padx=T.PAD_SM, pady=(0, T.PAD_SM))
         else:
             self._experimental_body.pack_forget()
-
-    def _build_about_card(self):
-        card = W.Card(self._scroll)
-        card.pack(fill="x", pady=(0, T.PAD_MD))
-        W.H2(card, t("About and licenses")).pack(
-            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
-        )
-        W.Body(card, ATTRIBUTION, wraplength=self.app.px(620)).pack(
-            anchor="w", fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM)
-        )
-        W.GhostButton(
-            card,
-            text=f"Source: {SOURCE_URL}",
-            command=lambda: self.app._open_url(SOURCE_URL),
-            anchor="w",
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
-        W.GhostButton(
-            card,
-            text=f"Sponsor: {SPONSOR_URL}",
-            command=lambda: self.app._open_url(SPONSOR_URL),
-            anchor="w",
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
     def _build_section_card(self, section_title: str, fields: list, parent=None):
         card = W.Card(parent or self._scroll)
@@ -424,17 +427,7 @@ class SettingsTab(ctk.CTkFrame):
         self._push_live(attr, new)
 
     def _on_reset(self):
-        if not self._reset_armed:
-            self._reset_armed = True
-            if self._reset_btn:
-                self._reset_btn.configure(text=t("Click again to confirm reset"))
-            return
-        self._reset_armed = False
-        if self._reset_btn:
-            self._reset_btn.configure(text=t("Reset to defaults"))
-        preferences.reset(self.settings)
-        self.app.refresh_setting_widgets()
-        log.info("Settings reset to defaults.")
+        self.app.request_factory_reset()
 
     def _push_live(self, attr: str, value):
         ds = getattr(self.app, "_ds", None)

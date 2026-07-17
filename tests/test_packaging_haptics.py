@@ -19,7 +19,8 @@ def test_windows_and_release_builds_install_audio_dependencies():
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
     assert "--with numpy --with sounddevice" in batch
-    assert workflow.count("--with numpy --with sounddevice") == 2
+    assert workflow.count("--with numpy --with sounddevice") == 1
+    assert "packaging\\windows\\build_exe.bat" in workflow
     assert "THIRD_PARTY_NOTICES.md" in batch
     assert "cp win_start.bat linux_start.sh LICENSE docs/THIRD_PARTY_NOTICES.md release/" in workflow
 

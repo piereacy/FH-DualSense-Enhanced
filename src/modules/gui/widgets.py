@@ -1,6 +1,9 @@
 """Reusable widget primitives. Build screens by composing these, not by
 re-implementing colors/spacing each time.
 """
+import tkinter as tk
+import weakref
+
 import customtkinter as ctk
 
 from . import theme as T
@@ -198,46 +201,149 @@ class PageHeader(ctk.CTkFrame):
 
 # MARK: scrollable card ---------------------------------------------------
 
-WHEEL_MULT = 5  # multiplier on top of CTk's default step (event.delta/6 px on Windows)
+WHEEL_PIXELS = 36
+
+
+def wheel_direction(event) -> int:
+    """Normalize Windows/macOS deltas and Linux wheel buttons to -1 or 1."""
+    number = getattr(event, "num", None)
+    if number == 4:
+        return -1
+    if number == 5:
+        return 1
+    delta = getattr(event, "delta", 0)
+    if delta > 0:
+        return -1
+    if delta < 0:
+        return 1
+    return 0
+
+
+def wheel_scroll_amount(event) -> int:
+    """Return a bounded pixel-like canvas step with natural touchpad scaling."""
+    direction = wheel_direction(event)
+    if direction == 0:
+        return 0
+    if getattr(event, "num", None) in (4, 5):
+        return direction * WHEEL_PIXELS
+    raw = abs(int(getattr(event, "delta", 0)))
+    if raw >= 120:
+        notches = max(1, min(3, int(round(raw / 120))))
+        magnitude = WHEEL_PIXELS * notches
+    else:
+        magnitude = max(1, min(WHEEL_PIXELS, int(round(raw / 3))))
+    return direction * magnitude
+
+
+def _view_can_scroll(view: tuple[float, float], direction: int) -> bool:
+    first, last = view
+    return first > 0.001 if direction < 0 else last < 0.999
+
+
+def scrollable_ancestor_chain(widget, registered) -> list:
+    """Return registered ancestors nearest-first for deterministic nesting."""
+    result = []
+    current = widget
+    while current is not None:
+        if current in registered:
+            result.append(current)
+        current = getattr(current, "master", None)
+    return result
+
+
+def first_scrollable_index(views: list[tuple[float, float]], direction: int):
+    for index, view in enumerate(views):
+        if view != (0.0, 1.0) and _view_can_scroll(view, direction):
+            return index
+    return None
+
+
+class WheelRouter:
+    """One root-level wheel binding for all registered scroll containers."""
+
+    def __init__(self, root):
+        self.root = root
+        self._containers = weakref.WeakSet()
+        self._rebind()
+
+    def register(self, container) -> None:
+        self._containers.add(container)
+        # CTkScrollableFrame installs a private bind_all in its constructor.
+        # Rebinding here removes that handler and restores our public root route.
+        self._rebind()
+
+    def unregister(self, container) -> None:
+        self._containers.discard(container)
+        self._rebind()
+
+    def _rebind(self):
+        try:
+            for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                self.root.unbind_all(sequence)
+                self.root.bind_all(sequence, self._on_wheel, add="+")
+        except tk.TclError:
+            pass
+
+    def _pointer_widget(self, event):
+        try:
+            x = getattr(event, "x_root", None)
+            y = getattr(event, "y_root", None)
+            if x is None or y is None:
+                x, y = self.root.winfo_pointerx(), self.root.winfo_pointery()
+            return self.root.winfo_containing(x, y) or event.widget
+        except tk.TclError:
+            return getattr(event, "widget", None)
+
+    def _on_wheel(self, event):
+        amount = wheel_scroll_amount(event)
+        if amount == 0:
+            return None
+        widget = self._pointer_widget(event)
+        candidates = scrollable_ancestor_chain(widget, self._containers)
+        views = []
+        alive = []
+        for candidate in candidates:
+            try:
+                views.append(candidate._parent_canvas.yview())
+                alive.append(candidate)
+            except tk.TclError:
+                self._containers.discard(candidate)
+        index = first_scrollable_index(views, -1 if amount < 0 else 1)
+        if index is None:
+            return None
+        canvas = alive[index]._parent_canvas
+        canvas.yview_scroll(amount, "units")
+        canvas.update_idletasks()
+        return "break"
+
+
+def install_wheel_router(root) -> WheelRouter:
+    router = getattr(root, "_fhds_wheel_router", None)
+    if router is None:
+        router = WheelRouter(root)
+        root._fhds_wheel_router = router
+    return router
 
 
 class FastScroll(ctk.CTkScrollableFrame):
-    """CTkScrollableFrame with faster, synchronously-repainted scrolling.
-
-    Overrides CTkScrollableFrame._mouse_wheel_all (CTk binds <MouseWheel> via
-    bind_all() in __init__, so rebinding from outside is shadowed).
-    Calls update_idletasks() after each scroll so embedded widgets repaint
-    immediately instead of one frame late.
-
-    Uses a visible scrollbar (accent thumb on a panel-tinted track) so users
-    can tell at a glance that the area is scrollable.
-    """
+    """Scrollable frame registered with the root-level WheelRouter."""
     def __init__(self, parent, **kw):
         kw.setdefault("fg_color", "transparent")
         kw.setdefault("scrollbar_fg_color", T.BG_PANEL)
         kw.setdefault("scrollbar_button_color", T.BG_ACTIVE)
         kw.setdefault("scrollbar_button_hover_color", T.ACCENT)
         super().__init__(parent, **kw)
+        self._wheel_router = install_wheel_router(self.winfo_toplevel())
+        self._wheel_router.register(self)
 
-    def _mouse_wheel_all(self, event):
-        import sys as _sys
-        if not self.check_if_master_is_canvas(event.widget):
-            return
-        cv = self._parent_canvas
-        if _sys.platform.startswith("win"):
-            step = -int(event.delta / 6) * WHEEL_MULT
-        else:
-            step = -int(event.delta) * WHEEL_MULT
-        if self._shift_pressed:
-            if cv.xview() != (0.0, 1.0):
-                cv.xview("scroll", step, "units")
-        else:
-            if cv.yview() != (0.0, 1.0):
-                cv.yview("scroll", step, "units")
-        cv.update_idletasks()
+    def destroy(self):
+        router = getattr(self, "_wheel_router", None)
+        if router is not None:
+            router.unregister(self)
+        super().destroy()
 
 
-class ScrollCard(ctk.CTkScrollableFrame):
+class ScrollCard(FastScroll):
     """Card-styled scrollable container for long forms."""
     def __init__(self, parent, **kw):
         kw.setdefault("fg_color", T.BG_PANEL)

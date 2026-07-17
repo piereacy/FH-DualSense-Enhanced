@@ -55,3 +55,26 @@ def test_renderer_rejects_invalid_frame_count():
         assert "frames" in str(exc)
     else:
         raise AssertionError("render() accepted a zero frame count")
+
+
+def test_bluetooth_soft_limiter_is_bounded_and_keeps_stereo_direction():
+    hard = HapticPcmRenderer(
+        numpy_module=np,
+        sample_rate=3000,
+        smoothing=1.0,
+        soft_clip=False,
+    )
+    soft = HapticPcmRenderer(
+        numpy_module=np,
+        sample_rate=3000,
+        smoothing=1.0,
+        soft_clip=True,
+    )
+    frame = HapticFrame(left_low=0.8, left_high=0.8, right_high=0.2)
+
+    hard_pcm = hard.render(frame, 32)
+    soft_pcm = soft.render(frame, 32)
+
+    assert np.max(np.abs(soft_pcm)) <= 1.0
+    assert not np.allclose(soft_pcm, hard_pcm)
+    assert np.max(np.abs(soft_pcm[:, 0])) > np.max(np.abs(soft_pcm[:, 1]))

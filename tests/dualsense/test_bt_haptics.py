@@ -8,9 +8,11 @@ from modules.dualsense.adaptive_trigger import rigid, vibrate
 from modules.dualsense.bt_haptics import (
     BT_HAPTICS_REPORT_ID,
     BT_HAPTICS_REPORT_SIZE,
+    BluetoothPcmQuantizer,
     BluetoothHapticsPacketBuilder,
     quantize_haptics,
 )
+from modules.dualsense.output_state import ControllerVisualState
 
 
 def test_quantize_haptics_interleaves_signed_left_and_right_samples():
@@ -25,6 +27,25 @@ def test_quantize_haptics_interleaves_signed_left_and_right_samples():
 def test_quantize_haptics_requires_32_stereo_frames():
     with pytest.raises(ValueError, match="32 stereo frames"):
         quantize_haptics(np.zeros((31, 2), dtype=np.float32), numpy_module=np)
+
+
+def test_stateful_quantizer_preserves_sub_lsb_average_energy_and_resets():
+    pcm = np.zeros((32, 2), dtype=np.float32)
+    pcm[:, 0] = 0.003
+    pcm[:, 1] = -0.003
+    assert quantize_haptics(pcm, numpy_module=np) == bytes(64)
+
+    quantizer = BluetoothPcmQuantizer(numpy_module=np)
+    first = quantizer.quantize(pcm)
+    values = np.frombuffer(first, dtype=np.int8).reshape(32, 2)
+
+    assert np.any(values[:, 0] == 1)
+    assert np.any(values[:, 1] == -1)
+    assert values[:, 0].mean() == pytest.approx(0.003 * 128.0, abs=0.15)
+    assert values[:, 1].mean() == pytest.approx(-0.003 * 128.0, abs=0.15)
+
+    quantizer.reset()
+    assert quantizer.quantize(pcm) == first
 
 
 def test_bt_haptics_report_has_expected_blocks_trigger_state_and_crc():
@@ -53,6 +74,27 @@ def test_bt_haptics_report_has_expected_blocks_trigger_state_and_crc():
 
     seed = zlib.crc32(b"\xA2")
     expected_crc = zlib.crc32(report[:394], seed)
+    assert struct.unpack_from("<I", report, 394)[0] == expected_crc
+
+
+def test_bt_haptics_report_036_carries_lighting_state_and_valid_crc():
+    builder = BluetoothHapticsPacketBuilder()
+    visual = ControllerVisualState(lightbar=(57, 197, 187), player_leds=0x0A)
+
+    report = builder.build(
+        bytes(64),
+        left=rigid(31),
+        right=vibrate(22, 9),
+        visual=visual,
+    )
+
+    state = report[13:76]
+    assert state[1] == 0x14
+    assert state[38] == 0x02
+    assert state[41] == 0x02
+    assert state[43] == 0x2A
+    assert tuple(state[44:47]) == (57, 197, 187)
+    expected_crc = zlib.crc32(report[:394], zlib.crc32(b"\xA2"))
     assert struct.unpack_from("<I", report, 394)[0] == expected_crc
 
 

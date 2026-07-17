@@ -69,10 +69,7 @@ class ProfilesTab(Vertical):
             yield Input(placeholder=t("New profile name"), id="profile-name")
             yield Button(t("Save"), id="profile-save", variant="success")
         yield Static(
-            t("Note: the [b]Default[/] profile is reset to built-in values every time "
-              "the app launches so new features and tuning come through. System "
-              "settings (System tab) are preserved. To keep your own tuning across "
-              "launches, save it as a named profile here."),
+            t("Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot."),
             id="profile-note",
             markup=True,
         )

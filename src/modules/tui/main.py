@@ -15,10 +15,14 @@ from modules.config import preferences, profiles
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.config.preferences import _release_version
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.update import UpdateService
+from modules.update.install import cleanup_previous_update, self_update_supported
 
+from .about_tab import AboutTab
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
+from .lighting_tab import LightingTab
 from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
 from .system_tab import SystemTab
@@ -92,6 +96,11 @@ class TriggerTUI(App):
         self._tearing_down = False
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
+        self._update_service = UpdateService(
+            settings,
+            supported=self_update_supported(),
+        )
+        cleanup_previous_update()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -106,12 +115,16 @@ class TriggerTUI(App):
                 yield ProfilesTab(self.settings)
             with TabPane(t("Settings"), id="tab-settings"):
                 yield SettingsTab(self.settings)
+            with TabPane(t("Controller lighting"), id="tab-lighting"):
+                yield LightingTab(self.settings)
             with TabPane(t("System"), id="tab-system"):
                 yield SystemTab(self.settings)
             with TabPane(t("Language"), id="tab-lang"):
                 yield LangTab(self.settings)
             with TabPane(t("Logs"), id="tab-logs"):
                 yield LogsTab()
+            with TabPane(t("About and licenses"), id="tab-about"):
+                yield AboutTab()
         with Horizontal(id="bottombar"):
             yield Button(f"q  {t('Quit')}", id="bb-quit", classes="bb-btn")
             yield Static(id="bb-spacer")
@@ -133,6 +146,7 @@ class TriggerTUI(App):
         self.refresh_profile()
         # MARK: keep handle so on_unmount can stop the poller before backend teardown
         self._status_timer = self.set_interval(1.0, self.refresh_status)
+        self._update_service.start_background()
         log.info("Starting controller and telemetry listener...")
         self.call_after_refresh(self._start_backend)
 
@@ -148,6 +162,7 @@ class TriggerTUI(App):
             if isinstance(h, _LogHandler):
                 root.removeHandler(h)
         self._stop.set()
+        self._update_service.stop()
         if self._thread:
             self._thread.join(timeout=2.0)
         self._usb_audio_lifecycle.close()

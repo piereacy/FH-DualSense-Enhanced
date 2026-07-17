@@ -3,7 +3,8 @@ import math
 import pytest
 
 from modules.config.settings import Settings
-from modules.dualsense.adaptive_trigger import M_VIBRATE, M_VIBRATE_ZONES
+from modules.dualsense.adaptive_trigger import M_OFF, M_RIGID, M_VIBRATE, M_VIBRATE_ZONES
+from modules.forzahorizon.collision import CollisionSignal
 from modules.forzahorizon.effects import Controller, TriggerAnimations, _AsymmetricEwma
 
 
@@ -22,6 +23,7 @@ def _telemetry(**overrides):
         "max_rpm": 9000.0,
         "accel_x": 0.0,
         "accel_z": 0.0,
+        "boost": 0.0,
     }
     for wheel in WHEELS:
         value[f"tire_slip_ratio_{wheel}"] = 0.0
@@ -29,6 +31,7 @@ def _telemetry(**overrides):
         value[f"wheel_rotation_speed_{wheel}"] = 0.0
         value[f"wheel_in_puddle_{wheel}"] = 0.0
         value[f"surface_rumble_{wheel}"] = 0.0
+        value[f"wheel_on_rumble_strip_{wheel}"] = 0
     value.update(overrides)
     return value
 
@@ -501,3 +504,82 @@ def test_abs_holds_the_last_dynamic_pulse_for_100_ms():
 
     assert animation.abs_pulse(clear, settings, 1.099) == frame
     assert animation.abs_pulse(clear, settings, 1.101) is None
+
+
+def test_turbo_boost_resistance_is_opt_in_and_adds_r2_force():
+    settings = Settings()
+    settings.enable_throttle_resistance = False
+    telemetry = _telemetry(accel=128, boost=2.0)
+    animation = TriggerAnimations()
+
+    assert animation.throttle_ramp(telemetry, settings, 1.0)[0] == M_OFF
+
+    settings.enable_boost_resistance = True
+    boosted = animation.throttle_ramp(telemetry, settings, 1.0)
+
+    assert boosted[0] == M_RIGID
+    assert boosted[1][1] > 0
+
+
+def test_g_force_resistance_uses_elapsed_time_smoothing_and_can_release():
+    settings = Settings()
+    settings.enable_throttle_resistance = False
+    settings.enable_gforce_resistance = True
+    telemetry = _telemetry(accel=128, accel_z=9.80665)
+    animation = TriggerAnimations()
+
+    assert animation.throttle_ramp(telemetry, settings, 1.0)[0] == M_OFF
+    attacked = animation.throttle_ramp(telemetry, settings, 1.07)
+    released = animation.throttle_ramp(
+        _telemetry(accel=128, accel_z=0.0), settings, 1.25
+    )
+
+    assert attacked[0] == M_RIGID
+    assert attacked[1][1] > released[1][1] > 0
+
+
+@pytest.mark.parametrize(
+    ("enable_l2", "enable_r2", "expected_l2", "expected_r2"),
+    [
+        (True, False, M_VIBRATE, M_RIGID),
+        (False, True, M_RIGID, M_VIBRATE),
+        (True, True, M_VIBRATE, M_VIBRATE),
+    ],
+)
+def test_collision_trigger_jolt_has_independent_l2_and_r2_switches(
+    enable_l2, enable_r2, expected_l2, expected_r2
+):
+    settings = Settings()
+    settings.enable_collision_trigger_l2 = enable_l2
+    settings.enable_collision_trigger_r2 = enable_r2
+    controller = Controller(settings)
+    controller.anim.arm_collision(
+        CollisionSignal(1.0, "center", "jerk", 30.0, 0.0),
+        settings,
+        now=1.0,
+    )
+    telemetry = _telemetry(brake=128, accel=128)
+
+    assert controller.L2(telemetry, settings, 1.01)[0] == expected_l2
+    assert controller.R2(telemetry, settings, 1.01)[0] == expected_r2
+
+
+def test_optional_trigger_surface_uses_rumble_strip_then_yields_when_pressed():
+    settings = Settings()
+    settings.enable_trigger_surface_r2 = True
+    controller = Controller(settings)
+    strip = _telemetry(
+        accel=0,
+        surface_rumble_rr=0.5,
+        wheel_on_rumble_strip_rr=1,
+    )
+
+    idle = controller.R2(strip, settings, 1.0)
+    pressed = controller.R2({**strip, "accel": 128}, settings, 1.01)
+
+    assert idle[0] == M_VIBRATE
+    assert idle[1][:2] == (
+        settings.trigger_rumble_strip_freq,
+        settings.trigger_rumble_strip_amp,
+    )
+    assert pressed[0] == M_RIGID

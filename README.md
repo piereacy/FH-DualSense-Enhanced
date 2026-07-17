@@ -14,14 +14,14 @@ FH-DualSense-Enhanced reads Forza Horizon Data Out telemetry and turns braking, 
 
 This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`, with haptics work informed by `HorizonHaptics 1.3.0`.
 
-## Highlights
+## What Enhanced adds over upstream 1.6.2
 
-- Adaptive L2 and R2 triggers for braking, ABS, throttle, and wheelspin.
-- Body haptics for the engine, road surface, suspension, water, tire slip, and impacts.
-- Directional collision feedback and surface-aware grip effects driven by live telemetry.
-- The same trigger and telemetry effect set over USB and Bluetooth.
-- Adjustable strengths, per-car profiles, and community-informed defaults.
-- Optional controller lighting and a focused desktop interface.
+- Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, redline, and directional impact feedback.
+- Expanded adaptive-trigger behavior adds dynamic traction and wheelspin, surface-aware frequency bands, zoned ABS, and optional telemetry layers.
+- USB and Bluetooth use the same stereo haptic mix; Bluetooth adds an HD transport with automatic compatible fallback.
+- Community-informed defaults, persistent Default autosave, named per-car profiles, and safe factory restore provide a more reliable configuration workflow.
+- A responsive multilingual desktop interface adds wheel scrolling, first-run system-language detection, update alerts, and optional controller lighting.
+- The canonical standalone EXE includes verified update downloads, restart replacement, and rollback if replacement fails.
 
 ## Download
 

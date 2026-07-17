@@ -14,12 +14,14 @@ class HapticPcmRenderer:
         numpy_module,
         sample_rate: int,
         smoothing: float = 0.35,
+        soft_clip: bool = False,
     ):
         if int(sample_rate) <= 0:
             raise ValueError("sample_rate must be positive")
         self._np = numpy_module
         self.sample_rate = int(sample_rate)
         self.smoothing = float(smoothing)
+        self.soft_clip = bool(soft_clip)
         self._levels = [0.0, 0.0, 0.0, 0.0, 0.0]
         self._phase_low = 0.0
         self._phase_high = 0.0
@@ -85,15 +87,15 @@ class HapticPcmRenderer:
         else:
             wave_engine = np_module.zeros(frames, dtype=np_module.float64)
 
+        left_mix = wave_low * left_low + wave_high * left_high + wave_engine * engine_amplitude
+        right_mix = wave_low * right_low + wave_high * right_high + wave_engine * engine_amplitude
+        if self.soft_clip:
+            # Bluetooth int8 has little headroom. A normalized tanh limiter
+            # keeps layered detail instead of flattening every overload to ±127.
+            normalizer = math.tanh(1.2)
+            left_mix = np_module.tanh(left_mix * 1.2) / normalizer
+            right_mix = np_module.tanh(right_mix * 1.2) / normalizer
         pcm = np_module.empty((frames, 2), dtype=np_module.float32)
-        pcm[:, 0] = np_module.clip(
-            wave_low * left_low + wave_high * left_high + wave_engine * engine_amplitude,
-            -1.0,
-            1.0,
-        )
-        pcm[:, 1] = np_module.clip(
-            wave_low * right_low + wave_high * right_high + wave_engine * engine_amplitude,
-            -1.0,
-            1.0,
-        )
+        pcm[:, 0] = np_module.clip(left_mix, -1.0, 1.0)
+        pcm[:, 1] = np_module.clip(right_mix, -1.0, 1.0)
         return pcm

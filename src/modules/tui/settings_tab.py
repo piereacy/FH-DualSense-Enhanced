@@ -7,7 +7,6 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Collapsible, Input, Label, Switch
 
 from lang import t
-from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
 from modules.config import preferences
 from modules.tui.widgets import RangeSlider
 
@@ -49,6 +48,8 @@ SETTING_SECTIONS = [
         ("grip_redline_ratio", "Grip trigger near redline at", 0.0, 1.0, ""),
         ("grip_redline_freq", "Grip pulse rate (Hz)", 1, 20, ""),
         ("grip_redline_amp", "Grip pulse strength", 0, 255, ""),
+        ("grip_redline_duty_cycle", "Grip pulse width", 0.20, 0.85, ""),
+        ("grip_redline_attack_strength", "Grip entry impact", 0.0, 1.0, ""),
     ]),
     ("Traction/grip feedback", [
         ("wheelspin_amp", "Grip feedback strength", 0, 255, ""),
@@ -80,6 +81,33 @@ SETTING_SECTIONS = [
 ]
 
 EXPERIMENTAL_SECTIONS = [
+    ("Experimental dynamic resistance", [
+        ("enable_boost_resistance", "Turbo boost resistance", None, None, ""),
+        ("boost_resistance_threshold", "Boost activation threshold", 0.0, 10.0, ""),
+        ("boost_resistance_force", "Boost extra resistance", 0, 255, ""),
+        ("enable_gforce_resistance", "G-force resistance", None, None, ""),
+        ("gforce_resistance_force", "G-force extra resistance", 0, 255, ""),
+        ("gforce_lateral_weight", "Lateral G weight", 0.0, 2.0, ""),
+        ("gforce_longitudinal_weight", "Longitudinal G weight", 0.0, 2.0, ""),
+        ("gforce_full_scale", "G force at maximum resistance", 0.1, 5.0, ""),
+        ("gforce_attack_ms", "G-force attack smoothing (ms)", 1.0, 500.0, ""),
+        ("gforce_release_ms", "G-force release smoothing (ms)", 1.0, 1000.0, ""),
+    ]),
+    ("Experimental collision trigger feedback", [
+        ("enable_collision_trigger_l2", "L2 collision trigger jolt", None, None, ""),
+        ("enable_collision_trigger_r2", "R2 collision trigger jolt", None, None, ""),
+        ("collision_trigger_freq", "Collision trigger frequency (Hz)", 0, 255, ""),
+        ("collision_trigger_amp", "Collision trigger strength", 0, 255, ""),
+        ("collision_trigger_duration_ms", "Collision trigger duration (ms)", 0.0, 500.0, ""),
+    ]),
+    ("Experimental road texture trigger feedback", [
+        ("enable_trigger_surface_l2", "L2 idle road texture", None, None, ""),
+        ("enable_trigger_surface_r2", "R2 idle road texture", None, None, ""),
+        ("trigger_surface_freq", "Road texture frequency (Hz)", 0, 255, ""),
+        ("trigger_surface_amp", "Road texture strength", 0, 255, ""),
+        ("trigger_rumble_strip_freq", "Rumble strip frequency (Hz)", 0, 255, ""),
+        ("trigger_rumble_strip_amp", "Rumble strip strength", 0, 255, ""),
+    ]),
     ("ABS advanced tuning", [
         ("abs_brake_threshold", "Minimum brake input", 0, 255, ""),
         ("abs_min_speed_kmh", "Minimum speed (km/h)", 0.0, 500.0, ""),
@@ -116,6 +144,7 @@ EXPERIMENTAL_SECTIONS = [
         ("grip_redline_gain", "Grip signal gain", 0.0, 2.0, ""),
         ("grip_redline_low_ratio", "Low-frequency pulse ratio", 0.0, 1.0, ""),
         ("grip_redline_background_duck", "Redline background level", 0.0, 1.0, ""),
+        ("grip_redline_attack_duration_ms", "Grip entry impact duration (ms)", 0.0, 500.0, ""),
     ]),
     ("Collision haptics advanced tuning", [
         ("collision_haptics_jerk_threshold", "Collision jerk threshold", 0.0, 50.0, ""),
@@ -229,14 +258,11 @@ class SettingsTab(VerticalScroll):
     SettingsTab #experimental-settings { height: auto; margin: 1 0; }
     SettingsTab #experimental-settings > Contents { height: auto; }
     SettingsTab #reset-settings { width: 1fr; margin: 2 0 1 0; }
-    SettingsTab Label.about-copy { width: 1fr; height: auto; padding: 1; }
-    SettingsTab Button.about-link { width: 1fr; margin: 0 1 1 1; }
     SystemTab Label.error { width: 1fr; height: auto; color: $error; padding: 1; text-style: bold; }
     """
 
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
-    SHOW_ABOUT = True
     SHOW_EXPERIMENTAL = True
 
     def __init__(self, settings):
@@ -311,11 +337,6 @@ class SettingsTab(VerticalScroll):
                     classes="hint",
                 )
                 yield from self._compose_sections(EXPERIMENTAL_SECTIONS)
-        if self.SHOW_ABOUT:
-            yield Label(t("About and licenses"), classes="section")
-            yield Label(ATTRIBUTION, classes="about-copy")
-            yield Button(f"Source: {SOURCE_URL}", id="about-source", classes="about-link")
-            yield Button(f"Sponsor: {SPONSOR_URL}", id="about-sponsor", classes="about-link")
         if self.SHOW_RESET:
             yield Button(t("Reset to defaults"), id="reset-settings", variant="error")
 
@@ -428,12 +449,6 @@ class SettingsTab(VerticalScroll):
     # ---- Reset (two-click confirm) ---------------------------------------
 
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "about-source":
-            self.app._open_url(SOURCE_URL)
-            return
-        if event.button.id == "about-sponsor":
-            self.app._open_url(SPONSOR_URL)
-            return
         if event.button.id != "reset-settings":
             return
         if not self._reset_armed:

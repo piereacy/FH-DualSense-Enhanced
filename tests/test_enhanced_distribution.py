@@ -11,12 +11,33 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "3"
-CURRENT_RELEASE_VERSION = "R3"
+CURRENT_INTERNAL_VERSION = "4"
+CURRENT_RELEASE_VERSION = "R4"
 
 
 def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_retired_ui_codename_only_remains_in_internal_design_guides():
+    retired_name = bytes((77, 105, 107, 117, 32, 67, 111, 110, 115, 111, 108, 101)).decode()
+    allowed = {
+        Path("AGENTS.md"),
+        Path("docs/ARCHITECTURE.md"),
+        Path("docs/DECISIONS.md"),
+    }
+    text_suffixes = {".bat", ".md", ".py", ".sh", ".spec", ".toml", ".yaml", ".yml"}
+
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in text_suffixes:
+            continue
+        relative = path.relative_to(ROOT)
+        if relative in allowed or any(
+            part in {".git", ".venv", ".worktrees", "build", "dist"}
+            for part in relative.parts
+        ):
+            continue
+        assert retired_name not in path.read_text(encoding="utf-8"), relative
 
 
 def test_shared_application_identity_is_enhanced():
@@ -54,12 +75,16 @@ def test_runtime_chrome_does_not_link_to_original_release_updates():
     assert original_releases not in _source("src/modules/tui/main.py")
 
 
-def test_standalone_modes_do_not_show_zuv_update_controls():
+def test_standalone_modes_show_builtin_update_controls_without_zuv_gate():
     gui = _source("src/modules/gui/system_tab.py")
     tui = _source("src/modules/tui/system_tab.py")
 
-    assert "if sentinel_path() is not None:" in gui
-    assert "if sentinel_path() is not None:" in tui
+    assert "sentinel_path" not in gui
+    assert "sentinel_path" not in tui
+    assert "UpdatePhase" in gui
+    assert "UpdatePhase" in tui
+    assert "Automatically check for updates" in gui
+    assert "Automatically check for updates" in tui
     assert "ZUV not found:" not in gui
     assert "ZUV not found:" not in tui
 
@@ -126,14 +151,20 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
 
     assert f"release/{ZUV_NAME}" in workflow
     assert '--update-repo "$GITHUB_REPOSITORY"' in workflow
-    assert "FH-DualSense-Enhanced-$tag.exe" in workflow
+    assert "packaging\\windows\\build_exe.bat" in workflow
     assert "HamzaYslmn/Forza-Horizon-DualSense-Python" not in workflow
-    assert "Download **`win_start.bat`**" in workflow
-    assert "manual ZUV fallback" in workflow
+    assert "Windows 独立 EXE（推荐）" in workflow
+    assert "win_start.bat" in workflow
+    assert "ZUV / Linux 备用方式" in workflow
+    assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R3 中文说明" in workflow
+    assert "Enhanced R4 中文说明" in workflow
+    assert "Enhanced R4 English notes" in workflow
+    assert "关于与许可证" in workflow
+    assert "About and licenses is now a dedicated page" in workflow
     assert "握把换挡冲击" in workflow
     assert "默认关闭 R2 扳机键红线、开启握把红线" in workflow
+    assert "You must disable in-game vibration in Forza" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow
 
@@ -143,8 +174,11 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     build = _source("packaging/windows/build_exe.bat")
     linux_spec = _source("packaging/linux/fhds.spec")
 
-    assert 'name="FH-DualSense-Enhanced"' in spec
+    assert "name=EXE_NAME" in spec
     assert "FH-DualSense-Enhanced-R%VER%.exe" in build
+    assert "FH-DualSense-Update-Helper.exe" in spec
+    assert "FH-DualSense-Update-Helper" in build
+    assert "$p+'.sha256'" in build
     assert "PUBLIC_VERSION = f\"R{VERSION}\"" in spec
     assert "StringStruct('FileVersion', '{PUBLIC_VERSION}')" in spec
     assert "StringStruct('ProductVersion', '{PUBLIC_VERSION}')" in spec
@@ -220,6 +254,25 @@ def test_readmes_are_original_enhanced_project_documentation():
     assert "1.6.2.post1" not in combined
 
 
+def test_readmes_explicitly_compare_enhanced_with_upstream_1_6_2():
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
+    japanese = _source("docs/ReadmeJA.md")
+
+    sections = (
+        (english, "## What Enhanced adds over upstream 1.6.2", "## Download"),
+        (chinese, "## 相比上游 1.6.2 的增强", "## 下载"),
+        (japanese, "## アップストリーム 1.6.2 からの拡張", "## ダウンロード"),
+    )
+    for text, heading, next_heading in sections:
+        assert heading in text
+        body = text.split(heading, 1)[1].split(next_heading, 1)[0]
+        bullets = [line for line in body.splitlines() if line.startswith("- ")]
+        assert 4 <= len(bullets) <= 6
+        assert "Bluetooth" in body
+        assert "1.6.2" not in body
+
+
 def test_readmes_stay_concise_and_avoid_implementation_details():
     english = _source("README.md")
     chinese = _source("docs/ReadmeZH.md")
@@ -229,9 +282,6 @@ def test_readmes_stay_concise_and_avoid_implementation_details():
     for text in (chinese, english, japanese):
         assert len(text.splitlines()) <= 120
         assert "FH-DualSense-Enhanced-R<n>.exe" in text
-        assert "Miku Console" not in text
-        assert "Miku-Stage" not in text
-        assert "Miku-Studio" not in text
         assert "wheelspin" in text.lower()
     assert len(english.split()) <= 900
 
@@ -271,7 +321,7 @@ def test_readmes_require_in_game_vibration_off_but_keep_steam_input_on():
     assert "握把フィードバックが正常に動作しません" in japanese
 
 
-def test_release_identity_uses_public_r2_and_internal_pep440_version():
+def test_release_identity_uses_public_r4_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 

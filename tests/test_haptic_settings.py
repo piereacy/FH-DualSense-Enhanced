@@ -37,7 +37,7 @@ BEHAVIOR_LABELS = {
     "Close the app when the game closes",
     "Move the app to the tray when minimized",
 }
-NORMAL_R3_FIELDS = {
+NORMAL_R4_FIELDS = {
     "ABS (anti-lock brake) rumble": ("abs_amp", "abs_sensitivity"),
     "R2 trigger redline vibration": (
         "rev_limit_ratio",
@@ -49,6 +49,8 @@ NORMAL_R3_FIELDS = {
         "grip_redline_ratio",
         "grip_redline_freq",
         "grip_redline_amp",
+        "grip_redline_duty_cycle",
+        "grip_redline_attack_strength",
     ),
     "Grip gear-shift thump": (
         "grip_gear_shift_strength",
@@ -57,6 +59,27 @@ NORMAL_R3_FIELDS = {
     "Traction/grip feedback": ("wheelspin_amp", "wheelspin_sensitivity"),
 }
 EXPERIMENTAL_FIELDS = (
+    "enable_boost_resistance",
+    "boost_resistance_threshold",
+    "boost_resistance_force",
+    "enable_gforce_resistance",
+    "gforce_resistance_force",
+    "gforce_lateral_weight",
+    "gforce_longitudinal_weight",
+    "gforce_full_scale",
+    "gforce_attack_ms",
+    "gforce_release_ms",
+    "enable_collision_trigger_l2",
+    "enable_collision_trigger_r2",
+    "collision_trigger_freq",
+    "collision_trigger_amp",
+    "collision_trigger_duration_ms",
+    "enable_trigger_surface_l2",
+    "enable_trigger_surface_r2",
+    "trigger_surface_freq",
+    "trigger_surface_amp",
+    "trigger_rumble_strip_freq",
+    "trigger_rumble_strip_amp",
     "abs_brake_threshold",
     "abs_min_speed_kmh",
     "abs_slip_ratio_threshold",
@@ -88,6 +111,7 @@ EXPERIMENTAL_FIELDS = (
     "grip_redline_gain",
     "grip_redline_low_ratio",
     "grip_redline_background_duck",
+    "grip_redline_attack_duration_ms",
     "collision_haptics_jerk_threshold",
     "collision_haptics_duration_ms",
     "collision_haptics_cooldown_ms",
@@ -95,7 +119,15 @@ EXPERIMENTAL_FIELDS = (
     "collision_haptics_weak_side_ratio",
     "collision_background_duck",
 )
-R3_LABELS = {
+EXPERIMENTAL_TRIGGER_SWITCHES = {
+    "enable_boost_resistance",
+    "enable_gforce_resistance",
+    "enable_collision_trigger_l2",
+    "enable_collision_trigger_r2",
+    "enable_trigger_surface_l2",
+    "enable_trigger_surface_r2",
+}
+R4_LABELS = {
     "Sensitivity",
     "Shared feedback",
     "Grip feedback",
@@ -112,10 +144,15 @@ R3_LABELS = {
     "Grip trigger near redline at",
     "Grip pulse rate (Hz)",
     "Grip pulse strength",
+    "Grip pulse width",
+    "Grip entry impact",
     "Traction/grip feedback",
     "Grip feedback strength",
     "Experimental features",
     "Not recommended for manual adjustment.",
+    "Experimental dynamic resistance",
+    "Experimental collision trigger feedback",
+    "Experimental road texture trigger feedback",
     "ABS advanced tuning",
     "Traction/grip advanced tuning",
     "Minimum brake input",
@@ -148,6 +185,33 @@ R3_LABELS = {
     "Grip signal gain",
     "Low-frequency pulse ratio",
     "Redline background level",
+    "Grip entry impact duration (ms)",
+    "R2 optional dynamic resistance",
+    "Boost activation threshold",
+    "Boost extra resistance",
+    "G-force extra resistance",
+    "G-force resistance advanced tuning",
+    "Lateral G weight",
+    "Longitudinal G weight",
+    "G force at maximum resistance",
+    "G-force attack smoothing (ms)",
+    "G-force release smoothing (ms)",
+    "Optional trigger events",
+    "Collision trigger frequency (Hz)",
+    "Collision trigger strength",
+    "Collision trigger duration (ms)",
+    "Road texture frequency (Hz)",
+    "Road texture strength",
+    "Rumble strip frequency (Hz)",
+    "Rumble strip strength",
+    "Collision trigger jolt",
+    "Idle road texture",
+    "L2 collision trigger jolt",
+    "R2 collision trigger jolt",
+    "L2 idle road texture",
+    "R2 idle road texture",
+    "Turbo boost resistance",
+    "G-force resistance",
     "Collision haptics advanced tuning",
     "Collision jerk threshold",
     "Collision duration (ms)",
@@ -158,6 +222,42 @@ R3_LABELS = {
     "R2 trigger gear-shift thump",
     "Grip thump strength",
     "Grip thump length (ms)",
+}
+
+LIGHTING_FIELDS = (
+    "enable_tachometer_lightbar",
+    "tachometer_start_ratio",
+    "tachometer_flash_ratio",
+    "tachometer_flash_rate_hz",
+    "tachometer_brightness",
+    "tachometer_start_red",
+    "tachometer_start_green",
+    "tachometer_start_blue",
+    "tachometer_redline_red",
+    "tachometer_redline_green",
+    "tachometer_redline_blue",
+    "enable_gear_player_leds",
+)
+LIGHTING_LABELS = {
+    "Controller lighting",
+    "Optional visual feedback with independent switches.",
+    "Tachometer lightbar",
+    "Enable tachometer lightbar",
+    "Uses controller lighting only; it does not change trigger or grip feedback.",
+    "Lightbar starts at RPM ratio",
+    "Lightbar flashes at RPM ratio",
+    "Flash rate (Hz)",
+    "Lightbar brightness",
+    "Lightbar colors",
+    "Start color red",
+    "Start color green",
+    "Start color blue",
+    "Redline color red",
+    "Redline color green",
+    "Redline color blue",
+    "Gear player LEDs",
+    "Show gear on player LEDs",
+    "Gears 1 to 5+ use the five white player indicator LEDs.",
 }
 
 
@@ -260,14 +360,14 @@ def test_every_non_english_catalog_translates_application_behavior_labels():
         assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
-def test_gui_and_tui_keep_only_strength_and_sensitivity_in_normal_r2_sections():
+def test_gui_and_tui_expose_identical_normal_r4_tuning_sections():
     for relative in ("src/modules/gui/settings_tab.py", "src/modules/tui/settings_tab.py"):
         sections = _fields_by_section(ROOT / relative, "SETTING_SECTIONS")
-        for title, expected in NORMAL_R3_FIELDS.items():
+        for title, expected in NORMAL_R4_FIELDS.items():
             assert sections[title] == expected
 
 
-def test_gui_and_tui_expose_identical_advanced_r2_fields():
+def test_gui_and_tui_expose_identical_advanced_r4_fields():
     gui = _fields_by_section(
         ROOT / "src/modules/gui/settings_tab.py", "EXPERIMENTAL_SECTIONS"
     )
@@ -277,11 +377,38 @@ def test_gui_and_tui_expose_identical_advanced_r2_fields():
 
     assert gui == tui
     assert tuple(field for fields_ in gui.values() for field in fields_) == EXPERIMENTAL_FIELDS
+    assert gui["Experimental dynamic resistance"] == (
+        "enable_boost_resistance",
+        "boost_resistance_threshold",
+        "boost_resistance_force",
+        "enable_gforce_resistance",
+        "gforce_resistance_force",
+        "gforce_lateral_weight",
+        "gforce_longitudinal_weight",
+        "gforce_full_scale",
+        "gforce_attack_ms",
+        "gforce_release_ms",
+    )
+    assert gui["Experimental collision trigger feedback"] == (
+        "enable_collision_trigger_l2",
+        "enable_collision_trigger_r2",
+        "collision_trigger_freq",
+        "collision_trigger_amp",
+        "collision_trigger_duration_ms",
+    )
+    assert gui["Experimental road texture trigger feedback"] == (
+        "enable_trigger_surface_l2",
+        "enable_trigger_surface_r2",
+        "trigger_surface_freq",
+        "trigger_surface_amp",
+        "trigger_rumble_strip_freq",
+        "trigger_rumble_strip_amp",
+    )
 
 
-def test_all_r2_tuning_fields_are_profile_scoped_settings():
+def test_all_r4_tuning_fields_are_profile_scoped_settings():
     setting_names = {field.name for field in fields(Settings)}
-    normal_fields = {field for values in NORMAL_R3_FIELDS.values() for field in values}
+    normal_fields = {field for values in NORMAL_R4_FIELDS.values() for field in values}
     all_fields = normal_fields | set(EXPERIMENTAL_FIELDS)
 
     assert all_fields <= setting_names
@@ -359,7 +486,7 @@ def test_experimental_settings_are_collapsed_by_default_and_excluded_from_system
 
 def test_tui_experimental_settings_mount_collapsed():
     from textual.app import App, ComposeResult
-    from textual.widgets import Collapsible
+    from textual.widgets import Collapsible, Switch
 
     from modules.tui.settings_tab import SettingsTab
 
@@ -372,20 +499,46 @@ def test_tui_experimental_settings_mount_collapsed():
         async with app.run_test():
             experimental = app.query_one("#experimental-settings", Collapsible)
             assert experimental.collapsed is True
+            for attr in EXPERIMENTAL_TRIGGER_SWITCHES:
+                switch = app.query_one(f"#{attr}", Switch)
+                assert switch.value is False
 
     asyncio.run(check())
 
 
-def test_every_non_english_catalog_translates_r3_settings_labels():
+def test_every_non_english_catalog_translates_r4_settings_labels():
     for path in sorted((ROOT / "src/lang").glob("*.py")):
         if path.name in {"__init__.py", "en.py"}:
             continue
         strings = runpy.run_path(str(path))["STRINGS"]
-        missing = R3_LABELS - strings.keys()
+        missing = R4_LABELS - strings.keys()
         assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
-def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
+def test_gui_and_tui_expose_identical_profile_scoped_lighting_fields():
+    gui = _fields_by_section(
+        ROOT / "src/modules/gui/lighting_tab.py", "LIGHTING_SECTIONS"
+    )
+    tui = _fields_by_section(
+        ROOT / "src/modules/tui/lighting_tab.py", "LIGHTING_SECTIONS"
+    )
+    flattened = tuple(field for values in gui.values() for field in values)
+
+    assert gui == tui
+    assert flattened == LIGHTING_FIELDS
+    assert set(flattened).isdisjoint(GLOBAL_FIELDS)
+
+
+def test_every_non_english_catalog_translates_lighting_labels():
+    for path in sorted((ROOT / "src/lang").glob("*.py")):
+        if path.name in {"__init__.py", "en.py"}:
+            continue
+        strings = runpy.run_path(str(path))["STRINGS"]
+        missing = LIGHTING_LABELS - strings.keys()
+        assert not missing, f"{path.name} is missing {sorted(missing)}"
+
+
+def test_gui_and_tui_keep_experimental_trigger_switches_out_of_driving_controls():
     gui = _sections(ROOT / "src/modules/gui/controls_tab.py", "TRIGGER_CONTROLS")
     tui = _sections(ROOT / "src/modules/tui/controls_tab.py", "TRIGGER_CONTROLS")
 
@@ -397,6 +550,8 @@ def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
     assert groups["R2 - Throttle"]["enable_rev_limiter"] == (
         "R2 trigger redline vibration"
     )
+    visible_switches = {attr for items in groups.values() for attr in items}
+    assert EXPERIMENTAL_TRIGGER_SWITCHES.isdisjoint(visible_switches)
     assert "enable_wheelspin_buzz" not in groups["R2 - Throttle"]
     assert groups["Shared feedback"] == {
         "enable_wheelspin_buzz": "Traction/grip feedback",
@@ -409,6 +564,14 @@ def test_gui_and_tui_separate_trigger_and_grip_redline_controls():
         "grip_redline_left": "Left grip",
         "grip_redline_right": "Right grip",
     }
+
+
+def test_experimental_trigger_switches_default_off():
+    settings = Settings()
+
+    assert all(
+        getattr(settings, attr) is False for attr in EXPERIMENTAL_TRIGGER_SWITCHES
+    )
 
 
 def test_simplified_chinese_distinguishes_r2_trigger_and_grip_redline():
