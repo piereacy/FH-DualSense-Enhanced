@@ -345,8 +345,6 @@ STRINGS.update({
         "已還原預設設定。重新啟動程式後會更新介面語言。",
     "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
         "Default 會自動儲存並跨重新啟動保留。需要可重複使用的快照時，請另存為命名設定檔。",
-    "Miku Console uses the shared settings, haptic engine, and controller backend.":
-        "Miku Console 使用統一的設定、觸覺引擎和控制器後端。",
 })
 
 STRINGS.update({
@@ -360,7 +358,7 @@ STRINGS.update({
     "Waiting for packets": "等待遙測資料", "USB or Bluetooth": "USB 或 Bluetooth",
     "Transport: {transport}": "連線方式：{transport}", "Forza telemetry": "Forza 遙測",
     "UDP data out": "UDP Data Out", "UDP port {port}": "UDP 連接埠 {port}",
-    "Quick access": "快速入口", "R4 workspace": "R4 工作台", "DualSense": "DualSense",
+    "Quick access": "快速入口", "DualSense": "DualSense",
     "Profile": "設定檔", "Automatically check for updates": "自動檢查更新",
     "Download updates in the background": "在背景下載更新", "Check now": "立即檢查",
     "Download update": "下載更新", "Restart and install": "重新啟動並安裝",

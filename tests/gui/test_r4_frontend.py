@@ -26,13 +26,16 @@ def _constant_translation_keys() -> set[str]:
     return keys
 
 
-def test_console_is_the_only_gui_shell_and_windows_asset_is_canonical():
+def test_single_gui_shell_and_windows_asset_are_canonical():
     main = (ROOT / "src/modules/gui/main.py").read_text(encoding="utf-8")
+    overview = (ROOT / "src/modules/gui/overview_tab.py").read_text(encoding="utf-8")
     spec = (ROOT / "packaging/windows/fhds.spec").read_text(encoding="utf-8")
     build = (ROOT / "packaging/windows/build_exe.bat").read_text(encoding="utf-8")
 
     assert not (ROOT / "src/modules/gui/variants.py").exists()
-    assert "Miku Console" in main
+    assert "self.root.title(APP_NAME)" in main
+    assert '"Logs", "About"' in main
+    assert "workspace" not in overview.lower()
     assert "current_variant" not in main
     assert "FHDS_BUILD_VARIANT" not in spec
     assert "ui_variant.txt" not in spec

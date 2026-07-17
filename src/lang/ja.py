@@ -309,8 +309,6 @@ STRINGS.update({
         "初期設定に戻しました。再起動すると表示言語が更新されます。",
     "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
         "Default は自動保存され、再起動後も保持されます。再利用する場合は名前付きプロファイルに保存してください。",
-    "Miku Console uses the shared settings, haptic engine, and controller backend.":
-        "Miku Console は共通の設定、触覚エンジン、コントローラーバックエンドを使用します。",
 })
 
 STRINGS.update({
@@ -325,7 +323,7 @@ STRINGS.update({
     "Transport: {transport}": "接続方式：{transport}", "Forza telemetry": "Forza テレメトリ",
     "UDP data out": "UDP Data Out", "UDP port {port}": "UDP ポート {port}",
     "UDP port {port} in use": "UDP ポート {port} は使用中です",
-    "Quick access": "クイックアクセス", "R4 workspace": "R4 ワークスペース", "DualSense": "DualSense",
+    "Quick access": "クイックアクセス", "DualSense": "DualSense",
     "Profile": "プロファイル", "Automatically check for updates": "更新を自動確認",
     "Download updates in the background": "更新をバックグラウンドでダウンロード",
     "Check now": "今すぐ確認", "Download update": "更新をダウンロード",

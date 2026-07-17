@@ -1,3 +1,4 @@
+import asyncio
 import runpy
 from pathlib import Path
 
@@ -22,36 +23,70 @@ def test_shared_about_metadata_matches_the_license_exactly():
     assert values["SPONSOR_URL"] == SPONSOR_URL
 
 
-def test_gui_settings_exposes_attribution_and_clickable_links():
-    source = _source("src/modules/gui/settings_tab.py")
+def test_gui_about_page_exposes_attribution_and_clickable_links():
+    source = _source("src/modules/gui/about_tab.py")
+    settings = _source("src/modules/gui/settings_tab.py")
 
-    assert "def _build_about_card" in source
     assert "ATTRIBUTION" in source
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
+    assert "ATTRIBUTION" not in settings
+    assert "About and licenses" not in settings
 
 
-def test_tui_settings_exposes_attribution_and_clickable_links():
-    source = _source("src/modules/tui/settings_tab.py")
+def test_tui_about_page_exposes_attribution_and_clickable_links():
+    source = _source("src/modules/tui/about_tab.py")
+    settings = _source("src/modules/tui/settings_tab.py")
 
     assert "ATTRIBUTION" in source
     assert "about-source" in source
     assert "about-sponsor" in source
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
+    assert "ATTRIBUTION" not in settings
+    assert "About and licenses" not in settings
 
 
 def test_sponsor_is_only_exposed_in_about_and_license_surfaces():
     gui_main = _source("src/modules/gui/main.py")
     tui_main = _source("src/modules/tui/main.py")
-    gui_settings = _source("src/modules/gui/settings_tab.py")
-    tui_settings = _source("src/modules/tui/settings_tab.py")
+    gui_about = _source("src/modules/gui/about_tab.py")
+    tui_about = _source("src/modules/tui/about_tab.py")
 
     assert "sponsor_btn" not in gui_main
     assert "bb-sponsor" not in tui_main
     assert "action_sponsor" not in tui_main
-    assert "self.app._open_url(SPONSOR_URL)" in gui_settings
-    assert "self.app._open_url(SPONSOR_URL)" in tui_settings
+    assert "self.app._open_url(SPONSOR_URL)" in gui_about
+    assert "self.app._open_url(SPONSOR_URL)" in tui_about
+
+
+def test_about_page_is_after_logs_in_both_interfaces():
+    gui = _source("src/modules/gui/main.py")
+    tui = _source("src/modules/tui/main.py")
+
+    assert '"System", "Language", "Logs", "About"' in gui
+    assert "self.about_tab = AboutTab" in gui
+    assert '"About":    self.about_tab' in gui
+    assert tui.index('id="tab-logs"') < tui.index('id="tab-about"')
+
+
+def test_tui_about_page_mounts_with_both_required_links():
+    from textual.app import App, ComposeResult
+    from textual.widgets import Button
+
+    from modules.tui.about_tab import AboutTab
+
+    class AboutHarness(App):
+        def compose(self) -> ComposeResult:
+            yield AboutTab()
+
+    async def check():
+        app = AboutHarness()
+        async with app.run_test():
+            assert app.query_one("#about-source", Button)
+            assert app.query_one("#about-sponsor", Button)
+
+    asyncio.run(check())
 
 
 def test_every_non_english_catalog_translates_about_heading():

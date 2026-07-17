@@ -109,7 +109,7 @@
 
 - 在独立仓库创建并推送稳定 tag `R4`，由 `.github/workflows/release.yml` 构建 ZUV、Windows EXE、Linux ELF 和 Release。
 - Release body 必须含中文 R4 说明，并把实验性扳机功能标为默认关闭、位于实验性折叠区。
-- 不在面向用户的 Release 文案中使用 “Miku Console” 产品概念。
+- 不在面向用户的 Release 文案中使用已停用的界面设计代号。
 - 等待 Actions 全部完成，核对规范 EXE、`.sha256`、ZUV、启动脚本、Linux ELF、`LICENSE` 和第三方声明。
 - 验证内置更新器能够发现 R4；R3 到 R4 的实际替换若无法安全自动执行，明确记录为未执行。
 

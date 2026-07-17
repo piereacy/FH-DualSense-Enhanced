@@ -39,6 +39,7 @@ from modules.update.install import cleanup_previous_update, self_update_supporte
 
 from . import theme as T
 from . import widgets as W
+from .about_tab import AboutTab
 from .controls_tab import ControlsTab
 from .dialogs import FactoryResetDialog, UnsavedProfileDialog
 from .lang_tab import LangTab
@@ -59,7 +60,7 @@ HAPTIC_DURATION_S = 0.10
 
 NAV_ITEMS = (
     "Overview", "Driving", "Haptics", "Lighting", "Profiles",
-    "System", "Language", "Logs",
+    "System", "Language", "Logs", "About",
 )
 NAV_LABELS = {
     "Overview": "Overview",
@@ -70,6 +71,7 @@ NAV_LABELS = {
     "System": "System and updates",
     "Language": "Language",
     "Logs": "Logs",
+    "About": "About and licenses",
 }
 class _QueueLogHandler(logging.Handler):
     """Worker threads push records here; the Tk loop drains them."""
@@ -123,7 +125,7 @@ class TriggerGUI:
         # Window
         self.root = ctk.CTk()
         self._wheel_router = W.install_wheel_router(self.root)
-        self.root.title(f"{APP_NAME} · Miku Console")
+        self.root.title(APP_NAME)
         self._set_window_icon()
         self._center_window()
         self._tray = TrayController(
@@ -340,6 +342,7 @@ class TriggerGUI:
         self.system_tab = SystemTab(self._content, self)
         self.lang_tab = LangTab(self._content, self)
         self.logs_tab = LogsTab(self._content, self)
+        self.about_tab = AboutTab(self._content, self)
         self._tab_frames = {
             "Overview": self.overview_tab,
             "Driving": self.controls_tab,
@@ -349,6 +352,7 @@ class TriggerGUI:
             "System":   self.system_tab,
             "Language": self.lang_tab,
             "Logs":     self.logs_tab,
+            "About":    self.about_tab,
         }
         self._active_nav: str | None = None
         self._select_nav("Overview")

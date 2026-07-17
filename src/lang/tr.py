@@ -309,8 +309,6 @@ STRINGS.update({
         "Fabrika ayarları geri yüklendi. Arayüz dilini yenilemek için uygulamayı yeniden başlatın.",
     "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
         "Default otomatik kaydedilir ve yeniden başlatmalarda korunur. Yeniden kullanılabilir kopya için adlandırılmış profil kaydedin.",
-    "Miku Console uses the shared settings, haptic engine, and controller backend.":
-        "Miku Console ortak ayarları, dokunsal motoru ve kontrolcü arka ucunu kullanır.",
 })
 
 STRINGS.update({
@@ -325,7 +323,7 @@ STRINGS.update({
     "Transport: {transport}": "Bağlantı: {transport}", "Forza telemetry": "Forza telemetrisi",
     "UDP data out": "UDP Data Out", "UDP port {port}": "UDP bağlantı noktası {port}",
     "UDP port {port} in use": "UDP bağlantı noktası {port} kullanımda",
-    "Quick access": "Hızlı erişim", "R4 workspace": "R4 çalışma alanı", "DualSense": "DualSense",
+    "Quick access": "Hızlı erişim", "DualSense": "DualSense",
     "Profile": "Profil", "Automatically check for updates": "Güncellemeleri otomatik denetle",
     "Download updates in the background": "Güncellemeleri arka planda indir",
     "Check now": "Şimdi denetle", "Download update": "Güncellemeyi indir",

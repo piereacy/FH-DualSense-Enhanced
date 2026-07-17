@@ -67,17 +67,6 @@ class OverviewTab(ctk.CTkFrame):
             row, text=t("Restore defaults"), command=self.app.request_factory_reset
         ).grid(row=1, column=1, sticky="ew", padx=(T.PAD_XS, 0), pady=(T.PAD_XS, 0))
 
-        note = W.Card(scroll)
-        note.pack(fill="x", pady=(T.PAD_MD, 0))
-        W.H2(note, t("R4 workspace")).pack(
-            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
-        )
-        W.Hint(
-            note,
-            t("Miku Console uses the shared settings, haptic engine, and controller backend."),
-            wrap=self.app.px(760),
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
-
     @staticmethod
     def _status_card(parent, index, title, value, hint):
         row, column = divmod(index, 2)

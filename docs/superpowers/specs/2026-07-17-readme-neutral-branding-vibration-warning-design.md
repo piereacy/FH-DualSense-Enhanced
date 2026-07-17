@@ -2,11 +2,11 @@
 
 ## 本轮目标
 
-本轮只修改面向 GitHub 用户的三语 README，不修改 Enhanced R4 程序窗口、总览页、翻译目录、Release workflow 或 Windows 版本资源。应用内移除 “Miku Console” 及其他 R4 功能设计留到用户后续讨论。
+本轮只修改面向 GitHub 用户的三语 README，不修改 Enhanced R4 程序窗口、总览页、翻译目录、Release workflow 或 Windows 版本资源。应用内移除旧界面设计代号及其他 R4 功能设计留到用户后续讨论。
 
 ## README 命名
 
-- 根 `README.md`、`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 的功能亮点不再使用 “Miku Console” 作为产品概念。
+- 根 `README.md`、`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 的功能亮点不再使用旧界面设计代号作为产品概念。
 - 对应条目改为中性的“简洁桌面界面”，保留可选手柄灯效这一用户可感知能力。
 - 项目名称仍为 `FH-DualSense-Enhanced`，不引入新的界面品牌或代号。
 
@@ -22,7 +22,7 @@
 
 ## 测试和交付
 
-- 文档契约检查三种 README 均不包含 “Miku Console”。
+- 文档契约检查三种 README 均不包含旧界面设计代号。
 - 文档契约检查英文、简体中文和日语都同时包含“关闭游戏内振动”和“保持 Steam Input 开启”的强制含义。
 - 三份 README 继续满足篇幅上限和相对链接检查。
 - 在 R4 分支运行定向测试、全量 `pytest` 和 `git diff --check`。

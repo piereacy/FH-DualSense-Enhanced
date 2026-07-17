@@ -9,7 +9,6 @@ import threading
 import customtkinter as ctk
 
 from lang import t
-from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
 from modules.config import preferences
 
 from . import theme as T
@@ -214,7 +213,6 @@ class SettingsTab(ctk.CTkFrame):
     """Header + scrollable sectioned list. System tab subclasses this."""
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
-    SHOW_ABOUT = True
     SHOW_EXPERIMENTAL = True
     PAGE_TITLE = "Grip haptics and tuning"
     PAGE_SUBTITLE = "All changes save instantly."
@@ -246,8 +244,6 @@ class SettingsTab(ctk.CTkFrame):
             self._build_section_card(section, fields)
         if self.SHOW_EXPERIMENTAL:
             self._build_experimental_card()
-        if self.SHOW_ABOUT:
-            self._build_about_card()
         if self.SHOW_RESET:
             self._reset_btn = W.DangerButton(self._scroll, t("Reset to defaults"),
                                              command=self._on_reset)
@@ -280,28 +276,6 @@ class SettingsTab(ctk.CTkFrame):
             self._experimental_body.pack(fill="x", padx=T.PAD_SM, pady=(0, T.PAD_SM))
         else:
             self._experimental_body.pack_forget()
-
-    def _build_about_card(self):
-        card = W.Card(self._scroll)
-        card.pack(fill="x", pady=(0, T.PAD_MD))
-        W.H2(card, t("About and licenses")).pack(
-            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
-        )
-        W.Body(card, ATTRIBUTION, wraplength=self.app.px(620)).pack(
-            anchor="w", fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM)
-        )
-        W.GhostButton(
-            card,
-            text=f"Source: {SOURCE_URL}",
-            command=lambda: self.app._open_url(SOURCE_URL),
-            anchor="w",
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
-        W.GhostButton(
-            card,
-            text=f"Sponsor: {SPONSOR_URL}",
-            command=lambda: self.app._open_url(SPONSOR_URL),
-            anchor="w",
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 
     def _build_section_card(self, section_title: str, fields: list, parent=None):
         card = W.Card(parent or self._scroll)

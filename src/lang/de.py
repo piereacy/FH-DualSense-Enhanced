@@ -346,8 +346,6 @@ STRINGS.update({
         "Werkseinstellungen wiederhergestellt. Zum Aktualisieren der Oberflächensprache neu starten.",
     "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
         "Default speichert automatisch und bleibt nach Neustarts erhalten. Für eine wiederverwendbare Momentaufnahme ein benanntes Profil speichern.",
-    "Miku Console uses the shared settings, haptic engine, and controller backend.":
-        "Miku Console nutzt die gemeinsamen Einstellungen, die Haptik-Engine und das Controller-Backend.",
 })
 
 STRINGS.update({
@@ -361,7 +359,7 @@ STRINGS.update({
     "Waiting for packets": "Warten auf Telemetrie", "USB or Bluetooth": "USB oder Bluetooth",
     "Transport: {transport}": "Verbindung: {transport}", "Forza telemetry": "Forza-Telemetrie",
     "UDP data out": "UDP Data Out", "UDP port {port}": "UDP-Port {port}",
-    "Quick access": "Schnellzugriff", "R4 workspace": "R4-Arbeitsbereich", "DualSense": "DualSense",
+    "Quick access": "Schnellzugriff", "DualSense": "DualSense",
     "Profile": "Profil", "Automatically check for updates": "Automatisch nach Updates suchen",
     "Download updates in the background": "Updates im Hintergrund herunterladen",
     "Check now": "Jetzt prüfen", "Download update": "Update herunterladen",

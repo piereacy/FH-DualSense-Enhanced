@@ -320,8 +320,6 @@ STRINGS.update({
         "Заводские настройки восстановлены. Перезапустите программу для обновления языка интерфейса.",
     "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
         "Default сохраняется автоматически и остаётся после перезапуска. Для повторного использования сохраните именованный профиль.",
-    "Miku Console uses the shared settings, haptic engine, and controller backend.":
-        "Miku Console использует общие настройки, тактильный движок и бэкенд контроллера.",
 })
 
 STRINGS.update({
@@ -336,7 +334,7 @@ STRINGS.update({
     "Transport: {transport}": "Подключение: {transport}", "Forza telemetry": "Телеметрия Forza",
     "UDP data out": "UDP Data Out", "UDP port {port}": "UDP-порт {port}",
     "UDP port {port} in use": "UDP-порт {port} уже используется",
-    "Quick access": "Быстрый доступ", "R4 workspace": "Рабочая область R4", "DualSense": "DualSense",
+    "Quick access": "Быстрый доступ", "DualSense": "DualSense",
     "Profile": "Профиль", "Automatically check for updates": "Автоматически проверять обновления",
     "Download updates in the background": "Загружать обновления в фоне",
     "Check now": "Проверить сейчас", "Download update": "Загрузить обновление",

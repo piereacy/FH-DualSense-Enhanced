@@ -309,8 +309,6 @@ STRINGS.update({
         "已还原默认设置。重启程序后会刷新界面语言。",
     "Default autosaves and persists across restarts. Save a named profile when you want a reusable snapshot.":
         "Default 会自动保存并跨重启保留。需要可重复使用的快照时，请保存为命名配置。",
-    "Miku Console uses the shared settings, haptic engine, and controller backend.":
-        "Miku Console 使用统一的设置、触觉引擎和手柄后端。",
 })
 
 STRINGS.update({
@@ -339,7 +337,6 @@ STRINGS.update({
     "UDP port {port}": "UDP 端口 {port}",
     "UDP port {port} in use": "UDP 端口 {port} 已被占用",
     "Quick access": "快速入口",
-    "R4 workspace": "R4 工作台",
     "DualSense": "DualSense",
     "Profile": "配置",
     "Automatically check for updates": "自动检查更新",

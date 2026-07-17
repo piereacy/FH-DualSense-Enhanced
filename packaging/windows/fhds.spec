@@ -45,7 +45,7 @@ VSVersionInfo(
     StringFileInfo([
       StringTable('040904B0', [
         StringStruct('CompanyName', 'FH-DualSense-Enhanced Contributors'),
-        StringStruct('FileDescription', 'Enhanced Forza Horizon DualSense haptics - Miku Console'),
+        StringStruct('FileDescription', 'Enhanced Forza Horizon DualSense haptics'),
         StringStruct('FileVersion', '{PUBLIC_VERSION}'),
         StringStruct('InternalName', '{EXE_NAME}'),
         StringStruct('LegalCopyright', '(C) 2025 Hamza Yesilmen (HamzaYslmn). Attribution & Sponsor License.'),

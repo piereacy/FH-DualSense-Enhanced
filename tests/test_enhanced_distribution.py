@@ -19,6 +19,24 @@ def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def test_retired_ui_codename_only_remains_in_internal_design_guides():
+    retired_name = bytes((77, 105, 107, 117, 32, 67, 111, 110, 115, 111, 108, 101)).decode()
+    allowed = {
+        Path("AGENTS.md"),
+        Path("docs/ARCHITECTURE.md"),
+        Path("docs/DECISIONS.md"),
+    }
+    text_suffixes = {".bat", ".md", ".py", ".sh", ".spec", ".toml", ".yaml", ".yml"}
+
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in text_suffixes:
+            continue
+        relative = path.relative_to(ROOT)
+        if relative in allowed or any(part in {".git", ".venv", "build", "dist"} for part in relative.parts):
+            continue
+        assert retired_name not in path.read_text(encoding="utf-8"), relative
+
+
 def test_shared_application_identity_is_enhanced():
     about = runpy.run_path(str(ROOT / "src/modules/about.py"))
     project = tomllib.loads(_source("src/pyproject.toml"))
@@ -136,13 +154,14 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "win_start.bat" in workflow
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
-    assert "Miku-Stage" not in workflow
-    assert "Miku-Studio" not in workflow
-    assert "Miku Console" not in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
     assert "Enhanced R4 中文说明" in workflow
+    assert "Enhanced R4 English notes" in workflow
+    assert "关于与许可证" in workflow
+    assert "About and licenses is now a dedicated page" in workflow
     assert "握把换挡冲击" in workflow
     assert "默认关闭 R2 扳机键红线、开启握把红线" in workflow
+    assert "You must disable in-game vibration in Forza" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow
 
@@ -153,8 +172,6 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     linux_spec = _source("packaging/linux/fhds.spec")
 
     assert "name=EXE_NAME" in spec
-    assert "Miku-Stage" not in spec
-    assert "Miku-Studio" not in spec
     assert "FH-DualSense-Enhanced-R%VER%.exe" in build
     assert "FH-DualSense-Update-Helper.exe" in spec
     assert "FH-DualSense-Update-Helper" in build
@@ -262,9 +279,6 @@ def test_readmes_stay_concise_and_avoid_implementation_details():
     for text in (chinese, english, japanese):
         assert len(text.splitlines()) <= 120
         assert "FH-DualSense-Enhanced-R<n>.exe" in text
-        assert "Miku Console" not in text
-        assert "Miku-Stage" not in text
-        assert "Miku-Studio" not in text
         assert "wheelspin" in text.lower()
     assert len(english.split()) <= 900
 

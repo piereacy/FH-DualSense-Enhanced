@@ -53,7 +53,7 @@ def test_release_parser_selects_canonical_asset_and_requires_checksum():
     assert parsed.asset_name == "FH-DualSense-Enhanced-R4.exe"
     assert GitHubReleaseClient._parse_release(release_payload(checksum=False)) is None
     legacy = release_payload()
-    legacy["assets"][0]["name"] = "FH-DualSense-Enhanced-R4-Miku-Console.exe"
+    legacy["assets"][0]["name"] = "FH-DualSense-Enhanced-R4-legacy-ui.exe"
     assert GitHubReleaseClient._parse_release(legacy) is None
 
 

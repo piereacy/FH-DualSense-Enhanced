@@ -7,7 +7,6 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Collapsible, Input, Label, Switch
 
 from lang import t
-from modules.about import ATTRIBUTION, SOURCE_URL, SPONSOR_URL
 from modules.config import preferences
 from modules.tui.widgets import RangeSlider
 
@@ -259,14 +258,11 @@ class SettingsTab(VerticalScroll):
     SettingsTab #experimental-settings { height: auto; margin: 1 0; }
     SettingsTab #experimental-settings > Contents { height: auto; }
     SettingsTab #reset-settings { width: 1fr; margin: 2 0 1 0; }
-    SettingsTab Label.about-copy { width: 1fr; height: auto; padding: 1; }
-    SettingsTab Button.about-link { width: 1fr; margin: 0 1 1 1; }
     SystemTab Label.error { width: 1fr; height: auto; color: $error; padding: 1; text-style: bold; }
     """
 
     SECTIONS = SETTING_SECTIONS
     SHOW_RESET = True
-    SHOW_ABOUT = True
     SHOW_EXPERIMENTAL = True
 
     def __init__(self, settings):
@@ -341,11 +337,6 @@ class SettingsTab(VerticalScroll):
                     classes="hint",
                 )
                 yield from self._compose_sections(EXPERIMENTAL_SECTIONS)
-        if self.SHOW_ABOUT:
-            yield Label(t("About and licenses"), classes="section")
-            yield Label(ATTRIBUTION, classes="about-copy")
-            yield Button(f"Source: {SOURCE_URL}", id="about-source", classes="about-link")
-            yield Button(f"Sponsor: {SPONSOR_URL}", id="about-sponsor", classes="about-link")
         if self.SHOW_RESET:
             yield Button(t("Reset to defaults"), id="reset-settings", variant="error")
 
@@ -458,12 +449,6 @@ class SettingsTab(VerticalScroll):
     # ---- Reset (two-click confirm) ---------------------------------------
 
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "about-source":
-            self.app._open_url(SOURCE_URL)
-            return
-        if event.button.id == "about-sponsor":
-            self.app._open_url(SPONSOR_URL)
-            return
         if event.button.id != "reset-settings":
             return
         if not self._reset_armed:

@@ -18,6 +18,7 @@ from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
 
+from .about_tab import AboutTab
 from .controls_tab import ControlsTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
@@ -122,6 +123,8 @@ class TriggerTUI(App):
                 yield LangTab(self.settings)
             with TabPane(t("Logs"), id="tab-logs"):
                 yield LogsTab()
+            with TabPane(t("About and licenses"), id="tab-about"):
+                yield AboutTab()
         with Horizontal(id="bottombar"):
             yield Button(f"q  {t('Quit')}", id="bb-quit", classes="bb-btn")
             yield Static(id="bb-spacer")

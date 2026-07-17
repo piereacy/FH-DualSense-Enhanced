@@ -70,7 +70,9 @@ flowchart LR
 
 GUI 的 Tk widget 只由主线程访问。后台日志进入最多 4000 条的 queue，再由 Tk 定时读取。最小化到托盘由 `settings.minimize_to_tray` 控制；窗口关闭、托盘退出、游戏关闭、遥测超时和更新重启都进入 `TriggerGUI.request_close()`，再由同一 teardown 顺序退出。托盘实现位于 `src/modules/gui/tray.py`。
 
-Enhanced R4 只保留 Miku Console 左侧导航壳层。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。长页面使用 `widgets.FastScroll` 注册到根窗口 `WheelRouter`：路由器按指针命中的最近祖先选择内层滚动画布，内层到达目标方向边界后才转交外层。驾驶反馈页的卡片保持自然高度，内容宽度低于阈值时只重新排列为单列，不重建开关。Per-Monitor v2 DPI awareness 和 CustomTkinter scaling 保持不变，裁切由滚动边界和响应式布局解决。
+Enhanced R4 只保留一个左侧导航壳层。其青绿色视觉来源在项目内部称为 Miku Console 设计理念，但当前产品名称、窗口标题和构建资产只使用 `FH-DualSense-Enhanced`。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。长页面使用 `widgets.FastScroll` 注册到根窗口 `WheelRouter`：路由器按指针命中的最近祖先选择内层滚动画布，内层到达目标方向边界后才转交外层。驾驶反馈页的卡片保持自然高度，内容宽度低于阈值时只重新排列为单列，不重建开关。Per-Monitor v2 DPI awareness 和 CustomTkinter scaling 保持不变，裁切由滚动边界和响应式布局解决。
+
+GUI 的 `src/modules/gui/about_tab.py` 和 TUI 的 `src/modules/tui/about_tab.py` 是独立的“关于与许可证”页面，均位于日志之后，复用 `src/modules/about.py` 的署名、原项目和 Sponsor URL。`settings_tab.py` 只负责握把触觉与调校，不再承载许可证卡片；总览页也不展示 Sponsor 或无功能的版本工作台。
 
 ### 3.3 Windows 独立 EXE 更新器
 
@@ -287,7 +289,7 @@ Enhanced R4 普通设置分别显示 R2 扳机键红线、握把红线、tractio
 - native HID 和 DSX 共享 `open/close/set/connected` 最小接口，loop 不应按具体类分支，能力差异通过 `is_dsx` 和 transport 表达。
 - HID 报告中的 offsets、flags、左右映射和 BT CRC 是协议边界，不应因代码美化而改变。
 - GUI/TUI 与 backend 分线程，Tk widget 不得在 worker thread 直接更新。
-- Miku Console 是唯一 GUI 壳层；不得重新引入构建时界面分叉、界面 marker 或多资产更新契约。
+- 当前青绿色 GUI 是唯一壳层；Miku Console 只表示老三样中记录的内部设计来源，不是产品名称。不得重新引入构建时界面分叉、界面 marker 或多资产更新契约。
 - 更新 Helper 是唯一允许替换运行中 EXE 的路径；主程序不得自行覆盖 `sys.executable`，更新目标必须使用规范文件名。
 - `Default` 持久化和 named/global 字段边界属于配置兼容协议；新默认值不能通过启动时强制覆盖已经保存的用户值。
 - Profile 的 global 和 per-profile 边界是兼容性协议，修改字段归属需要迁移和 round-trip 测试。

@@ -1,4 +1,4 @@
-"""R4 Miku-inspired GUI design tokens.
+"""R4 teal GUI design tokens.
 
 This is a color-language reference only. No character art, branded font, or
 third-party visual asset is bundled. Never hardcode page colors elsewhere.
@@ -20,7 +20,7 @@ TEXT       = ("#102b2d", "#eafdfc")
 TEXT_MUTED = ("#3f6668", "#a9cfcd")
 TEXT_FAINT = ("#67898a", "#739b9b")
 
-# Accent (Miku teal)
+# Accent
 ACCENT       = "#39c5bb"
 ACCENT_HOVER = "#2da99f"
 ACCENT_SOFT  = ("#20a99f", "#86e8e1")
@@ -61,6 +61,7 @@ ICON = {
     "System":   "\U0001F5A5",  # computer
     "Language": "\U0001F310",  # globe
     "Logs":     "\U0001F4DC",  # scroll
+    "About":    "\u24D8",      # information
     "pause":    "\u23F8",
     "play":     "\u25B6",
     "clear":    "\U0001F5D1",

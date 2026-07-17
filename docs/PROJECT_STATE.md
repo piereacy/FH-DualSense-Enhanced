@@ -9,13 +9,13 @@
 - 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `4`，公开候选名称 `Enhanced R4`。
 - 当前公开稳定版仍是 Enhanced R3。Enhanced R4 尚未 tag、推送或发布，不得移动或覆盖 R3 tag。
 - GitHub 默认分支 `main` 已通过独立提交 `b2bb4ca` 更新精简三语 README，没有合并 R4 业务代码。
-- GitHub `main` 又通过独立提交 `e57e7c1` 删除 README 中的 “Miku Console” 卖点，并把关闭 Forza 游戏内振动改为必需设置；现有界面设计仍保留。
+- GitHub `main` 又通过独立提交 `e57e7c1` 删除 README 中的旧界面代号卖点，并把关闭 Forza 游戏内振动改为必需设置；现有青绿色界面设计仍保留。
 - 当前阶段：Enhanced R4 的触觉、灯效、内置更新器和最终 Console 前端已经进入生产代码。单一 Windows 候选 EXE 已完成构建和本地冒烟，等待用户审阅。
 - 本轮界面与配置实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
 
 ## 当前开发重心
 
-当前 README 整改已经完成。下一阶段等待用户继续讨论 Enhanced R4 功能设计；现有 Miku Console 视觉设计必须保留，不能因为 README 使用中性措辞而删除。只有收到明确发布指令后才准备或发布 Enhanced R4。
+当前开发重心是完成独立“关于与许可证”页面、清理用户可见的旧界面代号、重新验证 Windows EXE，并按用户授权发布 Enhanced R4。现有青绿色主题和布局继续保留。
 
 ## 最近完成的功能
 
@@ -23,7 +23,7 @@
 
 ### 单一 Console 前端和滚动布局
 
-- 已删除 `src/modules/gui/variants.py`，不再支持 Stage、Studio、`FHDS_UI_VARIANT`、`FHDS_BUILD_VARIANT` 或 `data/ui_variant.txt`。GUI 固定为 Miku Console，入口在 `src/modules/gui/main.py`。
+- 已删除 `src/modules/gui/variants.py`，不再支持 Stage、Studio、`FHDS_UI_VARIANT`、`FHDS_BUILD_VARIANT` 或 `data/ui_variant.txt`。GUI 固定为单一正式壳层，入口在 `src/modules/gui/main.py`。
 - Windows 构建只生成规范资产 `FH-DualSense-Enhanced-R4.exe` 及同名 `.sha256`，对应配置在 `packaging/windows/fhds.spec` 和 `packaging/windows/build_exe.bat`。
 - `src/modules/gui/controls_tab.py` 的驾驶反馈卡片使用自然高度和可滚动容器，不再被窗口高度压缩。逻辑宽度至少 720 px 时显示两列，较窄时自动切为单列。
 - `src/modules/gui/widgets.py` 的根级 `WheelRouter` 统一处理滚轮。滚轮位于开关等子控件上时仍滚动所在页面；嵌套滚动到达边界后才转交外层；slider 不会被滚轮误改。
@@ -51,8 +51,8 @@
 - 已删除重复的 `docs/ReadmeEN.md`，也删除三语同页锚点、后台行为等小设置、算法与报文说明、版本历史和开发构建命令。
 - README 使用通用资产名 `FH-DualSense-Enhanced-R<n>.exe`，没有把尚未发布的 R4 写成当前稳定下载。
 - README 与契约测试在 R4 分支提交为 `311c268`；移植到 `main` 后生成 `b2bb4ca` 并已推送到 `origin/main`。
-- 三语 README 已移除 “Miku Console” 功能卖点，并用 `IMPORTANT` 明确 Steam Input 保持开启、Forza 游戏内振动必须关闭。R4 分支提交为 `12478e4`，`main` 提交为 `e57e7c1`。
-- 本轮没有修改窗口标题、主题、总览页、翻译目录、Release workflow 或 Windows 文件描述，Miku Console 视觉设计继续保留。
+- 三语 README 已移除旧界面代号功能卖点，并用 `IMPORTANT` 明确 Steam Input 保持开启、Forza 游戏内振动必须关闭。R4 分支提交为 `12478e4`，`main` 提交为 `e57e7c1`。
+- 旧一轮未修改窗口标题、主题、总览页、翻译目录、Release workflow 或 Windows 文件描述；当前发布收尾正在中性化窗口与文件描述，并保留青绿色视觉设计。
 
 ### R4 既有触觉和灯效
 
@@ -62,7 +62,7 @@
 ## 正在进行的工作
 
 - 本地候选位于工作区根部 `outputs/FH-DualSense-Enhanced-R4-review/FH-DualSense-Enhanced-R4.exe`，等待用户审阅。
-- Enhanced R4 未发布。本分支当前只进行本地提交和验证，不自动推送、tag 或创建 Release。
+- Enhanced R4 尚未发布；用户已经授权完成验证后推送、建立 `R4` tag 并创建中英双语 Release。
 
 ## 尚未完成的工作
 
@@ -133,7 +133,7 @@
 - 全量测试：`src/.venv/Scripts/python.exe -m pytest -q`，结果 `294 passed in 4.07s`。
 - README 重构后 R4 分支全量测试：`294 passed in 4.66s`；相对链接检查通过。
 - README 提交移植到稳定 R3 `main` 后全量测试：`242 passed in 4.31s`；GitHub API 已确认英文根首页、中日文页面和 `docs/ReadmeEN.md` 删除均已生效。
-- 强制振动警告更新后 R4 分支全量测试：`295 passed in 4.58s`；稳定 R3 `main` 全量测试：`243 passed in 3.87s`。GitHub API 已确认三语警告和 README 中无 “Miku Console”。
+- 强制振动警告更新后 R4 分支全量测试：`295 passed in 4.58s`；稳定 R3 `main` 全量测试：`243 passed in 3.87s`。GitHub API 已确认三语警告和 README 中无旧界面代号。
 - 字节码检查：`src/.venv/Scripts/python.exe -m compileall -q src/modules src/lang`，通过。
 - 空白检查：`git diff --check`，通过；仅有 Git 的 LF/CRLF 提示。
 - 125% Windows 显示缩放目视检查：驾驶反馈页卡片保持自然高度，右侧滚动条可用，底部内容位于滚动区域内，没有再被卡片裁切。
@@ -142,7 +142,7 @@
 - 最终 Windows 构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R4.exe`，大小 `46,320,513` bytes，SHA-256 `828bb93104e7c446e509d6e8d1ae3d253b79bea8c812e3b99710c9669f632ee2`。
 - 配套 `.sha256` 与实际文件匹配；`FileVersion` 和 `ProductVersion` 为 `R4`，`OriginalFilename` 为 `FH-DualSense-Enhanced-R4.exe`。
 - PyInstaller archive 包含 `data/FH-DualSense-Update-Helper.exe`，不包含 `ui_variant` 或 `variants`；`--help` 退出码为 `0`。
-- 冻结 GUI 已启动并显示 `FH-DualSense-Enhanced · Miku Console`，随后正常关闭，没有生成 crash log 或残留主程序进程。
+- 上一候选冻结 GUI 已正常启动和关闭，没有生成 crash log 或残留主程序进程；当前中性窗口标题的新候选尚待重建冒烟。
 - Enhanced R4 真实 USB/Bluetooth Forza 测试：本轮未执行。
 - 本轮游戏内振动状态：未参与。
 - 本轮 Steam Input 状态：未参与。
@@ -166,4 +166,4 @@
 7. `src/modules/gui/main.py`、`src/modules/gui/widgets.py`、`src/modules/config/preferences.py`
 8. `git status --short --branch`、`git diff` 和最近 10 条提交
 
-下一次会话建议首先处理的具体任务：等待用户提出 Enhanced R4 功能设计并进入讨论。保留现有 Miku Console 视觉设计；不要根据 README 的中性命名自行删除主题或界面。没有新的发布指令时，不要自动 tag、推送或发布 Enhanced R4。
+下一次会话建议首先处理的具体任务：若 Enhanced R4 发布流程尚未完成，优先核对 CI、Release 资产和中英双语正文；若已经完成，则处理自动更新 24 小时节流、红线振动调校或后续前端优化。保留现有青绿色视觉设计，不恢复界面变体。

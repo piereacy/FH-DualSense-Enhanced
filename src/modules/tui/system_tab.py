@@ -20,7 +20,6 @@ log = logging.getLogger("fhds")
 class SystemTab(SettingsTab):
     SECTIONS = SYSTEM_SECTIONS
     SHOW_RESET = False
-    SHOW_ABOUT = False
     SHOW_EXPERIMENTAL = False
 
     DEFAULT_CSS = """
