@@ -13,7 +13,6 @@ APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
 CURRENT_INTERNAL_VERSION = "4"
 CURRENT_RELEASE_VERSION = "R4"
-DOCUMENTED_STABLE_RELEASE = "R4"
 
 
 def _source(path: str) -> str:
@@ -98,15 +97,15 @@ def test_linux_launcher_downloads_or_reuses_the_enhanced_bundle():
 
 
 def test_linux_docs_describe_manual_udev_setup_without_launcher_claims():
-    chinese = _source("README.md")
-    english = _source("docs/ReadmeEN.md")
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
     japanese = _source("docs/ReadmeJA.md")
     workflow = _source(".github/workflows/release.yml")
 
     for text in (chinese, english, japanese, workflow):
         assert "70-dualsense.rules" in text
     for text in (chinese, english, japanese):
-        assert "sudo udevadm control --reload-rules" in text
+        assert "sudo udevadm control --reload-rules" not in text
 
     assert "启动器会给出安装提示" not in chinese
     assert "launcher provides setup guidance" not in english
@@ -166,27 +165,29 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     assert "FH-DualSense-Enhanced-R$VER" in _source("packaging/linux/build_elf.sh")
 
 
-def test_readme_uses_same_page_three_language_navigation():
+def test_readme_defaults_to_english_with_separate_language_pages():
     assert not (ROOT / "README_EN.md").exists(), "obsolete root English README remains"
+    assert not (ROOT / "docs/ReadmeEN.md").exists(), "duplicate English README remains"
     assert not (ROOT / "docs/ReadmeTR.md").exists(), "obsolete Turkish README remains"
-    chinese = _source("README.md")
-    english = _source("docs/ReadmeEN.md")
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
     japanese = _source("docs/ReadmeJA.md")
 
-    assert '<a id="readme-zh-cn"></a>' in chinese
-    assert '<a id="readme-en"></a>' in chinese
-    assert '<a id="readme-ja"></a>' in chinese
+    assert '<strong>English</strong>' in english
+    assert 'href="docs/ReadmeZH.md">简体中文</a>' in english
+    assert 'href="docs/ReadmeJA.md">日本語</a>' in english
+    assert 'href="../README.md">English</a>' in chinese
     assert '<strong>简体中文</strong>' in chinese
-    assert 'href="#readme-zh-cn">简体中文</a>' in chinese
-    assert 'href="#readme-en">English</a>' in chinese
-    assert 'href="#readme-ja">日本語</a>' in chinese
-    assert 'href="docs/ReadmeEN.md">English</a>' not in chinese
-    assert 'href="docs/ReadmeJA.md">日本語</a>' not in chinese
+    assert 'href="ReadmeJA.md">日本語</a>' in chinese
+    assert 'href="../README.md">English</a>' in japanese
+    assert 'href="ReadmeZH.md">简体中文</a>' in japanese
+    assert '<strong>日本語</strong>' in japanese
 
-    assert "唯一的 Windows 主程序" in chinese
-    assert "FH-DualSense-Enhanced-R4.exe" in chinese
-    assert "win_start.bat" in chinese
+    for text in (english, chinese, japanese):
+        assert "FH-DualSense-Enhanced-R<n>.exe" in text
+        assert "win_start.bat" in text
     assert "manual" in english.lower() and ZUV_NAME in english
+    assert "手动" in chinese and ZUV_NAME in chinese
     assert "手動" in japanese and ZUV_NAME in japanese
     assert "社区" in chinese
     assert "community" in english.lower()
@@ -194,22 +195,24 @@ def test_readme_uses_same_page_three_language_navigation():
 
 
 def test_readmes_are_original_enhanced_project_documentation():
-    chinese = _source("README.md")
-    english = _source("docs/ReadmeEN.md")
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
     japanese = _source("docs/ReadmeJA.md")
     combined = chinese + "\n" + english + "\n" + japanese
 
-    for text in (
-        "Steam Input",
-        "Data Out",
-        "5300",
-        "win_start.bat",
-        ZUV_NAME,
-        "USB",
-        "Bluetooth",
-        "HorizonHaptics",
-    ):
-        assert text.lower() in combined.lower()
+    for readme in (chinese, english, japanese):
+        for text in (
+            "Steam Input",
+            "Data Out",
+            "5300",
+            "win_start.bat",
+            ZUV_NAME,
+            "USB",
+            "Bluetooth",
+            "HorizonHaptics",
+            "Forza-Horizon-DualSense-Python 1.6.2",
+        ):
+            assert text.lower() in readme.lower()
 
     for forbidden in (
         "steamcommunity.com/id/teccno",
@@ -227,30 +230,36 @@ def test_readmes_are_original_enhanced_project_documentation():
     assert "firewall" in english.lower()
     assert "ファイアウォール" in japanese
     assert "握把触覚" in japanese
-    for text in (chinese, english, japanese):
-        assert DOCUMENTED_STABLE_RELEASE in text
-        assert "Forza-Horizon-DualSense-Python 1.6.2" in text
-        assert "HorizonHaptics 1.3.0" in text
-        assert "1.6.2.post1" in text
+    assert "1.6.2.post1" not in combined
 
 
-def test_readmes_describe_r4_features_and_public_artifact_names():
-    chinese = _source("README.md")
-    english = _source("docs/ReadmeEN.md")
+def test_readmes_stay_concise_and_avoid_implementation_details():
+    english = _source("README.md")
+    chinese = _source("docs/ReadmeZH.md")
     japanese = _source("docs/ReadmeJA.md")
+    combined = "\n".join((english, chinese, japanese))
 
     for text in (chinese, english, japanese):
-        assert "FH-DualSense-Enhanced-R4.exe" in text
+        assert len(text.splitlines()) <= 120
+        assert "FH-DualSense-Enhanced-R<n>.exe" in text
         assert "Miku-Stage" not in text
         assert "Miku-Studio" not in text
         assert "wheelspin" in text.lower()
-        assert "ABS wall" in text
-        assert "R4-preview" in text
+    assert len(english.split()) <= 900
 
-    assert "默认关闭 R2 扳机键红线、开启握把红线" in chinese
-    assert "HapticPcmRenderer" in chinese
-    assert "398 字节 HID report `0x36`" in chinese
-    assert "单槽最新帧队列" in chinese
+    for detail in (
+        "Background behavior",
+        "后台行为",
+        "バックグラウンド動作",
+        "HapticPcmRenderer",
+        "report `0x36`",
+        "398 字节",
+        "单槽最新帧队列",
+        "R4-preview",
+        "ABS wall",
+        "1.6.2.post1",
+    ):
+        assert detail not in combined
 
 
 def test_release_identity_uses_public_r4_and_internal_pep440_version():
