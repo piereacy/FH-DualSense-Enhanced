@@ -18,18 +18,12 @@ TRIGGER_CONTROLS = [
         ("enable_brake_static_wall", "Static brake wall"),
         ("enable_brake_resistance",  "Brake stiffness"),
         ("enable_handbrake_bonus",   "Handbrake stiffness bonus"),
-        ("enable_collision_trigger_l2", "Collision trigger jolt"),
-        ("enable_trigger_surface_l2", "Idle road texture"),
     ]),
     ("R2 - Throttle", [
         ("enable_gear_shift",          "Shift thump"),
         ("enable_idle_buzz",           "Idle buzz"),
         ("enable_rev_limiter",         "R2 trigger redline vibration"),
         ("enable_throttle_resistance", "Throttle stiffness"),
-        ("enable_boost_resistance",    "Turbo boost resistance"),
-        ("enable_gforce_resistance",   "G-force resistance"),
-        ("enable_collision_trigger_r2", "Collision trigger jolt"),
-        ("enable_trigger_surface_r2",  "Idle road texture"),
     ]),
     ("Shared feedback", [
         ("enable_wheelspin_buzz", "Traction/grip feedback"),
