@@ -21,7 +21,7 @@ This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6
 - Directional collision feedback and surface-aware grip effects driven by live telemetry.
 - The same trigger and telemetry effect set over USB and Bluetooth.
 - Adjustable strengths, per-car profiles, and community-informed defaults.
-- Optional controller lighting and a focused Miku Console interface.
+- Optional controller lighting and a focused desktop interface.
 
 ## Download
 
@@ -60,7 +60,8 @@ If loopback packets are not received, try `::1` in both the game and the app.
 2. Start FH-DualSense-Enhanced and confirm that the controller and UDP listener are ready.
 3. Start the game.
 
-Telemetry haptics work independently of the in-game vibration option. Keeping game vibration enabled preserves menu and cutscene rumble, but it can mask directional impact feedback. Disable it temporarily when comparing direction or duplicated effects.
+> [!IMPORTANT]
+> Keep Steam Input enabled, but turn **Vibration** off in Forza's own settings. Native game rumble competes with and masks the controller's grip haptics, so grip feedback will not work correctly while in-game vibration is enabled.
 
 ## USB and Bluetooth
 
