@@ -10,6 +10,8 @@
   <p><strong>Adaptive triggers and telemetry-driven DualSense haptics for Forza Horizon on PC.</strong></p>
 </div>
 
+> Optimized for the Forza Horizon series, especially Forza Horizon 6.
+
 FH-DualSense-Enhanced reads Forza Horizon Data Out telemetry and turns braking, throttle, engine, road, tire, and impact data into DualSense feedback.
 
 This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`, with haptics work informed by `HorizonHaptics 1.3.0`.
@@ -61,7 +63,7 @@ If loopback packets are not received, try `::1` in both the game and the app.
 3. Start the game.
 
 > [!IMPORTANT]
-> Keep Steam Input enabled, but turn **Vibration** off in Forza's own settings. Native game rumble competes with and masks the controller's grip haptics, so grip feedback will not work correctly while in-game vibration is enabled.
+> Keep Steam Input enabled, but turn **Vibration** off in Forza's own settings. Native game rumble competes with and masks the controller's grip haptics, so grip feedback will not work correctly when both are active.
 
 ## USB and Bluetooth
 
@@ -84,13 +86,13 @@ Both connections use the same telemetry decisions and support adaptive triggers,
 
 ## DualSense button icons
 
-For PlayStation button prompts in Forza Horizon 6, see [PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2). Game updates may restore the original files, so the mod may need to be applied again.
+For PlayStation button prompts in Forza Horizon 6, see [PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2). Game updates may restore the original files, so this may need to be re-applied.
 
 ## Credits and license
 
 Originally created by Hamza Yeşilmen (HamzaYslmn):
 [Forza-Horizon-DualSense-Python](https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python)
 
-The body-haptics work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics), and the Bluetooth protocol work references [vDS](https://github.com/hurryman2212/vds). Their notices are included in [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+The body-haptics work references [HorizonHaptics](https://github.com/haritha99ch/HorizonHaptics), and the Bluetooth protocol work references [vDS](https://github.com/hurryman2212/vds). Their notices remain credited in this repository.
 
 This project uses a custom source-available license for personal, non-commercial use. Read [LICENSE](LICENSE) before copying, modifying, or redistributing it.
