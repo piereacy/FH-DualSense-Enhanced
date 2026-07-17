@@ -8,6 +8,7 @@
 - 当前分支：`feat/r4-ui-updater-haptics`。
 - 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `4`，公开候选名称 `Enhanced R4`。
 - 当前公开稳定版仍是 Enhanced R3。Enhanced R4 尚未 tag、推送或发布，不得移动或覆盖 R3 tag。
+- GitHub 默认分支 `main` 已通过独立提交 `b2bb4ca` 更新精简三语 README，没有合并 R4 业务代码。
 - 当前阶段：Enhanced R4 的触觉、灯效、内置更新器和最终 Console 前端已经进入生产代码。单一 Windows 候选 EXE 已完成构建和本地冒烟，等待用户审阅。
 - 本轮界面与配置实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
 
@@ -41,7 +42,14 @@
 - 第一次启动且不存在有效偏好文件时，`src/modules/config/system_language.py` 根据 Windows 显示语言选择 `en`、`de`、`ja`、`ru`、`tr`、`zh` 或 `zh_tw`；之后仍可手动修改语言。
 - “系统与更新”导航项旁会在发现可用更新、下载中、校验中、等待安装或更新错误时显示白点。进入页面不会提前清除提示。
 - 更新器只接受唯一规范资产 `FH-DualSense-Enhanced-R<n>.exe` 及其 `.sha256`，不再按前端变体选择资产。
-- README 的简中、English、日本語同页内容、独立语言镜像和六个非英语语言目录已同步本轮行为。
+- 应用内六个非英语语言目录已同步 R4 界面行为；用户 README 另按英文、简体中文、日语三个独立页面维护。
+
+### 精简并拆分用户 README
+
+- 根 `README.md` 现在是 96 行英文默认首页；`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 是各 96 行的独立简体中文和日语页面，三者顶部可互相切换。
+- 已删除重复的 `docs/ReadmeEN.md`，也删除三语同页锚点、后台行为等小设置、算法与报文说明、版本历史和开发构建命令。
+- README 使用通用资产名 `FH-DualSense-Enhanced-R<n>.exe`，没有把尚未发布的 R4 写成当前稳定下载。
+- README 与契约测试在 R4 分支提交为 `311c268`；移植到 `main` 后生成 `b2bb4ca` 并已推送到 `origin/main`。
 
 ### R4 既有触觉和灯效
 
@@ -80,7 +88,7 @@
 - `src/lang/` 仍保留旧 ZUV sentinel 的未使用翻译键。
 - USB audio endpoint 依赖名称 heuristic，没有用户选择和多 host API fallback。
 - DSX 无 ACK、不提供本项目 body haptics，也不接收灯效。
-- 根 README 与两个独立语言镜像存在重复内容，后续仍有漂移风险。
+- 三个独立语言 README 仍有事实重复；契约测试不能发现所有翻译语义漂移。
 
 ## 暂时不要修改的部分
 
@@ -100,19 +108,25 @@
 - 更新器：`src/modules/update/github.py`、`service.py`、`presentation.py`。
 - 构建和发布：`packaging/windows/fhds.spec`、`packaging/windows/build_exe.bat`、`.github/workflows/release.yml`。
 - 测试：`tests/gui/test_r4_frontend.py`、`tests/gui/test_scroll_routing.py`、`tests/test_profile_persistence.py`、`tests/test_system_language.py`、`tests/test_updater.py`、`tests/test_enhanced_distribution.py`。
+- 用户文档：`README.md`、`docs/ReadmeZH.md`、`docs/ReadmeJA.md`；`docs/ReadmeEN.md` 已删除。
 - 长期文档：`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DECISIONS.md`。
-- 本轮设计：`docs/superpowers/specs/2026-07-16-r4-console-persistence-interactions-design.md`、`docs/superpowers/plans/2026-07-17-r4-console-persistence-interactions.md`。
+- 本轮设计：`docs/superpowers/specs/2026-07-16-r4-console-persistence-interactions-design.md`、`docs/superpowers/plans/2026-07-17-r4-console-persistence-interactions.md`、`docs/superpowers/specs/2026-07-17-readme-language-split-and-simplification-design.md`。
 
 ## 当前 Git 工作区状态
 
 - 分支：`feat/r4-ui-updater-haptics`。
 - 本轮实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
+- README 设计提交：`43a0486 docs: design concise split-language README`。
+- R4 分支 README 提交：`311c268 docs: simplify split-language README`。
+- GitHub `main` README 提交：`b2bb4ca docs: simplify split-language README`，已推送。
 - 本文件提交并完成最终状态检查后，工作树应保持清洁。
 - 构建产物、截图、缓存和用户偏好文件没有加入 Git。
 
 ## 已执行的测试和验证结果
 
 - 全量测试：`src/.venv/Scripts/python.exe -m pytest -q`，结果 `294 passed in 4.07s`。
+- README 重构后 R4 分支全量测试：`294 passed in 4.66s`；相对链接检查通过。
+- README 提交移植到稳定 R3 `main` 后全量测试：`242 passed in 4.31s`；GitHub API 已确认英文根首页、中日文页面和 `docs/ReadmeEN.md` 删除均已生效。
 - 字节码检查：`src/.venv/Scripts/python.exe -m compileall -q src/modules src/lang`，通过。
 - 空白检查：`git diff --check`，通过；仅有 Git 的 LF/CRLF 提示。
 - 125% Windows 显示缩放目视检查：驾驶反馈页卡片保持自然高度，右侧滚动条可用，底部内容位于滚动区域内，没有再被卡片裁切。

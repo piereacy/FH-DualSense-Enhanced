@@ -2,6 +2,15 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-07-17：README 默认英文、按语言拆分并保持用户导向
+
+- 状态：三份用户指南、文档契约和 GitHub 默认分支均已更新。
+- 背景：根 README 曾把简体中文、English、日本語完整拼接在同一页面，达到 641 行，并混入后台开关、Default 保存、滚轮、更新提示、触觉算法、Bluetooth 报文和开发构建等细节，普通用户难以找到安装与必要配置。
+- 决定：根 `README.md` 只提供英文；`docs/ReadmeZH.md` 和 `docs/ReadmeJA.md` 分别提供简体中文与日语；删除重复的 `docs/ReadmeEN.md`。三个页面顶部互相链接，正文保持相同主题顺序。
+- 内容边界：只保留项目用途、最多六条核心能力、下载、Steam Input、Data Out、启动顺序、USB/Bluetooth 简述、五项常见故障、按键图标 Mod、来源与许可证。小设置、版本历史、实现算法、报文字节、开发和构建命令不进入用户 README。
+- 发布边界：README 使用 `FH-DualSense-Enhanced-R<n>.exe` 和 latest Release 链接，不硬编码尚未发布的具体版本。README 提交可独立同步到 `main`，不得借此合并未发布的业务代码。
+- 后果：新增功能不自动获得 README 条目，只有改变首次安装、必需配置、核心产品能力或高频排障时才更新三种语言。实现细节应写入 `docs/ARCHITECTURE.md`、`docs/DECISIONS.md` 或 Release body。
+
 ## 2026-07-17：Enhanced R4 收敛为单一 Console，并建立持久化 Default 交互
 
 - 状态：生产代码、自动测试、125% 缩放下的源码 GUI 视觉/滚轮冒烟、单一 EXE 构建和冻结程序冒烟均已完成；100% 与 150% 缩放和用户交互验收待执行。
