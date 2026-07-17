@@ -220,7 +220,7 @@ jobs:
 
             “系统与更新”旁会在发现、下载、校验、待安装或带 Release 信息的错误状态下显示白点；打开页面不会清除提醒。内置更新器只接受规范资产 `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}` 及其 SHA-256，不再区分界面方案。
 
-            Windows 独立 EXE 可以在“系统与更新”中检查更新、选择后台下载、显示进度，并在用户确认后重启安装。更新助手等待主程序退出后替换文件，失败时恢复 `.old`。ZUV 和启动脚本继续作为网络或 Linux 环境下的备用安装方式，不再是 Windows EXE 更新的必要条件。
+            Windows 独立 EXE 可以在“系统与更新”中检查更新、选择后台下载、显示进度，并在用户确认后重启安装。更新助手等待主程序退出后替换文件，失败时恢复 `.old`。ZUV 和启动脚本继续作为网络或 Linux 环境下的备用安装方式，不再是 Windows EXE 更新的必要条件。发布流水线会使用跨平台生成器写入 SHA-256 sidecar，并在上传前重新计算和验证；缺失或不匹配会直接阻止 Release。
 
             红线握把反馈改为非线性感知增益，默认强度提高到 `220/255`，low 比例提高到 `45%`，脉冲宽度提高到 `70%`，并加入可调的进入冲击。默认关闭 R2 扳机键红线、开启握把红线；握把默认仍在左侧。可选握把换挡冲击继续默认关闭。
 
@@ -255,7 +255,7 @@ jobs:
 
             The `Default` profile now autosaves and persists across restarts. Window close, tray quit, game close, and update restart share one exit path. If profile-scoped values in `Default` changed during the session, the app can save them as a named profile with `profile1`, `profile2`, and so on prefilled, or exit without creating a named profile. Factory reset preserves named profiles, resets profile and system settings, re-detects the Windows display language, and returns to `Default`. First launch also selects a supported system language automatically, while later manual language choices remain available.
 
-            A white update dot appears beside System and Updates while a release is available, downloading, verifying, ready to install, or associated with an update error. Opening the page does not dismiss it. The built-in updater accepts only the canonical `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}` asset and its SHA-256 file. It supports background download, visible progress, user-confirmed restart installation, replacement by a separate helper after the main process exits, and `.old` rollback if replacement fails. ZUV remains optional for the standalone Windows EXE.
+            A white update dot appears beside System and Updates while a release is available, downloading, verifying, ready to install, or associated with an update error. Opening the page does not dismiss it. The built-in updater accepts only the canonical `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}` asset and its SHA-256 file. It supports background download, visible progress, user-confirmed restart installation, replacement by a separate helper after the main process exits, and `.old` rollback if replacement fails. ZUV remains optional for the standalone Windows EXE. The release pipeline now writes SHA-256 sidecars with a cross-platform generator and recomputes them before upload; a missing or mismatched sidecar blocks the Release.
 
             Grip redline feedback now uses a nonlinear perceptual gain curve, with a default peak of `220/255`, a `45%` low-frequency ratio, a `70%` pulse width, and an adjustable entry impact. R2-trigger redline feedback is disabled by default, grip redline feedback is enabled by default on the left grip, and the optional grip gear-shift thump remains disabled by default.
 
