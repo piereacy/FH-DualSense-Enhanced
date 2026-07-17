@@ -10,7 +10,7 @@
 - 当前公开稳定版仍是 Enhanced R3。Enhanced R4 尚未 tag、推送或发布，不得移动或覆盖 R3 tag。
 - GitHub 默认分支 `main` 已通过独立提交 `b2bb4ca` 更新精简三语 README，没有合并 R4 业务代码。
 - GitHub `main` 又通过独立提交 `e57e7c1` 删除 README 中的旧界面代号卖点，并把关闭 Forza 游戏内振动改为必需设置；现有青绿色界面设计仍保留。
-- 当前阶段：Enhanced R4 的触觉、灯效、内置更新器和最终 Console 前端已经进入生产代码。单一 Windows 候选 EXE 已完成构建和本地冒烟，等待用户审阅。
+- 当前阶段：Enhanced R4 的触觉、灯效、内置更新器、最终桌面前端和独立“关于与许可证”页面已经进入生产代码。最终 Windows 候选 EXE 已完成本地构建与自动验证，正在准备推送、仓库独立化和发布。
 - 本轮界面与配置实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
 
 ## 当前开发重心
@@ -45,6 +45,13 @@
 - 更新器只接受唯一规范资产 `FH-DualSense-Enhanced-R<n>.exe` 及其 `.sha256`，不再按前端变体选择资产。
 - 应用内六个非英语语言目录已同步 R4 界面行为；用户 README 另按英文、简体中文、日语三个独立页面维护。
 
+### 独立关于页和正式命名
+
+- GUI 左侧导航和 TUI 页签均在“日志”之后提供独立“关于与许可证”页面，继续显示 `LICENSE` 要求的署名、原项目与 Sponsor 链接。
+- “握把触觉”不再混入许可证卡片；总览页已删除没有状态或动作的版本工作台。
+- 窗口标题固定为 `FH-DualSense-Enhanced`，Windows `FileDescription` 为 `Enhanced Forza Horizon DualSense haptics`；旧界面代号只留在老三样记录设计来源。
+- `.github/workflows/release.yml` 的 Enhanced R4 正文包含信息对等的完整中文和英文说明。
+
 ### 精简并拆分用户 README
 
 - 根 `README.md` 现在是 96 行英文默认首页；`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 是各 96 行的独立简体中文和日语页面，三者顶部可互相切换。
@@ -61,8 +68,8 @@
 
 ## 正在进行的工作
 
-- 本地候选位于工作区根部 `outputs/FH-DualSense-Enhanced-R4-review/FH-DualSense-Enhanced-R4.exe`，等待用户审阅。
-- Enhanced R4 尚未发布；用户已经授权完成验证后推送、建立 `R4` tag 并创建中英双语 Release。
+- 本地最终候选位于 `packaging/windows/dist/FH-DualSense-Enhanced-R4.exe`，配套 `.sha256` 已生成并匹配。
+- Enhanced R4 尚未发布；用户已经授权完成验证后推送、使 GitHub 仓库脱离 fork network、建立 `R4` tag 并创建中英双语 Release。
 
 ## 尚未完成的工作
 
@@ -119,6 +126,8 @@
 
 - 分支：`feat/r4-ui-updater-haptics`。
 - 本轮实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
+- 独立关于页设计提交：`7172afb docs: design standalone about page`。
+- 独立关于页、正式命名与双语 Release 正文提交：`653d23e feat: add standalone about page`。
 - README 设计提交：`43a0486 docs: design concise split-language README`。
 - R4 分支 README 提交：`311c268 docs: simplify split-language README`。
 - GitHub `main` README 提交：`b2bb4ca docs: simplify split-language README`，已推送。
@@ -130,7 +139,7 @@
 
 ## 已执行的测试和验证结果
 
-- 全量测试：`src/.venv/Scripts/python.exe -m pytest -q`，结果 `294 passed in 4.07s`。
+- 当前最终候选全量测试：`uv run --project src pytest -q`，结果 `300 passed in 4.73s`。
 - README 重构后 R4 分支全量测试：`294 passed in 4.66s`；相对链接检查通过。
 - README 提交移植到稳定 R3 `main` 后全量测试：`242 passed in 4.31s`；GitHub API 已确认英文根首页、中日文页面和 `docs/ReadmeEN.md` 删除均已生效。
 - 强制振动警告更新后 R4 分支全量测试：`295 passed in 4.58s`；稳定 R3 `main` 全量测试：`243 passed in 3.87s`。GitHub API 已确认三语警告和 README 中无旧界面代号。
@@ -139,10 +148,10 @@
 - 125% Windows 显示缩放目视检查：驾驶反馈页卡片保持自然高度，右侧滚动条可用，底部内容位于滚动区域内，没有再被卡片裁切。
 - 合成滚轮冒烟：鼠标位于子级开关时，单次标准滚轮使页面移动约 36 px；嵌套边界和 slider 保护由 `tests/gui/test_scroll_routing.py` 覆盖。
 - 退出弹窗目视检查：中文标题、说明、默认 `profile1` 输入框及三个操作按钮均完整显示。
-- 最终 Windows 构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R4.exe`，大小 `46,320,513` bytes，SHA-256 `828bb93104e7c446e509d6e8d1ae3d253b79bea8c812e3b99710c9669f632ee2`。
+- 最终 Windows 构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R4.exe`，大小 `46,321,844` bytes，SHA-256 `2dcc88b0f8270726255e8453177273b112ed10df4c8c49e3ef9fbaf18d050925`。
 - 配套 `.sha256` 与实际文件匹配；`FileVersion` 和 `ProductVersion` 为 `R4`，`OriginalFilename` 为 `FH-DualSense-Enhanced-R4.exe`。
-- PyInstaller archive 包含 `data/FH-DualSense-Update-Helper.exe`，不包含 `ui_variant` 或 `variants`；`--help` 退出码为 `0`。
-- 上一候选冻结 GUI 已正常启动和关闭，没有生成 crash log 或残留主程序进程；当前中性窗口标题的新候选尚待重建冒烟。
+- PyInstaller archive 包含 `data/FH-DualSense-Update-Helper.exe`、`modules.gui.about_tab` 和 `modules.tui.about_tab`，不包含 `ui_variant` 或 `variants`；`--help` 退出码为 `0`。
+- 最终冻结 GUI 已完成隐藏和普通启动冒烟，均未产生新 crash log 或残留进程；当前自动化桌面环境未从进程 API 取得 Tk 窗口标题，因此独立关于页的最终可见布局仍未人工点击检查。窗口标题由源码与契约测试确认。
 - Enhanced R4 真实 USB/Bluetooth Forza 测试：本轮未执行。
 - 本轮游戏内振动状态：未参与。
 - 本轮 Steam Input 状态：未参与。
@@ -153,7 +162,7 @@
 - 真实手柄、Forza 遥测、触觉和灯效验证尚未执行。
 - Linux ELF 构建尚未执行。
 - 下一稳定版尚不存在，因此真实自动更新替换尚未执行。
-- 本轮没有失败的自动测试、编译检查或构建步骤。
+- 第一次本地构建因 PyPI TLS 握手中断而失败；确认 PyInstaller 和依赖已存在于 uv 缓存后，以 `UV_OFFLINE=1` 重建成功。没有失败的代码测试、编译检查或最终构建步骤。
 
 ## 下一次会话开始时优先阅读
 
@@ -166,4 +175,4 @@
 7. `src/modules/gui/main.py`、`src/modules/gui/widgets.py`、`src/modules/config/preferences.py`
 8. `git status --short --branch`、`git diff` 和最近 10 条提交
 
-下一次会话建议首先处理的具体任务：若 Enhanced R4 发布流程尚未完成，优先核对 CI、Release 资产和中英双语正文；若已经完成，则处理自动更新 24 小时节流、红线振动调校或后续前端优化。保留现有青绿色视觉设计，不恢复界面变体。
+下一次会话建议首先处理的具体任务：若 Enhanced R4 发布流程尚未完成，优先核对 fork 脱离结果、CI、Release 资产和中英双语正文；若已经完成，则处理自动更新 24 小时节流、红线振动调校或后续前端优化。保留现有青绿色视觉设计，不恢复界面变体。
