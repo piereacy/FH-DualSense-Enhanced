@@ -9,12 +9,13 @@
 - 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `4`，公开候选名称 `Enhanced R4`。
 - 当前公开稳定版仍是 Enhanced R3。Enhanced R4 尚未 tag、推送或发布，不得移动或覆盖 R3 tag。
 - GitHub 默认分支 `main` 已通过独立提交 `b2bb4ca` 更新精简三语 README，没有合并 R4 业务代码。
+- GitHub `main` 又通过独立提交 `e57e7c1` 删除 README 中的 “Miku Console” 卖点，并把关闭 Forza 游戏内振动改为必需设置；现有界面设计仍保留。
 - 当前阶段：Enhanced R4 的触觉、灯效、内置更新器和最终 Console 前端已经进入生产代码。单一 Windows 候选 EXE 已完成构建和本地冒烟，等待用户审阅。
 - 本轮界面与配置实现提交：`88c4d52 feat: finalize R4 Console persistence experience`。
 
 ## 当前开发重心
 
-当前重心是审阅唯一保留的 Miku Console，重点确认长页面滚动、不同显示缩放、Default 持久化、退出另存和恢复默认设置。只有收到明确发布指令后才准备或发布 Enhanced R4。
+当前 README 整改已经完成。下一阶段等待用户继续讨论 Enhanced R4 功能设计；现有 Miku Console 视觉设计必须保留，不能因为 README 使用中性措辞而删除。只有收到明确发布指令后才准备或发布 Enhanced R4。
 
 ## 最近完成的功能
 
@@ -50,6 +51,8 @@
 - 已删除重复的 `docs/ReadmeEN.md`，也删除三语同页锚点、后台行为等小设置、算法与报文说明、版本历史和开发构建命令。
 - README 使用通用资产名 `FH-DualSense-Enhanced-R<n>.exe`，没有把尚未发布的 R4 写成当前稳定下载。
 - README 与契约测试在 R4 分支提交为 `311c268`；移植到 `main` 后生成 `b2bb4ca` 并已推送到 `origin/main`。
+- 三语 README 已移除 “Miku Console” 功能卖点，并用 `IMPORTANT` 明确 Steam Input 保持开启、Forza 游戏内振动必须关闭。R4 分支提交为 `12478e4`，`main` 提交为 `e57e7c1`。
+- 本轮没有修改窗口标题、主题、总览页、翻译目录、Release workflow 或 Windows 文件描述，Miku Console 视觉设计继续保留。
 
 ### R4 既有触觉和灯效
 
@@ -119,6 +122,9 @@
 - README 设计提交：`43a0486 docs: design concise split-language README`。
 - R4 分支 README 提交：`311c268 docs: simplify split-language README`。
 - GitHub `main` README 提交：`b2bb4ca docs: simplify split-language README`，已推送。
+- README 振动警告设计提交：`c434841 docs: design neutral README vibration warning`。
+- R4 分支振动警告提交：`12478e4 docs: require in-game vibration off`。
+- GitHub `main` 振动警告提交：`e57e7c1 docs: require in-game vibration off`，已推送。
 - 本文件提交并完成最终状态检查后，工作树应保持清洁。
 - 构建产物、截图、缓存和用户偏好文件没有加入 Git。
 
@@ -127,6 +133,7 @@
 - 全量测试：`src/.venv/Scripts/python.exe -m pytest -q`，结果 `294 passed in 4.07s`。
 - README 重构后 R4 分支全量测试：`294 passed in 4.66s`；相对链接检查通过。
 - README 提交移植到稳定 R3 `main` 后全量测试：`242 passed in 4.31s`；GitHub API 已确认英文根首页、中日文页面和 `docs/ReadmeEN.md` 删除均已生效。
+- 强制振动警告更新后 R4 分支全量测试：`295 passed in 4.58s`；稳定 R3 `main` 全量测试：`243 passed in 3.87s`。GitHub API 已确认三语警告和 README 中无 “Miku Console”。
 - 字节码检查：`src/.venv/Scripts/python.exe -m compileall -q src/modules src/lang`，通过。
 - 空白检查：`git diff --check`，通过；仅有 Git 的 LF/CRLF 提示。
 - 125% Windows 显示缩放目视检查：驾驶反馈页卡片保持自然高度，右侧滚动条可用，底部内容位于滚动区域内，没有再被卡片裁切。
@@ -159,4 +166,4 @@
 7. `src/modules/gui/main.py`、`src/modules/gui/widgets.py`、`src/modules/config/preferences.py`
 8. `git status --short --branch`、`git diff` 和最近 10 条提交
 
-下一次会话建议首先处理的具体任务：让用户运行唯一的 R4 候选 EXE，确认 100%、125%、150% 显示缩放下的滚动与布局，并验证 Default 跨重启、退出另存和恢复默认。没有新的发布指令时，不要自动 tag、推送或发布 Enhanced R4。
+下一次会话建议首先处理的具体任务：等待用户提出 Enhanced R4 功能设计并进入讨论。保留现有 Miku Console 视觉设计；不要根据 README 的中性命名自行删除主题或界面。没有新的发布指令时，不要自动 tag、推送或发布 Enhanced R4。
