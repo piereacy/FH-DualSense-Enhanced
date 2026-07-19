@@ -12,6 +12,8 @@
 
 FH-DualSense-Enhanced は Forza Horizon の Data Out テレメトリを読み取り、ブレーキ、アクセル、エンジン、路面、タイヤ、衝突のデータを DualSense のフィードバックへ変換します。
 
+現在は Windows の Steam と Xbox App における Forza Horizon 4、Forza Horizon 5、Forza Horizon 6 の利用フローに対応し、概要ページでプラットフォームと作品を選択して記憶できます。
+
 `Forza-Horizon-DualSense-Python 1.6.2` を基にし、`HorizonHaptics 1.3.0` を参考にした非公式の拡張版です。
 
 ## アップストリーム 1.6.2 からの拡張
@@ -20,7 +22,7 @@ FH-DualSense-Enhanced は Forza Horizon の Data Out テレメトリを読み取
 - 拡張アダプティブトリガーは、動的グリップと wheelspin、路面別周波数帯、ゾーン ABS、任意のテレメトリ効果を追加します。
 - USB と Bluetooth は同じステレオ触覚ミックスを使用し、Bluetooth では HD 転送と自動互換フォールバックを利用できます。
 - コミュニティを参考にした初期設定、Default の永続保存、車両別の名前付きプロファイル、安全な初期化により設定管理を改善します。
-- レスポンシブな多言語デスクトップ UI は、ホイールスクロール、初回のシステム言語検出、更新通知、任意のコントローラーライトに対応します。
+- レスポンシブな多言語デスクトップ UI は、選択を記憶する FH4/FH5/FH6 Steam/Xbox App ランチャー、内蔵 DualSense-to-XInput ブリッジ、復元可能な FH6 DualSense ボタンアイコンを提供します。
 - 単一のスタンドアロン EXE は、検証付き更新ダウンロード、再起動後の置換、失敗時のロールバックに対応します。
 
 ## ダウンロード
@@ -38,9 +40,10 @@ FH-DualSense-Enhanced は Forza Horizon の Data Out テレメトリを読み取
 
 ## 必須のゲーム設定
 
-### 1. Steam Input を有効にする
+### 1. ゲームのプラットフォームを選択する
 
-Steam の**ゲームのプロパティ -> コントローラー**を開き、そのゲームの Steam Input を有効にします。Steam の DualSense 振動サポートも有効にしてください。
+- **Steam：****ゲームのプロパティ -> コントローラー**で Steam Input を有効のままにし、Steam の DualSense 振動サポートも有効にします。
+- **Xbox App：**FH-DualSense-Enhanced で Xbox App を選択します。内蔵 XInput ブリッジが DS4Windows または Steam Input の代わりになり、初回は Windows UAC 経由で同梱 ViGEmBus ドライバーのインストールを求める場合があります。インストールにインターネット接続は不要です。
 
 ### 2. Forza Data Out を有効にする
 
@@ -61,7 +64,7 @@ Steam の**ゲームのプロパティ -> コントローラー**を開き、そ
 3. ゲームを起動します。
 
 > [!IMPORTANT]
-> Steam Input は有効のままにし、Forza のゲーム設定にある「振動」は必ず無効にしてください。ゲーム本来の振動が握把触覚と競合して覆い隠すため、ゲーム内振動が有効な状態では握把フィードバックが正常に動作しません。
+> Steam モードでは Steam Input は有効のままにします。すべてのモードで Forza のゲーム設定にある「振動」は必ず無効にしてください。ゲーム本来の振動が握把触覚と競合して覆い隠すため、ゲーム内振動が有効な状態では握把フィードバックが正常に動作しません。
 
 ## USB と Bluetooth
 
@@ -81,10 +84,11 @@ Steam の**ゲームのプロパティ -> コントローラー**を開き、そ
 | DualSense が見つからない | コントローラーを再接続し、Steam、HidHide、またはコントローラーを占有するアプリを確認します。 |
 | USB 触覚または `PaErrorCode -9999` | DualSense オーディオを確認し、使用中のアプリを閉じて USB を再接続します。トリガーは引き続き使用できます。 |
 | Bluetooth 触覚のフォールバック | コントローラーを再接続して HD haptics を再試行します。フォールバック中もトリガーは使用できます。 |
+| Xbox App で入力できない | アプリで Xbox App を選び、必要なら ViGEmBus の設定を完了し、同じコントローラーを Steam Input や DS4Windows に同時接続しないでください。 |
 
-## DualSense ボタンアイコン
+## FH6 ユーティリティ
 
-Forza Horizon 6 で PlayStation のボタン表示を使う場合は、[PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2) を利用できます。ゲーム更新後は Mod の再適用が必要になる場合があります。
+専用の **FH6 ユーティリティ**ページでは、Steam または Xbox App のインストール先に対して中国語テキスト + 英語音声のファイル交換と、復元可能な DualSense ボタンアイコン MOD を利用できます。Steam のパスは自動検出し、Xbox App のパスは手動で選択します。言語状態は現在のゲーム言語、実際の表示言語、音声言語を個別に表示し、確認できない値は推測しません。ゲーム更新で元のファイルに戻った場合は再度適用してください。提供者 [@hotline1337](https://www.nexusmods.com/forzahorizon6/mods/2) に感謝します。
 
 ## クレジットとライセンス
 

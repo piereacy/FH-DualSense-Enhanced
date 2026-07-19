@@ -1,7 +1,7 @@
 # Enhanced R6 Xbox App XInput 桥实施计划
 
 日期：2026-07-19
-状态：执行中
+状态：核心实现、完整测试和 Windows 构建完成，冻结界面与发布验收中
 
 对应规格：`docs/superpowers/specs/2026-07-19-r6-xbox-app-xinput-bridge-design.md`
 
@@ -62,7 +62,7 @@
 
 - 在 `Settings` 和 `preferences.GLOBAL_FIELDS` 增加 `preferred_forza_platform`，默认 `steam`，允许 `steam`/`xbox_app`。
 - 保证旧配置迁移、Default 持久化、恢复出厂设置、named Profile 和 share code 边界正确。
-- 在总览增加 Steam/Xbox App 选择及 bridge 状态；Xbox App 模式不调用 Steam URI，明确提示从 Xbox App 手动启动。
+- 在总览增加 Steam/Xbox App 选择及 bridge 状态；Xbox App 模式不调用 Steam URI，优先以 `Get-StartApps` 返回的 AUMID 激活已安装包，未发现时打开对应 `msxbox://game/?productId=<id>` 产品页。
 - GUI 只在 Tk 主线程轮询不可变 snapshot；TUI/headless 复用同一字段和 service，不从日志猜状态。
 - 补齐所有语言模块的必要键或明确英文回退，并增加 GUI/TUI 字段契约测试。
 
@@ -82,3 +82,7 @@
 - USB 和 Bluetooth 分别验证 Windows XInput 反读、100 ms 中立保护、3 s target 移除和现有触觉回归。
 - 选择 Xbox App 模式，关闭 Steam Input 和 Forza 游戏内振动，使用 Steam 版 Forza 完成实车控制验收；切回 Steam 后验证虚拟 target 消失并恢复 Steam Input。
 - 没有 clean-machine driver 安装或 Xbox App 游戏实测时明确记录“未执行”，不把兼容推断写成已验证。
+
+## 11. 实施范围修订
+
+用户在核心 XInput 设计确认后追加了 Xbox App 启动入口与 FH6 DualSense 图标 MOD。本计划第 8 步原先的“只提示手动启动”已由显式 AUMID/product-ID 启动链路替代；不在范围仍包括 Xbox 安装路径自动发现、商店管理和直接执行游戏 EXE。图标 MOD 使用独立事务模块、应用内作者鸣谢和第三方声明，具体状态以 `docs/PROJECT_STATE.md` 为准。

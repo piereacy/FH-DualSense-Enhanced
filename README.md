@@ -10,7 +10,7 @@
   <p><strong>Adaptive triggers and telemetry-driven DualSense haptics for Forza Horizon on PC.</strong></p>
 </div>
 
-> Optimized for the Forza Horizon series, especially Forza Horizon 6.
+> Supports Windows Steam and Xbox App workflows for Forza Horizon 4, Forza Horizon 5, and Forza Horizon 6.
 
 FH-DualSense-Enhanced reads Forza Horizon Data Out telemetry and turns braking, throttle, engine, road, tire, and impact data into DualSense feedback.
 
@@ -22,7 +22,7 @@ This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6
 - Expanded adaptive-trigger behavior adds dynamic traction and wheelspin, surface-aware frequency bands, zoned ABS, and optional telemetry layers.
 - USB and Bluetooth use the same stereo haptic mix; Bluetooth adds an HD transport with automatic compatible fallback.
 - Community-informed defaults, persistent Default autosave, named per-car profiles, and safe factory restore provide a more reliable configuration workflow.
-- A responsive multilingual desktop interface adds wheel scrolling, first-run system-language detection, update alerts, and optional controller lighting.
+- A responsive multilingual desktop interface adds a remembered FH4/FH5/FH6 Steam/Xbox App launcher, an integrated DualSense-to-XInput bridge, and reversible FH6 DualSense button icons.
 - The canonical standalone EXE includes verified update downloads, restart replacement, and rollback if replacement fails.
 
 ## Download
@@ -40,9 +40,10 @@ Other launch options:
 
 ## Required game setup
 
-### 1. Enable Steam Input
+### 1. Choose the game platform
 
-In Steam, open **Game Properties -> Controller** and enable Steam Input for the game. Enable DualSense vibration support in Steam as well.
+- **Steam:** Keep Steam Input enabled in **Game Properties -> Controller**, including DualSense vibration support.
+- **Xbox App:** Select Xbox App in FH-DualSense-Enhanced. The integrated XInput bridge replaces DS4Windows or Steam Input; first use may ask you to install the bundled ViGEmBus driver through Windows UAC. The driver installation works offline.
 
 ### 2. Enable Forza Data Out
 
@@ -63,7 +64,7 @@ If loopback packets are not received, try `::1` in both the game and the app.
 3. Start the game.
 
 > [!IMPORTANT]
-> Keep Steam Input enabled, but turn **Vibration** off in Forza's own settings. Native game rumble competes with and masks the controller's grip haptics, so grip feedback will not work correctly when both are active.
+> In Steam mode, keep Steam Input enabled. In every mode, turn **Vibration** off in Forza's own settings. Native game rumble competes with and masks the controller's grip haptics, so grip feedback will not work correctly when both are active.
 
 ## USB and Bluetooth
 
@@ -83,10 +84,11 @@ Both connections use the same telemetry decisions and support adaptive triggers,
 | DualSense not found | Reconnect the controller and check Steam, HidHide, or another app that may have claimed it. |
 | USB haptics or `PaErrorCode -9999` | Check the DualSense audio device, close apps using it, and reconnect USB. Trigger feedback remains available. |
 | Bluetooth haptics fallback | Reconnect the controller to retry HD haptics. Trigger feedback remains available during fallback. |
+| Xbox App input missing | Select Xbox App in the app, finish the ViGEmBus setup if prompted, and do not run Steam Input or DS4Windows for the same controller. |
 
-## DualSense button icons
+## FH6 utilities
 
-For PlayStation button prompts in Forza Horizon 6, see [PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2). Game updates may restore the original files, so this may need to be re-applied.
+The dedicated **FH6 utilities** page provides Chinese-text plus English-voice file swapping and a reversible DualSense icon MOD for Steam or Xbox App installations. Steam paths are detected automatically; Xbox App paths are selected manually. Language status separately shows game, display, and voice language without inventing values that cannot be verified. Game updates may restore files, so reapply a utility when needed. Thanks to [@hotline1337](https://www.nexusmods.com/forzahorizon6/mods/2).
 
 ## Credits and license
 

@@ -87,12 +87,85 @@ def test_read_only_discovery_and_inspection_never_rename_archives(tmp_path):
         running_executables=[],
     )
     inspection = language.inspect_language_state(found)
+    summary = language.summarize_fh6_languages(inspection)
 
     assert inspection.state is language.FH6LanguageState.NATIVE
+    assert summary == language.FH6LanguageSummary(
+        game_language="",
+        display_language=language.ArchiveLanguage.UNKNOWN,
+        voice_language="",
+    )
     assert {
         path.name: path.read_bytes()
         for path in install.string_tables.iterdir()
     } == before
+
+
+def _summary_inspection(state, steam_language="english"):
+    install = language.FH6Install(
+        Path("C:/Game"),
+        Path("C:/Game/StringTables"),
+        "test",
+        steam_language,
+    )
+    return language.LanguageInspection(state, install)
+
+
+def test_language_summary_distinguishes_native_and_swapped_text_from_voice():
+    native = language.summarize_fh6_languages(
+        _summary_inspection(language.FH6LanguageState.NATIVE)
+    )
+    swapped = language.summarize_fh6_languages(
+        _summary_inspection(language.FH6LanguageState.SWAPPED)
+    )
+
+    assert native == language.FH6LanguageSummary(
+        "english",
+        language.ArchiveLanguage.ENGLISH,
+        "english",
+    )
+    assert swapped == language.FH6LanguageSummary(
+        "english",
+        language.ArchiveLanguage.CHINESE,
+        "english",
+    )
+
+
+@pytest.mark.parametrize(
+    "state",
+    (
+        language.FH6LanguageState.RECOVERY_REQUIRED,
+        language.FH6LanguageState.MISSING,
+        language.FH6LanguageState.UNKNOWN,
+        language.FH6LanguageState.CORRUPT,
+    ),
+)
+def test_language_summary_does_not_guess_display_language_for_unsafe_states(state):
+    summary = language.summarize_fh6_languages(_summary_inspection(state))
+
+    assert summary.game_language == "english"
+    assert summary.display_language is language.ArchiveLanguage.UNKNOWN
+    assert summary.voice_language == "english"
+
+
+def test_language_summary_normalizes_other_tokens_and_preserves_unknowns():
+    other = language.summarize_fh6_languages(
+        _summary_inspection(language.FH6LanguageState.NATIVE, "  SChinese  ")
+    )
+    unknown = language.summarize_fh6_languages(
+        language.LanguageInspection(language.FH6LanguageState.NOT_FOUND, None)
+    )
+
+    assert other == language.FH6LanguageSummary(
+        "schinese",
+        language.ArchiveLanguage.UNKNOWN,
+        "schinese",
+    )
+    assert unknown == language.FH6LanguageSummary(
+        "",
+        language.ArchiveLanguage.UNKNOWN,
+        "",
+    )
 
 
 def test_detects_native_and_swapped_content_from_zip_payloads(tmp_path, monkeypatch):
@@ -268,8 +341,10 @@ def test_fh6_install_cache_is_global_and_never_profile_scoped():
 
 def test_gui_and_tui_only_invoke_language_mutation_from_explicit_actions():
     root = Path(__file__).resolve().parents[2]
-    gui = (root / "src/modules/gui/system_tab.py").read_text(encoding="utf-8")
-    tui = (root / "src/modules/tui/system_tab.py").read_text(encoding="utf-8")
+    gui_system = (root / "src/modules/gui/system_tab.py").read_text(encoding="utf-8")
+    tui_system = (root / "src/modules/tui/system_tab.py").read_text(encoding="utf-8")
+    gui = (root / "src/modules/gui/fh6_utilities_tab.py").read_text(encoding="utf-8")
+    tui = (root / "src/modules/tui/fh6_utilities_tab.py").read_text(encoding="utf-8")
     core = (root / "src/modules/forzahorizon/fh6_language.py").read_text(encoding="utf-8")
 
     for source in (gui, tui):
@@ -277,5 +352,9 @@ def test_gui_and_tui_only_invoke_language_mutation_from_explicit_actions():
         assert "enable_chinese_text_english_voice" in source
         assert "restore_native_language" in source
         assert "repair_native_language" in source
+    for source in (gui_system, tui_system):
+        assert "enable_chinese_text_english_voice" not in source
+        assert "restore_native_language" not in source
+        assert "repair_native_language" not in source
     assert "Program Files" not in core
     assert "C:\\\\" not in core

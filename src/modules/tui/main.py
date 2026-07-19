@@ -6,7 +6,7 @@ import webbrowser
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Button, Header, Input, Static, Switch, TabbedContent, TabPane
+from textual.widgets import Button, Header, Input, Select, Static, Switch, TabbedContent, TabPane
 
 from lang import set_language, t
 from modules.about import APP_NAME
@@ -17,9 +17,11 @@ from modules.config.preferences import _release_version
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
+from modules.xinput.service import XInputBridgeService
 
 from .about_tab import AboutTab
 from .controls_tab import ControlsTab
+from .fh6_utilities_tab import FH6UtilitiesTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
 from .lighting_tab import LightingTab
@@ -102,6 +104,7 @@ class TriggerTUI(App):
             settings,
             supported=self_update_supported(),
         )
+        self._xinput_service = XInputBridgeService(settings)
         cleanup_previous_update()
 
     def compose(self) -> ComposeResult:
@@ -121,6 +124,8 @@ class TriggerTUI(App):
                 yield LightingTab(self.settings)
             with TabPane(t("System"), id="tab-system"):
                 yield SystemTab(self.settings)
+            with TabPane(t("FH6 utilities"), id="tab-fh6-utilities"):
+                yield FH6UtilitiesTab(self.settings)
             with TabPane(t("Language"), id="tab-lang"):
                 yield LangTab(self.settings)
             with TabPane(t("Logs"), id="tab-logs"):
@@ -167,6 +172,7 @@ class TriggerTUI(App):
         self._update_service.stop()
         if self._thread:
             self._thread.join(timeout=2.0)
+        self._xinput_service.stop()
         self._usb_audio_lifecycle.close()
         if self._listener_cm:
             self._listener_cm.__exit__(None, None, None)
@@ -180,6 +186,7 @@ class TriggerTUI(App):
             preferences.load(s)
             self._ds = make_backend(s, s.enable_startup_pulse)
             self._ds.open()
+            self._xinput_service.sync(self._ds)
             self._listener_cm = forzahorizon.UDPListener(
                 s.udp_host, s.udp_port, s.udp_timeout, s.udp_forward_to, s.udp_forward)
             self._listener = self._listener_cm.__enter__()
@@ -225,6 +232,7 @@ class TriggerTUI(App):
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=2.0)
+        self._xinput_service.stop()
         if self._ds:
             self._ds.close()
         self._stop.clear()
@@ -233,6 +241,7 @@ class TriggerTUI(App):
             # MARK: suppress pulse on hot-swap - avoid confusing the user mid-session
             self._ds = make_backend(s, False)
             self._ds.open()
+            self._xinput_service.sync(self._ds)
             self._backend_error = ""
             if s.use_dsx:
                 log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
@@ -315,6 +324,9 @@ class TriggerTUI(App):
                     attr = sld.id[len("slider-"):]
                     if hasattr(self.settings, attr):
                         sld.value = float(getattr(self.settings, attr))
+            for select in self.query(Select):
+                if select.id and hasattr(self.settings, select.id):
+                    select.value = getattr(self.settings, select.id)
         finally:
             self._refreshing = False
 

@@ -6,11 +6,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .fh6_language import (
+    ArchiveLanguage,
     FH6LanguageState,
     LanguageInspection,
     SteamLanguageState,
     is_windows_steam_supported,
+    summarize_fh6_languages,
 )
+
+STEAM_PLATFORM = "steam"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,18 +27,51 @@ class LanguageView:
     unknown_language_warning: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class LanguageSummaryView:
+    game_language: str
+    display_language: str
+    voice_language: str
+
+
+def _language_name(
+    language: str | ArchiveLanguage,
+    translate: Callable[[str], str],
+) -> str:
+    token = str(language).strip().casefold()
+    key = {
+        "english": "English",
+        "chinese": "Chinese",
+        "unknown": "Unknown",
+        "": "Unknown",
+    }.get(token)
+    return translate(key) if key is not None else token
+
+
+def language_summary_view(
+    inspection: LanguageInspection,
+    translate: Callable[[str], str],
+) -> LanguageSummaryView:
+    """Localize the three language facts shared by GUI and TUI."""
+    summary = summarize_fh6_languages(inspection)
+    return LanguageSummaryView(
+        game_language=_language_name(summary.game_language, translate),
+        display_language=_language_name(summary.display_language, translate),
+        voice_language=_language_name(summary.voice_language, translate),
+    )
+
+
 def language_view(
     inspection: LanguageInspection,
     *,
     game_running: bool,
     translate: Callable[[str], str],
+    platform: str = STEAM_PLATFORM,
 ) -> LanguageView:
     if not is_windows_steam_supported():
         return LanguageView(
             translate("Unavailable in this runtime"),
-            translate(
-                "Windows Steam only. Detection is automatic, but files change only after you press a button and confirm."
-            ),
+            translate("This FH6 utility is available only on Windows."),
             "",
             "",
             False,
@@ -44,7 +81,9 @@ def language_view(
     if state is FH6LanguageState.NOT_FOUND:
         return LanguageView(
             translate("FH6 installation not found"),
-            translate("Run FH6 at least once, then rescan or choose its install folder."),
+            translate("Run FH6 at least once, then rescan or choose its install folder.")
+            if platform == STEAM_PLATFORM
+            else translate("Choose the Xbox App FH6 install folder to continue."),
             "",
             "",
             False,
@@ -58,7 +97,7 @@ def language_view(
         ),
         FH6LanguageState.SWAPPED: (
             "Chinese text + English voice enabled",
-            "File contents are swapped. Steam updates may restore the original files.",
+            "File contents are swapped. Game updates may restore the original files.",
             "restore",
             "Restore original language files",
         ),
@@ -70,7 +109,7 @@ def language_view(
         ),
         FH6LanguageState.MISSING: (
             "Language files are missing",
-            "Verify the FH6 game files in Steam, then rescan.",
+            "Verify the FH6 game files, then rescan.",
             "",
             "",
         ),
@@ -82,7 +121,7 @@ def language_view(
         ),
         FH6LanguageState.CORRUPT: (
             "Language archive is damaged",
-            "Verify the FH6 game files in Steam before trying again.",
+            "Verify the FH6 game files before trying again.",
             "",
             "",
         ),
@@ -98,9 +137,7 @@ def language_view(
             detail_key = "Set the FH6 language to English in Steam Properties first."
             enabled = False
         elif install.steam_language_state is SteamLanguageState.UNKNOWN:
-            detail_key = (
-                "Steam language could not be verified. Continuing requires an extra confirmation."
-            )
+            detail_key = "FH6 game language could not be verified. Continuing requires an extra confirmation."
             warning = True
     if state is FH6LanguageState.RECOVERY_REQUIRED and not inspection.can_repair:
         enabled = False

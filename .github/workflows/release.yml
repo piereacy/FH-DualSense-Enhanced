@@ -212,21 +212,17 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: true
           body: |
-            ## Enhanced R5 中文说明
+            ## Enhanced R6 中文说明
 
-            Enhanced R5 相比上一稳定版 Enhanced R4，首先补全了总览页的实时状态链路。DualSense 卡片会区分 USB、Bluetooth、等待重连、关闭自动重连、DSX 单向 UDP 和后端错误；Forza 遥测卡片会区分等待数据、持续接收、数据中断和 UDP 绑定失败，并显示数据包来源、计数或最后接收时间。当前配置不再使用 `-` 占位，更新卡片会显示自动检查等待、检查关闭、检查中、已是最新、发现新版本、下载百分比、校验、待安装、安装中和错误。总览在页面创建后立即刷新，并在运行期间每秒刷新。
+            Enhanced R6 相比上一稳定版 Enhanced R5，把游戏平台扩展为 Steam 与 Xbox App，并继续支持 Forza Horizon 4、Forza Horizon 5 和 Forza Horizon 6。总览页会记住平台与游戏；Steam 通过对应 `steam://run/<app-id>` 启动，Xbox App 会优先使用 Windows 当前安装的 AUMID 直接启动，无法解析时打开对应 Xbox App 商品页供用户点击游玩。启动始终由用户点击触发，不会自动启动游戏或修改游戏设置。
 
-            总览快速入口还新增“启动 FH6”按钮。程序会复用 Windows Steam FH6 安装发现，只有在确认安装有效且游戏尚未运行时才启用按钮；点击后通过 `steam://run/2483190` 交给 Steam 启动，以保留 Steam Input 和 Steam 启动上下文。按钮会区分正在查找、可以启动、正在启动、游戏运行中和未找到游戏，并在 FH6 已运行时保持禁用。程序不会自动启动游戏，也不会因为启动按钮而交换语言包或修改 Steam/游戏设置。
+            Windows x64 版新增内置 DualSense 到 XInput 连接桥。Xbox App 模式把物理 DualSense 映射为虚拟 Xbox 360 Controller，不要求 DS4Windows，也不需要把 Xbox App 游戏加入 Steam。Steam 模式不会创建虚拟手柄。桥接包含 latest-state 转发、100 ms 中立保护和 3 s 移除保护，不接管游戏原生振动，也不安装或配置 HidHide。
 
-            本版同时换用新的水墨风 DualSense 赛车图标。窗口标题栏、系统托盘、Windows 独立 EXE 与内置更新 Helper 共用同一套 PNG/多尺寸 ICO 资产。
+            若电脑缺少兼容的 ViGEmBus，软件会在用户确认后校验并打开内置的官方 ViGEmBus `1.22.0` 安装程序，通过 Windows UAC 安装且不需要联网。已有兼容驱动会直接复用，不自动升级。ViGEmBus 与 ViGEmClient 已停止上游维护，本项目固定版本与 SHA-256，并允许随时切回 Steam 模式关闭连接桥。
 
-            “系统与更新”新增 Windows Steam 版 FH6 的“中文文字 + 英文语音”按钮功能。程序会从 Steam 注册表、`libraryfolders.vdf`、App ID `2483190` 的 manifest、卸载信息和正在运行的 `ForzaHorizon6.exe` 查找安装目录，因此不依赖 C 盘；也可以手动选择安装目录。自动流程只会读取路径与状态，绝不会自动改名。
+            独立的“FH6 实用功能”页面集中提供“中文文字 + 英文语音”和 DualSense 按键图标安装与还原，系统与更新页不再保留重复入口。两项功能均支持 Steam 与 Xbox App 安装目录：Steam 自动发现，Xbox App 由用户手动选择并保存。语言卡片分别显示当前游戏语言、实际显示语言和语音语言，无法验证的 Xbox App 语言会明确显示未知并要求额外确认，不会伪造结果。EXE 只内置一份 MOD 资源，安装前分别备份普通与 HiRes 原文件；写入失败会回滚，游戏运行时拒绝修改。感谢 [@hotline1337](https://www.nexusmods.com/forzahorizon6/mods/2) 授权并提供 MOD；游戏更新或验证文件后可能需要重新安装。
 
-            启用按钮只在确认 `CHS.zip` 为中文、`EN.zip` 为英文且 FH6 已关闭时可用，并要求 Steam 中的 FH6 语言为英文；无法读取 Steam 语言时会要求额外确认，明确检测到其他语言时会阻止操作。用户确认后，程序使用同目录临时名完成三步改名；还原按钮使用相同流程恢复原始名称。若进程中途失败会尝试回滚；若上次崩溃留下临时文件，只显示“需要修复”，必须再次点击按钮确认，程序不会自动修复或删除文件。Steam 更新或验证文件可能恢复原始语言包，之后重新扫描即可重新识别。
-
-            该功能只支持 Windows Steam 版 FH6，不复制语言包、不创建永久备份，也不在游戏运行时改名。使用前请至少运行一次 FH6，并在 Steam 属性中把游戏语言设为 English；修改语言包与 Forza Data Out、手柄触觉设置相互独立。
-
-            Enhanced R5 基于 Forza-Horizon-DualSense-Python 1.6.2，参考 HorizonHaptics 1.3.0，并使用 vDS 0.3.0-rc7 与 DS5Dongle 作为 Bluetooth HD haptics 协议参考。历史 Enhanced R1 使用 `1.6.2.post1`；从 Enhanced R2 起使用独立 R 版本体系。
+            GUI 页面现在只挂载一次并通过 `tkraise()` 切换，避免每次导航都重新布局。总览只探测当前选择的 Steam 游戏，找到有效路径后停止探测；未找到时每 30 秒静默重试。按钮、平台选择器和 XInput 提示只在实际状态变化时重绘，默认平台保持 Steam。更新提醒点的黑色方块已修复，并完成 FH4/FH5/FH6 通用启动文案。Enhanced R6 仍基于 Forza-Horizon-DualSense-Python 1.6.2，触觉参考 HorizonHaptics 1.3.0，Bluetooth HD haptics 协议参考 vDS 0.3.0-rc7 与 DS5Dongle。
 
             ## Windows 独立 EXE（推荐）
 
@@ -240,28 +236,24 @@ jobs:
 
             ## 必要设置
 
-            启用 Steam Input 和 DualSense vibration，然后在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`。必须关闭 Forza 游戏内振动，否则原生 rumble 会争用并掩盖本项目的握把反馈。先启动 FH-DualSense-Enhanced，再启动游戏。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300；只在短暂排查时关闭防火墙，随后立即恢复。本项目仍不会接管或完整复现菜单、CG 和上车过场的游戏原生振动。
+            Steam 版保持 Steam Input 与 DualSense vibration 开启；Xbox App 版在软件中选择 Xbox App，不要同时运行 Steam Input 或 DS4Windows 接管同一手柄。所有平台都要在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`，并关闭游戏内振动，否则原生 rumble 会争用并掩盖本项目的握把反馈。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300。本项目仍不会接管或完整复现菜单、CG 和上车过场的游戏原生振动。
 
             ---
             > - 设置保存在程序旁边的 `data/user_preferences.json`，更新后继续保留。
             > - Linux 启动器不会安装 udev 规则。HID 权限不足时，请下载 [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules)，复制到 `/etc/udev/rules.d/`，重新载入规则后连接手柄。
             > - 预发布频道仍可通过 `uv run FH-DualSense-Enhanced.zuv.py --prerelease` 跟踪。
 
-            ## Enhanced R5 English notes
+            ## Enhanced R6 English notes
 
-            Compared with the previous stable Enhanced R4, Enhanced R5 completes the live status path on the Overview page. The DualSense card distinguishes USB, Bluetooth, reconnect waiting, disabled automatic reconnect, DSX fire-and-forget UDP, and backend errors. The Forza telemetry card distinguishes waiting, active reception, lost data, and UDP bind failure, with packet source, count, or last-received age. The active profile no longer falls back to a `-` placeholder. The update card covers the automatic-check wait, disabled checks, checking, up to date, available, download percentage, verification, ready, installing, and error states. Overview refreshes immediately after construction and once per second while the app runs.
+            Compared with the previous stable Enhanced R5, Enhanced R6 adds Steam and Xbox App platform workflows for Forza Horizon 4, Forza Horizon 5, and Forza Horizon 6. Overview remembers both selections. Steam uses the matching `steam://run/<app-id>` URI. Xbox App first attempts direct activation through the installed current-user AUMID, then falls back to the matching Xbox App product page so the user can press Play. Launch is always user initiated and never changes game settings.
 
-            Overview Quick Access also adds a Launch FH6 button. The app reuses Windows Steam FH6 install discovery and enables the button only when the install is valid and the game is not running. A click delegates launch to Steam through `steam://run/2483190`, preserving Steam Input and the Steam launch context. The button distinguishes discovery, ready, launching, running, and not-found states, and stays disabled while FH6 is running. The app never launches the game automatically, and the launch button does not swap language archives or change Steam/game settings.
+            Windows x64 now includes a DualSense-to-XInput bridge. Xbox App mode exposes the physical DualSense as a virtual Xbox 360 Controller without DS4Windows or adding the game to Steam. Steam mode creates no virtual target. Latest-state forwarding, a 100 ms neutral guard, and a 3 s target-removal guard prevent stale controls. The bridge does not capture native game rumble and does not install or configure HidHide.
 
-            This release also adopts a new ink-wash DualSense racing icon. The title bar, system tray, Windows standalone EXE, and bundled update Helper all use the same PNG and multi-size ICO assets.
+            If no compatible ViGEmBus is available, the app verifies and opens the bundled official ViGEmBus `1.22.0` installer only after confirmation. Windows UAC is shown and installation works offline. A compatible existing driver is reused without automatic upgrades. ViGEmBus and ViGEmClient are archived upstream, so this project fixes their versions and SHA-256 values and lets users disable the bridge by returning to Steam mode.
 
-            System and Updates now includes an explicit button for Chinese text with English voice in the Windows Steam edition of FH6. Discovery checks Steam registry roots, `libraryfolders.vdf`, the App ID `2483190` manifest, uninstall metadata, and the full path of a running `ForzaHorizon6.exe`, so it does not assume the C drive. A manual install-folder choice is also available. Automatic work is read-only: the app never renames files without a button press and confirmation.
+            A dedicated FH6 Utilities page now contains the Chinese-text plus English-voice tool and FH6 DualSense icon installation and restore actions; System and Updates no longer duplicates them. Both utilities support Steam and Xbox App installations: Steam paths are discovered automatically, while Xbox App paths are selected and saved manually. The language card separately shows the current game, effective display, and voice languages. An Xbox App language that cannot be verified remains explicitly Unknown and requires extra confirmation instead of being invented. The EXE bundles one MOD archive, backs up the normal and HiRes originals separately, rolls back failed writes, and refuses changes while FH6 is running. Thanks to [@hotline1337](https://www.nexusmods.com/forzahorizon6/mods/2) for permission and the MOD. Game updates or file verification can require reinstallation.
 
-            Enable is available only after CHS.zip is identified as Chinese, EN.zip as English, and FH6 is closed. The FH6 language in Steam must be English. An unknown Steam language requires an extra confirmation, while an explicitly different language blocks the operation. After confirmation, the app performs a three-step rename through a temporary name in the same directory; Restore uses the same process to return the original names. An in-process failure attempts rollback. A temporary file left by a previous crash is only reported as requiring repair, and repair still needs another button press and confirmation. Nothing is repaired or deleted automatically. A Steam update or file verification may restore the original archives, which a later rescan will detect.
-
-            This feature supports only the Windows Steam edition of FH6. It does not copy language archives, create a permanent backup, or rename anything while the game is running. Run FH6 at least once and set its Steam language to English before use. The language archive feature is independent from Forza Data Out and controller haptics settings.
-
-            Enhanced R5 is based on Forza-Horizon-DualSense-Python 1.6.2, references HorizonHaptics 1.3.0, and uses vDS 0.3.0-rc7 plus DS5Dongle as Bluetooth HD haptics protocol references. Historical Enhanced R1 used `1.6.2.post1`; Enhanced R2 and later use the independent R-series version scheme.
+            GUI pages are mounted once and switched with `tkraise()` instead of being laid out again on every navigation. Overview discovers only the selected Steam game, stops after a valid path is found, and retries missing installs silently every 30 seconds. Buttons, selectors, and XInput hints redraw only when their presentation changes, while Steam remains the default platform. It fixes the black background behind the update notification dot and completes generic FH4/FH5/FH6 launch wording. Enhanced R6 remains based on Forza-Horizon-DualSense-Python 1.6.2, references HorizonHaptics 1.3.0, and uses vDS 0.3.0-rc7 plus DS5Dongle as Bluetooth HD haptics protocol references.
 
             ## Windows standalone EXE (recommended)
 
@@ -273,7 +265,7 @@ jobs:
 
             ## Required settings
 
-            Keep Steam Input and DualSense vibration enabled. In Forza Horizon, enable Data Out, set IP to `127.0.0.1`, and set port to `5300`. You must disable in-game vibration in Forza, otherwise native rumble can compete with or mask this project's grip feedback. Start FH-DualSense-Enhanced before starting the game. If UDP packets do not arrive, allow the app and UDP 5300 through Windows Firewall. Disable the firewall only for brief diagnosis and restore it immediately afterward. The project still does not capture or fully reproduce native vibration from menus, cutscenes, or vehicle-entry sequences.
+            For Steam, keep Steam Input and DualSense vibration enabled. For Xbox App, select Xbox App inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the same controller. On every platform, enable Forza Data Out at `127.0.0.1:5300` and disable in-game vibration, otherwise native rumble can compete with or mask this project's grip feedback. Allow the app and UDP 5300 through Windows Firewall if packets do not arrive. The project still does not capture or fully reproduce native vibration from menus, cutscenes, or vehicle-entry sequences.
 
             ---
             > - Settings are stored in `data/user_preferences.json` beside the executable and remain across updates.

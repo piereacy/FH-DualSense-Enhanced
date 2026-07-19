@@ -46,5 +46,9 @@ def test_haptics_reference_notices_and_user_docs_are_present():
     assert "2d27ab0b2ea02e735cd3aa758cc5bf3d6e578534" in notice
     assert "ade9ea15b6fb1bf3f4fdc72da8c316234f32e0d0" in notice
     assert "MIT License" in notice
+    assert "ViGEmBus" in notice and "BSD 3-Clause License" in notice
+    assert "ViGEmClient" in notice and "vgamepad" in notice
+    assert "@hotline1337" in notice
+    assert "9677E50BF04276A9606956819D7760588EA7B986CFAFEBC70396F35630C53A61" in notice
     assert "Bluetooth" in readme and "falls back automatically" in readme
     assert "Bluetooth" in readme_zh and "自动回退" in readme_zh

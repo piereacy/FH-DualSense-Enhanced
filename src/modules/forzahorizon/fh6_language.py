@@ -1,23 +1,23 @@
-"""Windows Steam FH6 language archive discovery and explicit safe swapping."""
+"""Windows FH6 language archive inspection and explicit safe swapping."""
 
 from __future__ import annotations
 
 import logging
 import os
 import re
-import sys
 import zipfile
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from .process_watch import find_game_process
+from . import game_launch
 
 log = logging.getLogger("fhds.fh6_language")
 
-FH6_APP_ID = "2483190"
+FH6_GAME = game_launch.get_forza_game("fh6")
+FH6_APP_ID = FH6_GAME.steam_app_id
 STEAM_RUN_URI = f"steam://run/{FH6_APP_ID}"
-GAME_EXE = "ForzaHorizon6.exe"
+GAME_EXE = FH6_GAME.executable_name
 TABLES_RELATIVE = Path("media") / "Stripped" / "StringTables"
 CHS_NAME = "CHS.zip"
 EN_NAME = "EN.zip"
@@ -82,6 +82,32 @@ class LanguageInspection:
         ) == 1
 
 
+@dataclass(frozen=True, slots=True)
+class FH6LanguageSummary:
+    """Transport-neutral language facts derived from one read-only inspection."""
+
+    game_language: str
+    display_language: ArchiveLanguage
+    voice_language: str
+
+
+def summarize_fh6_languages(inspection: LanguageInspection) -> FH6LanguageSummary:
+    """Summarize effective FH6 languages without reading or changing any files."""
+    install = inspection.install
+    game_language = install.steam_language.strip().casefold() if install is not None else ""
+    display_language = ArchiveLanguage.UNKNOWN
+    if game_language == SteamLanguageState.ENGLISH.value:
+        if inspection.state is FH6LanguageState.NATIVE:
+            display_language = ArchiveLanguage.ENGLISH
+        elif inspection.state is FH6LanguageState.SWAPPED:
+            display_language = ArchiveLanguage.CHINESE
+    return FH6LanguageSummary(
+        game_language=game_language,
+        display_language=display_language,
+        voice_language=game_language,
+    )
+
+
 class FH6LanguageError(RuntimeError):
     pass
 
@@ -91,107 +117,19 @@ class InvalidArchiveError(FH6LanguageError):
 
 
 def is_windows_steam_supported() -> bool:
-    return sys.platform.startswith("win")
-
-
-def _vdf_unescape(value: str) -> str:
-    return value.replace(r"\\", "\\").replace(r'\"', '"')
-
-
-def _quoted_value(text: str, key: str) -> str:
-    match = re.search(
-        rf'"{re.escape(key)}"\s*"([^"\r\n]*)"',
-        text,
-        flags=re.IGNORECASE,
-    )
-    return _vdf_unescape(match.group(1)).strip() if match else ""
-
-
-def _read_vdf(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8-sig", errors="replace")
-    except OSError:
-        return ""
-
-
-def _unique_paths(paths) -> list[Path]:
-    result: list[Path] = []
-    seen: set[str] = set()
-    for raw in paths:
-        if not raw:
-            continue
-        path = Path(raw).expanduser()
-        key = os.path.normcase(os.path.normpath(str(path)))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(path)
-    return result
+    return game_launch.is_windows_steam_supported()
 
 
 def steam_roots_from_registry() -> list[Path]:
-    if not sys.platform.startswith("win"):
-        return []
-    try:
-        import winreg
-    except ImportError:
-        return []
-    locations = (
-        (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", ("SteamPath", "SteamExe")),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", ("InstallPath",)),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", ("InstallPath",)),
-    )
-    roots: list[Path] = []
-    for hive, key_name, values in locations:
-        try:
-            with winreg.OpenKey(hive, key_name) as key:
-                for value_name in values:
-                    try:
-                        value = str(winreg.QueryValueEx(key, value_name)[0]).strip()
-                    except OSError:
-                        continue
-                    if value:
-                        path = Path(value)
-                        roots.append(path.parent if path.suffix.lower() == ".exe" else path)
-        except OSError:
-            continue
-    return _unique_paths(roots)
+    return game_launch.steam_roots_from_registry()
 
 
 def steam_library_paths(steam_root: Path) -> list[Path]:
-    libraries = [steam_root]
-    text = _read_vdf(steam_root / "steamapps" / "libraryfolders.vdf")
-    libraries.extend(
-        Path(_vdf_unescape(value))
-        for value in re.findall(r'"path"\s*"([^"\r\n]+)"', text, flags=re.IGNORECASE)
-    )
-    # Legacy Steam format: "1" "D:\\SteamLibrary".
-    for value in re.findall(r'^\s*"\d+"\s*"([^"\r\n]+)"', text, flags=re.MULTILINE):
-        candidate = _vdf_unescape(value)
-        if re.match(r"^[A-Za-z]:[\\/]", candidate) or candidate.startswith("/"):
-            libraries.append(Path(candidate))
-    return _unique_paths(libraries)
+    return game_launch.steam_library_paths(steam_root)
 
 
 def uninstall_locations_from_registry() -> list[Path]:
-    if not sys.platform.startswith("win"):
-        return []
-    try:
-        import winreg
-    except ImportError:
-        return []
-    subkey = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {FH6_APP_ID}"
-    locations: list[Path] = []
-    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-        for view in (0, getattr(winreg, "KEY_WOW64_32KEY", 0), getattr(winreg, "KEY_WOW64_64KEY", 0)):
-            try:
-                with winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ | view) as key:
-                    value = str(winreg.QueryValueEx(key, "InstallLocation")[0]).strip()
-            except OSError:
-                continue
-            if value:
-                locations.append(Path(value))
-    return _unique_paths(locations)
+    return game_launch.uninstall_locations_from_registry(FH6_GAME)
 
 
 def validate_game_root(
@@ -200,37 +138,20 @@ def validate_game_root(
     source: str = "Manual",
     steam_language: str = "",
 ) -> FH6Install | None:
-    path = Path(root).expanduser()
-    if path.name.casefold() == GAME_EXE.casefold():
-        path = path.parent
-    try:
-        resolved = path.resolve()
-        tables = (resolved / TABLES_RELATIVE).resolve()
-    except OSError:
-        return None
-    if not (resolved / GAME_EXE).is_file() or not tables.is_dir():
-        return None
-    return FH6Install(
-        root=resolved,
-        string_tables=tables,
+    install = game_launch.validate_forza_root(
+        FH6_GAME,
+        root,
         source=source,
         steam_language=steam_language,
+        required_directories=(TABLES_RELATIVE,),
     )
-
-
-def _manifest_install(library: Path) -> FH6Install | None:
-    manifest = library / "steamapps" / f"appmanifest_{FH6_APP_ID}.acf"
-    text = _read_vdf(manifest)
-    if not text:
+    if install is None:
         return None
-    install_dir = _quoted_value(text, "installdir")
-    if not install_dir:
-        return None
-    language = _quoted_value(text, "language").casefold()
-    return validate_game_root(
-        library / "steamapps" / "common" / install_dir,
-        source="Steam manifest",
-        steam_language=language,
+    return FH6Install(
+        root=install.root,
+        string_tables=(install.root / TABLES_RELATIVE).resolve(),
+        source=install.source,
+        steam_language=install.steam_language,
     )
 
 
@@ -244,51 +165,27 @@ def discover_fh6_install(
 ) -> FH6Install | None:
     if not is_windows_steam_supported():
         return None
-    roots = steam_roots_from_registry() if steam_roots is None else steam_roots
-    for root in _unique_paths(roots):
-        for library in steam_library_paths(root):
-            install = _manifest_install(library)
-            if install is not None:
-                return install
-
-    if cached_path:
-        install = validate_game_root(cached_path, source="Cached path")
-        if install is not None:
-            return install
-
-    locations = (
-        uninstall_locations_from_registry()
-        if uninstall_locations is None
-        else uninstall_locations
+    install = game_launch.discover_forza_install(
+        FH6_GAME,
+        cached_path,
+        steam_roots=steam_roots,
+        uninstall_locations=uninstall_locations,
+        running_executables=running_executables,
+        manual_path=manual_path,
+        required_directories=(TABLES_RELATIVE,),
     )
-    for location in _unique_paths(locations):
-        install = validate_game_root(location, source="Steam uninstall registry")
-        if install is not None:
-            return install
-
-    if running_executables is None:
-        process = find_game_process((), exact_name=GAME_EXE)
-        running_executables = [Path(process.exe)] if process and process.exe else []
-    for executable in _unique_paths(running_executables):
-        install = validate_game_root(executable, source="Running game")
-        if install is not None:
-            return install
-
-    if manual_path:
-        return validate_game_root(manual_path, source="Manual")
-    return None
+    if install is None:
+        return None
+    return FH6Install(
+        root=install.root,
+        string_tables=(install.root / TABLES_RELATIVE).resolve(),
+        source=install.source,
+        steam_language=install.steam_language,
+    )
 
 
 def is_fh6_running(install: FH6Install | None = None) -> bool:
-    process = find_game_process((), exact_name=GAME_EXE)
-    if process is None:
-        return False
-    if install is None or not process.exe:
-        return True
-    try:
-        return Path(process.exe).resolve() == (install.root / GAME_EXE).resolve()
-    except OSError:
-        return True
+    return game_launch.is_forza_game_running(FH6_GAME, install)
 
 
 def _archive_paths(install: FH6Install) -> tuple[Path, Path, Path]:

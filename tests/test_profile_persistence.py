@@ -16,6 +16,10 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
     settings = Settings()
     preferences.load(settings)
     settings.brake_max_force = 3
+    settings.preferred_forza_game = "fh4"
+    settings.preferred_forza_platform = "xbox_app"
+    settings.fh4_install_path = "D:/Steam/FH4"
+    settings.fh6_xbox_install_path = "G:/Xbox/FH6"
     assert preferences.save(settings)
 
     reloaded = Settings()
@@ -23,6 +27,10 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
 
     assert reloaded.brake_max_force == 3
     assert reloaded.language == "zh"
+    assert reloaded.preferred_forza_game == "fh4"
+    assert reloaded.preferred_forza_platform == "xbox_app"
+    assert reloaded.fh4_install_path == "D:/Steam/FH4"
+    assert reloaded.fh6_xbox_install_path == "G:/Xbox/FH6"
 
 
 def test_first_run_detects_language_but_existing_config_keeps_user_choice(tmp_path, monkeypatch):
@@ -47,6 +55,10 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     preferences.load(settings)
     settings.brake_max_force = 3
     settings.minimize_to_tray = False
+    settings.preferred_forza_game = "fh5"
+    settings.preferred_forza_platform = "xbox_app"
+    settings.fh5_install_path = "E:/Steam/FH5"
+    settings.fh6_xbox_install_path = "G:/Xbox/FH6"
     assert preferences.save(settings)
     assert profiles.save_profile("Track", settings) == "Track"
     settings.brake_max_force = 2
@@ -60,6 +72,12 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     assert "Track" in store["profiles"]
     assert settings.brake_max_force == Settings().brake_max_force
     assert settings.minimize_to_tray is Settings().minimize_to_tray
+    assert settings.preferred_forza_game == "fh6"
+    assert settings.preferred_forza_platform == "steam"
+    assert settings.fh4_install_path == ""
+    assert settings.fh5_install_path == ""
+    assert settings.fh6_install_path == ""
+    assert settings.fh6_xbox_install_path == ""
     assert settings.language == "zh_tw"
     assert preferences.PATH.with_suffix(".json.bak").exists()
 

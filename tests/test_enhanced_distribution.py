@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "5"
-CURRENT_RELEASE_VERSION = "R5"
+CURRENT_INTERNAL_VERSION = "6"
+CURRENT_RELEASE_VERSION = "R6"
 
 
 def _source(path: str) -> str:
@@ -160,18 +160,16 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R5 中文说明" in workflow
-    assert "Enhanced R5 English notes" in workflow
-    assert "总览页的实时状态链路" in workflow
-    assert "总览快速入口还新增“启动 FH6”按钮" in workflow
-    assert "新的水墨风 DualSense 赛车图标" in workflow
+    assert "Enhanced R6 中文说明" in workflow
+    assert "Enhanced R6 English notes" in workflow
+    assert "游戏平台扩展为 Steam 与 Xbox App" in workflow
+    assert "内置 DualSense 到 XInput 连接桥" in workflow
+    assert "独立的“FH6 实用功能”页面" in workflow
     assert "中文文字 + 英文语音" in workflow
-    assert "Overview Quick Access also adds a Launch FH6 button" in workflow
-    assert "new ink-wash DualSense racing icon" in workflow
-    assert "steam://run/2483190" in workflow
-    assert "Automatic work is read-only" in workflow
-    assert "three-step rename" in workflow
-    assert "You must disable in-game vibration in Forza" in workflow
+    assert "DualSense-to-XInput bridge" in workflow
+    assert "A dedicated FH6 Utilities page" in workflow
+    assert "steam://run/<app-id>" in workflow
+    assert "disable in-game vibration" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow
 
@@ -228,6 +226,8 @@ def test_readme_defaults_to_english_with_separate_language_pages():
     for text in (english, chinese, japanese):
         assert "FH-DualSense-Enhanced-R<n>.exe" in text
         assert "win_start.bat" in text
+        for game in ("4", "5", "6"):
+            assert f"Forza Horizon {game}" in text or f"地平线 {game}" in text
     assert "manual" in english.lower() and ZUV_NAME in english
     assert "手动" in chinese and ZUV_NAME in chinese
     assert "手動" in japanese and ZUV_NAME in japanese
@@ -342,7 +342,7 @@ def test_readmes_require_in_game_vibration_off_but_keep_steam_input_on():
     assert "握把フィードバックが正常に動作しません" in japanese
 
 
-def test_release_identity_uses_public_r5_and_internal_pep440_version():
+def test_release_identity_uses_public_r6_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 

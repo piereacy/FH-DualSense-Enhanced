@@ -131,6 +131,43 @@ class PrimaryButton(ctk.CTkButton):
         super().__init__(parent, text=text, command=command, **kw)
 
 
+class NavButton(ctk.CTkButton):
+    """Sidebar button with an optional canvas-drawn update notice dot."""
+
+    NOTICE_TAG = "fhds_update_notice"
+
+    def __init__(self, parent, **kw):
+        self._notice_visible = False
+        super().__init__(parent, **kw)
+
+    def set_notice_visible(self, visible: bool) -> None:
+        visible = bool(visible)
+        if visible == self._notice_visible:
+            return
+        self._notice_visible = visible
+        self._draw()
+
+    def _draw(self, no_color_updates=False):
+        super()._draw(no_color_updates)
+        self._canvas.delete(self.NOTICE_TAG)
+        if not self._notice_visible:
+            return
+        diameter = self._apply_widget_scaling(5)
+        radius = diameter / 2
+        center_x = self._apply_widget_scaling(self._current_width - 14)
+        center_y = self._apply_widget_scaling(self._current_height / 2)
+        self._canvas.create_oval(
+            center_x - radius,
+            center_y - radius,
+            center_x + radius,
+            center_y + radius,
+            fill="white",
+            outline="",
+            tags=self.NOTICE_TAG,
+        )
+        self._canvas.tag_raise(self.NOTICE_TAG)
+
+
 class GhostButton(ctk.CTkButton):
     """Transparent button - blends into toolbars."""
     def __init__(self, parent, text: str, command=None, **kw):

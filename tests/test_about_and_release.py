@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ATTRIBUTION = "Originally created by Hamza Yeşilmen (HamzaYslmn)."
 SOURCE_URL = "https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python"
 SPONSOR_URL = "https://github.com/sponsors/HamzaYslmn"
+MOD_URL = "https://www.nexusmods.com/forzahorizon6/mods/2"
 
 
 def _source(path: str) -> str:
@@ -21,6 +22,13 @@ def test_shared_about_metadata_matches_the_license_exactly():
     assert values["ATTRIBUTION"] == ATTRIBUTION
     assert values["SOURCE_URL"] == SOURCE_URL
     assert values["SPONSOR_URL"] == SPONSOR_URL
+    assert values["CONTROLLER_ICON_MOD_ATTRIBUTION"] == "DualSense Icons MOD by @hotline1337."
+    assert values["CONTROLLER_ICON_MOD_URL"] == MOD_URL
+    assert {label for label, _url in values["THIRD_PARTY_LINKS"]} == {
+        "ViGEmBus 1.22.0 (BSD-3-Clause)",
+        "ViGEmClient (MIT)",
+        "vgamepad 0.1.3 (MIT)",
+    }
 
 
 def test_gui_about_page_exposes_attribution_and_clickable_links():
@@ -30,6 +38,8 @@ def test_gui_about_page_exposes_attribution_and_clickable_links():
     assert "ATTRIBUTION" in source
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
+    assert "self.app._open_url(CONTROLLER_ICON_MOD_URL)" in source
+    assert "THIRD_PARTY_LINKS" in source
     assert "ATTRIBUTION" not in settings
     assert "About and licenses" not in settings
 
@@ -43,6 +53,8 @@ def test_tui_about_page_exposes_attribution_and_clickable_links():
     assert "about-sponsor" in source
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
+    assert "self.app._open_url(CONTROLLER_ICON_MOD_URL)" in source
+    assert "THIRD_PARTY_LINKS" in source
     assert "ATTRIBUTION" not in settings
     assert "About and licenses" not in settings
 
@@ -64,10 +76,12 @@ def test_about_page_is_after_logs_in_both_interfaces():
     gui = _source("src/modules/gui/main.py")
     tui = _source("src/modules/tui/main.py")
 
-    assert '"System", "Language", "Logs", "About"' in gui
+    assert '"System", "FH6Utilities", "Language", "Logs", "About"' in gui
     assert "self.about_tab = AboutTab" in gui
     assert '"About":    self.about_tab' in gui
     assert tui.index('id="tab-logs"') < tui.index('id="tab-about"')
+    assert tui.index('id="tab-system"') < tui.index('id="tab-fh6-utilities"')
+    assert tui.index('id="tab-fh6-utilities"') < tui.index('id="tab-lang"')
 
 
 def test_tui_about_page_mounts_with_both_required_links():
@@ -85,6 +99,7 @@ def test_tui_about_page_mounts_with_both_required_links():
         async with app.run_test():
             assert app.query_one("#about-source", Button)
             assert app.query_one("#about-sponsor", Button)
+            assert app.query_one("#about-controller-icons", Button)
 
     asyncio.run(check())
 

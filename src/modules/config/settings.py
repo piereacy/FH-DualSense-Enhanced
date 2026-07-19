@@ -209,9 +209,16 @@ class Settings:
     check_for_updates: bool = True            # built-in updater checks GitHub in the background
     auto_download_updates: bool = False       # download only; installation still requires confirmation
 
-    # MARK: System - FH6 installation
-    # Validated Windows Steam game root. Discovery is read-only; archive swaps are button-only.
+    # MARK: System - Forza Horizon installations
+    # Validated Windows Steam roots. Discovery is read-only; launch is always button-only.
+    preferred_forza_platform: str = "steam"
+    preferred_forza_game: str = "fh6"
+    fh4_install_path: str = ""
+    fh5_install_path: str = ""
+    # FH6 is also reused by the explicit, button-only language archive tool.
     fh6_install_path: str = ""
+    # Xbox App installs are user-selected for the explicit FH6 icon MOD tool.
+    fh6_xbox_install_path: str = ""
 
     # MARK: System - DSX
     # When on, triggers go to DualSenseX over UDP instead of HID. Lets DSX (Steam)

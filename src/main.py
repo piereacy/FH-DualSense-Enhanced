@@ -11,6 +11,7 @@ load_dotenv("./dev.env")
 from modules import forzahorizon, make_backend, setup_logging, loop
 from modules.about import APP_NAME
 from modules.config import paths, preferences, Settings
+from modules.xinput.service import XInputBridgeService
 
 log = logging.getLogger("fhds")
 
@@ -39,7 +40,9 @@ def _log_zuv_status() -> None:
 
 def run(s: Settings) -> None:
     ds = make_backend(s, s.enable_startup_pulse)
+    xinput = XInputBridgeService(s)
     ds.open()
+    xinput.sync(ds)
     try:
         with forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout,
                                       s.udp_forward_to, s.udp_forward) as listener:
@@ -49,6 +52,7 @@ def run(s: Settings) -> None:
                 log.info("  DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
             loop.run(ds, listener, s)
     finally:
+        xinput.stop()
         ds.close()
 
 

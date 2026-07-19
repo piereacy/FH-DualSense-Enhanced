@@ -1,32 +1,17 @@
 """System tab: controller selection, built-in updates, and app settings."""
 import logging
 import threading
-from tkinter import filedialog
 
 import customtkinter as ctk
 
 from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
-from modules.forzahorizon.fh6_language import (
-    FH6Install,
-    FH6LanguageError,
-    LanguageInspection,
-    discover_fh6_install,
-    enable_chinese_text_english_voice,
-    inspect_language_state,
-    is_fh6_running,
-    repair_native_language,
-    restore_native_language,
-    validate_game_root,
-)
-from modules.forzahorizon.fh6_language_presentation import LanguageView, language_view
 from modules.update import UpdatePhase
 from modules.update.presentation import localized_status
 
 from . import theme as T
 from . import widgets as W
-from .dialogs import ConfirmationDialog
 from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 
 log = logging.getLogger("fhds")
@@ -52,29 +37,14 @@ class SystemTab(SettingsTab):
         self._controller_card: "W.Card | None" = None
         self._dsx_note: "W.Hint | None" = None
         self._updates_card: "W.Card | None" = None
-        self._fh6_install: FH6Install | None = None
-        self._fh6_inspection = inspect_language_state(None)
-        self._fh6_game_running = False
-        self._fh6_scan_busy = False
-        self._fh6_operation_busy = False
-        self._fh6_error = ""
-        self._fh6_status: ctk.CTkLabel | None = None
-        self._fh6_detail: ctk.CTkLabel | None = None
-        self._fh6_path: ctk.CTkLabel | None = None
-        self._fh6_steam_language: ctk.CTkLabel | None = None
-        self._fh6_action: ctk.CTkButton | None = None
-        self._fh6_view: LanguageView | None = None
         super().__init__(parent, app)
         threading.Thread(target=self._enumerate_async, daemon=True).start()
         self.app.root.after(250, self._refresh_update_status)
-        self.app.root.after(100, lambda: self._start_fh6_scan(rediscover=True))
-        self.app.root.after(5000, self._tick_fh6_status)
 
     def _build(self):
         self._build_controller_card()
         self._build_dsx_note()
         self._build_updates_card()
-        self._build_fh6_language_card()
         # Standard sections from SYSTEM_SECTIONS
         super()._build()
         # Run after every card exists so the DSX/controller swap can reference them.
@@ -184,237 +154,6 @@ class SystemTab(SettingsTab):
         )
         self._release_button = W.GhostButton(
             actions, t("View release"), self._open_update_release, width=120
-        )
-
-    # MARK: FH6 language archives -----------------------------------------
-
-    def _build_fh6_language_card(self):
-        card = W.Card(self._scroll)
-        card.pack(fill="x", pady=(0, T.PAD_MD))
-        W.H2(card, t("FH6 Chinese text + English voice")).pack(
-            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_XS)
-        )
-        W.Hint(
-            card,
-            t(
-                "Windows Steam only. Detection is automatic, but files change only after you press a button and confirm."
-            ),
-            wrap=self.app.px(640),
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
-        self._fh6_status = W.Body(card, t("Scanning for FH6"))
-        self._fh6_status.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
-        self._fh6_detail = W.Hint(card, "", wrap=self.app.px(640))
-        self._fh6_detail.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
-        self._fh6_path = W.Hint(card, t("Install folder: not found"), wrap=self.app.px(640))
-        self._fh6_path.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
-        self._fh6_steam_language = W.Hint(card, t("Steam language: unknown"))
-        self._fh6_steam_language.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
-
-        actions = ctk.CTkFrame(card, fg_color="transparent")
-        actions.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
-        self._fh6_action = W.PrimaryButton(
-            actions,
-            t("Enable Chinese text + English voice"),
-            self._request_fh6_action,
-            width=230,
-        )
-        W.SecondaryButton(
-            actions,
-            t("Rescan"),
-            lambda: self._start_fh6_scan(rediscover=True),
-            width=100,
-        ).pack(side="left", padx=(0, T.PAD_SM))
-        W.GhostButton(
-            actions,
-            t("Choose folder"),
-            self._choose_fh6_folder,
-            width=120,
-        ).pack(side="left")
-
-    def _tick_fh6_status(self):
-        if self.app._tearing_down:
-            return
-        self._start_fh6_scan(rediscover=False)
-        self.app.root.after(5000, self._tick_fh6_status)
-
-    def _start_fh6_scan(self, *, rediscover: bool, manual_path: str = ""):
-        if self._fh6_scan_busy or self._fh6_operation_busy or self.app._tearing_down:
-            return
-        self._fh6_scan_busy = True
-        self._fh6_error = ""
-        self._render_fh6_status()
-
-        def worker():
-            error = ""
-            try:
-                if manual_path:
-                    install = validate_game_root(manual_path, source="Manual")
-                elif self._fh6_install is not None and not rediscover:
-                    install = self._fh6_install
-                else:
-                    install = discover_fh6_install(self.settings.fh6_install_path)
-                inspection = inspect_language_state(install)
-                running = is_fh6_running(install) if install is not None else False
-            except Exception as exc:
-                install = None
-                inspection = inspect_language_state(None)
-                running = False
-                error = str(exc) or type(exc).__name__
-                log.exception("FH6 language status scan failed")
-            try:
-                self.app.root.after(
-                    0,
-                    lambda: self._apply_fh6_scan(install, inspection, running, error),
-                )
-            except Exception:
-                pass
-
-        threading.Thread(target=worker, name="fhds-fh6-language-scan", daemon=True).start()
-
-    def _apply_fh6_scan(self, install, inspection, running, error):
-        self._fh6_scan_busy = False
-        self._fh6_install = install
-        self._fh6_inspection = inspection
-        self._fh6_game_running = running
-        self._fh6_error = error
-        if install is not None:
-            resolved = str(install.root)
-            if self.settings.fh6_install_path != resolved:
-                self.settings.fh6_install_path = resolved
-                preferences.save(self.settings)
-        self._render_fh6_status()
-
-    def _render_fh6_status(self):
-        if self._fh6_status is None:
-            return
-        view = language_view(
-            self._fh6_inspection,
-            game_running=self._fh6_game_running,
-            translate=t,
-        )
-        self._fh6_view = view
-        status = t("Scanning for FH6") if self._fh6_scan_busy else view.status
-        detail = self._fh6_error or view.detail
-        if self._fh6_operation_busy:
-            status = t("Changing FH6 language files")
-            detail = t("Please wait. Do not start FH6 until the operation finishes.")
-        self._fh6_status.configure(text=status)
-        self._fh6_detail.configure(text=detail)
-        install = self._fh6_inspection.install
-        self._fh6_path.configure(
-            text=(
-                t("Install folder: {path}").format(path=install.root)
-                if install is not None
-                else t("Install folder: not found")
-            )
-        )
-        language = install.steam_language if install and install.steam_language else t("unknown")
-        self._fh6_steam_language.configure(
-            text=t("Steam language: {language}").format(language=language)
-        )
-        self._fh6_action.pack_forget()
-        if view.action:
-            self._fh6_action.configure(
-                text=view.action_label,
-                state=(
-                    "normal"
-                    if view.action_enabled and not self._fh6_scan_busy and not self._fh6_operation_busy
-                    else "disabled"
-                ),
-            )
-            self._fh6_action.pack(side="left", padx=(0, T.PAD_SM))
-
-    def _choose_fh6_folder(self):
-        selected = filedialog.askdirectory(
-            parent=self.app.root,
-            title=t("Choose the Forza Horizon 6 install folder"),
-            mustexist=True,
-        )
-        if selected:
-            self._start_fh6_scan(rediscover=False, manual_path=selected)
-
-    def _request_fh6_action(self):
-        view = self._fh6_view
-        if view is None or not view.action or not view.action_enabled:
-            return
-        headings = {
-            "enable": t("Enable Chinese text + English voice?"),
-            "restore": t("Restore original FH6 language files?"),
-            "repair": t("Repair interrupted FH6 language swap?"),
-        }
-        messages = {
-            "enable": t(
-                "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. "
-                "Steam updates or file verification may restore the original files."
-            ),
-            "restore": t(
-                "FHDS will exchange the archive names again and restore Chinese to CHS.zip "
-                "and English to EN.zip. Close FH6 first."
-            ),
-            "repair": t(
-                "FHDS found an interrupted two-file swap. It will only move the identified "
-                "Chinese and English archives back to their original names."
-            ),
-        }
-        message = messages[view.action]
-        if view.unknown_language_warning:
-            message += " " + t(
-                "Steam language could not be verified as English. Continue only if FH6 is set to English in Steam."
-            )
-        ConfirmationDialog(
-            self.app.root,
-            heading=headings[view.action],
-            message=message,
-            confirm_label=view.action_label,
-            on_confirm=lambda: self._run_fh6_action(
-                view.action,
-                allow_unknown=view.unknown_language_warning,
-            ),
-        )
-
-    def _run_fh6_action(self, action: str, *, allow_unknown: bool):
-        if self._fh6_install is None or self._fh6_operation_busy:
-            return
-        install = self._fh6_install
-        self._fh6_operation_busy = True
-        self._fh6_error = ""
-        self._render_fh6_status()
-
-        def worker():
-            try:
-                if action == "enable":
-                    result = enable_chinese_text_english_voice(
-                        install,
-                        allow_unknown_steam_language=allow_unknown,
-                    )
-                elif action == "restore":
-                    result = restore_native_language(install)
-                elif action == "repair":
-                    result = repair_native_language(install)
-                else:
-                    raise FH6LanguageError(f"Unknown FH6 language action: {action}")
-                error = ""
-            except Exception as exc:
-                result = inspect_language_state(install)
-                error = str(exc) or type(exc).__name__
-                log.exception("FH6 language action failed")
-            try:
-                self.app.root.after(0, lambda: self._finish_fh6_action(result, error))
-            except Exception:
-                pass
-
-        threading.Thread(target=worker, name="fhds-fh6-language-action", daemon=True).start()
-
-    def _finish_fh6_action(self, inspection: LanguageInspection, error: str):
-        self._fh6_operation_busy = False
-        self._fh6_inspection = inspection
-        # Every operation checks that FH6 is closed immediately before each
-        # rename. The periodic background scan will refresh this flag again.
-        self._fh6_game_running = False
-        self._fh6_error = error
-        self._render_fh6_status()
-        self.app.toast(
-            t("FH6 language change failed") if error else t("FH6 language files updated")
         )
 
     # MARK: controller list -------------------------------------------------

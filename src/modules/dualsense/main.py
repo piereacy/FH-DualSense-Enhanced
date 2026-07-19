@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import zlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 # PyPI's hidapi Linux wheel uses libusb, which can't claim the gamepad interface
 # (hid-playstation kernel driver owns it). Use a direct /dev/hidraw shim instead.
@@ -19,6 +19,12 @@ else:
 from . import hidhide
 from .adaptive_trigger import M_RIGID, off
 from .bt_haptics import BluetoothHapticsPacketBuilder
+from .input_state import (
+    DualSenseInputState,
+    InputReportError,
+    InputTransport,
+    parse_input_report,
+)
 from .output_state import ControllerVisualState, NO_VISUAL_CONTROL
 
 if TYPE_CHECKING:
@@ -244,6 +250,9 @@ class DualSense:
         # the nonblocking read returns empty for `_input_idle_timeout`.
         self._input_idle_timeout = 3.0
         self._last_input_at = 0.0
+        self._input_consumer: Callable[[DualSenseInputState, float], None] | None = None
+        self._input_parse_errors = 0
+        self._input_consumer_errors = 0
         # Latched mode is derived (see `persistent` property). Active only when
         # HidHide is cloaking the device AND the user opted out of reconnect.
         # Locked controller serial (empty = first-found). Persists across launches.
@@ -393,6 +402,42 @@ class DualSense:
         self._reconnect_interval = new
         self._wake.set()
         log.info("Reconnect interval = %.1fs", new)
+
+    def set_input_consumer(
+        self,
+        consumer: Callable[[DualSenseInputState, float], None] | None,
+    ) -> None:
+        """Hot-switch the nonblocking consumer used by the XInput bridge.
+
+        The callback runs on this object's existing HID I/O thread.  It must
+        only publish a latest snapshot and return; ViGEm calls belong to the
+        bridge worker.
+        """
+        with self._lock:
+            self._input_consumer = consumer
+        self._wake.set()
+
+    def _publish_input(self, data, received_at: float) -> None:
+        with self._lock:
+            consumer = self._input_consumer
+        if consumer is None:
+            return
+        transport = (
+            InputTransport.BLUETOOTH if self.lay["bt"] else InputTransport.USB
+        )
+        try:
+            state = parse_input_report(data, transport)
+        except InputReportError as exc:
+            self._input_parse_errors += 1
+            if self._input_parse_errors == 1:
+                log.warning("DualSense input report rejected: %s", exc)
+            return
+        try:
+            consumer(state, received_at)
+        except Exception as exc:
+            self._input_consumer_errors += 1
+            if self._input_consumer_errors == 1:
+                log.warning("DualSense input consumer failed: %s", exc)
 
     def set_selection(self, lock_serial: str) -> None:
         """Store new lock serial for the next connect attempt.
@@ -575,7 +620,9 @@ class DualSense:
                     continue
                 data = None
             if data:
-                self._last_input_at = now
+                received_at = time.monotonic()
+                self._last_input_at = received_at
+                self._publish_input(data, received_at)
             elif not persistent and now - self._last_input_at >= self._input_idle_timeout:
                 self._disconnect(f"no input for {self._input_idle_timeout:.0f}s")
                 continue
@@ -615,7 +662,13 @@ class DualSense:
                 continue
             # Sleep until set()/queue_bt_haptics() publishes a new frame, or wake
             # periodically to recheck the input watchdog.
-            self._wake.wait(0.5)
+            with self._lock:
+                input_consumer_enabled = self._input_consumer is not None
+            if input_consumer_enabled:
+                poll_interval = 0.004 if self.lay["bt"] else 0.001
+            else:
+                poll_interval = 0.5
+            self._wake.wait(poll_interval)
 
     def _new_report(self):
         L = self.lay

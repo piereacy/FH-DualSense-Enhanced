@@ -36,12 +36,14 @@ from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
+from modules.xinput.service import XInputBridgeService
 
 from . import theme as T
 from . import widgets as W
 from .about_tab import AboutTab
 from .controls_tab import ControlsTab
 from .dialogs import FactoryResetDialog, UnsavedProfileDialog
+from .fh6_utilities_tab import FH6UtilitiesTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
 from .lighting_tab import LightingTab
@@ -60,7 +62,7 @@ HAPTIC_DURATION_S = 0.10
 
 NAV_ITEMS = (
     "Overview", "Driving", "Haptics", "Lighting", "Profiles",
-    "System", "Language", "Logs", "About",
+    "System", "FH6Utilities", "Language", "Logs", "About",
 )
 NAV_LABELS = {
     "Overview": "Overview",
@@ -69,6 +71,7 @@ NAV_LABELS = {
     "Lighting": "Controller lighting",
     "Profiles": "Profiles",
     "System": "System and updates",
+    "FH6Utilities": "FH6 utilities",
     "Language": "Language",
     "Logs": "Logs",
     "About": "About and licenses",
@@ -112,6 +115,7 @@ class TriggerGUI:
             settings,
             supported=self_update_supported(),
         )
+        self._xinput_service = XInputBridgeService(settings)
         self._profile_session = ProfileSession(settings)
         cleanup_previous_update()
 
@@ -308,13 +312,12 @@ class TriggerGUI:
         nav_box = ctk.CTkFrame(nav_host, fg_color="transparent")
         nav_box.pack(side="top", fill="x", pady=(T.PAD_MD, 0))
 
-        self._nav_buttons: dict[str, ctk.CTkButton] = {}
-        self._nav_badges: dict[str, ctk.CTkLabel] = {}
+        self._nav_buttons: dict[str, W.NavButton] = {}
         for key in NAV_ITEMS:
             label = t(NAV_LABELS[key])
             holder = ctk.CTkFrame(nav_box, fg_color="transparent")
             holder.pack(side="top", fill="x", padx=T.PAD_XS, pady=2)
-            btn = ctk.CTkButton(
+            btn = W.NavButton(
                 holder, text=f"  {T.ICON[key]}   {label}", anchor="w", width=0,
                 height=36, corner_radius=6,
                 fg_color="transparent", hover_color=T.BG_HOVER,
@@ -324,17 +327,11 @@ class TriggerGUI:
             )
             btn.pack(fill="x")
             self._nav_buttons[key] = btn
-            if key == "System":
-                badge = ctk.CTkLabel(
-                    holder, text="●", width=12, height=12,
-                    text_color="white", font=ctk.CTkFont(size=8), cursor="hand2",
-                )
-                badge.bind("<Button-1>", lambda _event: self._select_nav("System"))
-                badge.place_forget()
-                self._nav_badges[key] = badge
 
         self._content = ctk.CTkFrame(body, corner_radius=0, fg_color=T.BG_MAIN)
         self._content.pack(side="left", fill="both", expand=True)
+        self._content.grid_rowconfigure(0, weight=1)
+        self._content.grid_columnconfigure(0, weight=1)
 
         self.overview_tab = OverviewTab(self._content, self)
         self.controls_tab = ControlsTab(self._content, self)
@@ -342,6 +339,7 @@ class TriggerGUI:
         self.settings_tab = SettingsTab(self._content, self)
         self.lighting_tab = LightingTab(self._content, self)
         self.system_tab = SystemTab(self._content, self)
+        self.fh6_utilities_tab = FH6UtilitiesTab(self._content, self)
         self.lang_tab = LangTab(self._content, self)
         self.logs_tab = LogsTab(self._content, self)
         self.about_tab = AboutTab(self._content, self)
@@ -352,25 +350,65 @@ class TriggerGUI:
             "Lighting": self.lighting_tab,
             "Profiles": self.profiles_tab,
             "System":   self.system_tab,
+            "FH6Utilities": self.fh6_utilities_tab,
             "Language": self.lang_tab,
             "Logs":     self.logs_tab,
             "About":    self.about_tab,
         }
+        for frame in self._tab_frames.values():
+            frame.grid(
+                row=0,
+                column=0,
+                sticky="nsew",
+                padx=T.PAD_LG,
+                pady=T.PAD_LG,
+            )
         self._active_nav: str | None = None
         self._select_nav("Overview")
 
     def _select_nav(self, key: str):
         if key == self._active_nav:
             return
-        if self._active_nav:
-            self._tab_frames[self._active_nav].pack_forget()
-            prev = self._nav_buttons[self._active_nav]
+        target = self._tab_frames.get(key)
+        if target is None:
+            log.error("Unknown GUI navigation target: %s", key)
+            return
+        previous_key = self._active_nav
+        previous = self._tab_frames.get(previous_key) if previous_key else None
+        previous_on_hide = getattr(previous, "on_hide", None) if previous is not None else None
+        if callable(previous_on_hide):
+            try:
+                previous_on_hide()
+            except Exception:
+                log.exception("GUI page on_hide failed: %s", previous_key)
+        try:
+            target.tkraise()
+        except Exception:
+            log.exception("Could not show GUI navigation target %s", key)
+            if previous is not None:
+                try:
+                    previous.tkraise()
+                except Exception:
+                    log.exception("Could not restore GUI page %s", previous_key)
+                previous_on_show = getattr(previous, "on_show", None)
+                if callable(previous_on_show):
+                    try:
+                        previous_on_show()
+                    except Exception:
+                        log.exception("GUI page rollback on_show failed: %s", previous_key)
+            return
+        if previous is not None:
+            prev = self._nav_buttons[previous_key]
             prev.configure(fg_color="transparent", text_color=T.TEXT_MUTED)
-        self._tab_frames[key].pack(fill="both", expand=True,
-                                   padx=T.PAD_LG, pady=T.PAD_LG)
         btn = self._nav_buttons[key]
         btn.configure(fg_color=T.BG_ACTIVE, text_color=T.TEXT)
         self._active_nav = key
+        on_show = getattr(target, "on_show", None)
+        if callable(on_show):
+            try:
+                on_show()
+            except Exception:
+                log.exception("GUI page on_show failed: %s", key)
 
     # MARK: lifecycle -------------------------------------------------------
 
@@ -514,6 +552,7 @@ class TriggerGUI:
         self._update_service.stop()
         if self._thread:
             self._thread.join(timeout=2.0)
+        self._xinput_service.stop()
         self._usb_audio_lifecycle.close()
         if self._listener_cm:
             try:
@@ -552,6 +591,7 @@ class TriggerGUI:
             preferences.load(s)
             self._ds = make_backend(s, s.enable_startup_pulse)
             self._ds.open()
+            self._xinput_service.sync(self._ds)
             self._backend_error = ""
         except Exception as exc:
             self._backend_error = str(exc) or type(exc).__name__
@@ -607,6 +647,7 @@ class TriggerGUI:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=2.0)
+        self._xinput_service.stop()
         if self._ds:
             self._ds.close()
         self._stop.clear()
@@ -615,6 +656,7 @@ class TriggerGUI:
             # MARK: suppress pulse on hot-swap
             self._ds = make_backend(s, False)
             self._ds.open()
+            self._xinput_service.sync(self._ds)
             self._backend_error = ""
             if s.use_dsx:
                 log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
@@ -651,13 +693,10 @@ class TriggerGUI:
     def _refresh_update_badge(self):
         from modules.update.presentation import has_update_notice
 
-        badge = self._nav_badges.get("System")
-        if badge is None:
+        button = self._nav_buttons.get("System")
+        if button is None:
             return
-        if has_update_notice(self._update_service.snapshot()):
-            badge.place(relx=1.0, rely=0.5, x=-12, anchor="e")
-        else:
-            badge.place_forget()
+        button.set_notice_visible(has_update_notice(self._update_service.snapshot()))
 
     def _refresh_status(self):
         if self._backend_error:

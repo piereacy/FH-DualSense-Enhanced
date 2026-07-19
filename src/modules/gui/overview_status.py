@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from modules.forzahorizon import TelemetryPhase
 from modules.update import UpdatePhase
 from modules.update.presentation import localized_status
+from modules.xinput.bridge import BridgeStatus
+from modules.xinput.service import STEAM_PLATFORM
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,9 +136,65 @@ def update_status(service, settings, translate: Callable[[str], str]) -> CardSta
     return CardStatus(localized_status(snapshot, translate), hint)
 
 
-def fh6_launch_button_status(
+def xinput_bridge_status(service, platform: str, translate: Callable[[str], str]) -> CardStatus:
+    if platform == STEAM_PLATFORM:
+        return CardStatus(
+            translate("Steam Input mode"),
+            translate("XInput bridge is off"),
+        )
+    if service is None:
+        return CardStatus(
+            translate("XInput bridge unavailable"),
+            translate("Controller backend is still starting"),
+        )
+    snapshot = service.snapshot()
+    if snapshot.status is BridgeStatus.DRIVER_MISSING:
+        return CardStatus(
+            translate("ViGEmBus required"),
+            translate("Install the bundled driver to use Xbox App"),
+        )
+    if snapshot.status is BridgeStatus.INSTALLING:
+        return CardStatus(
+            translate("Installing ViGEmBus"),
+            translate("Complete the Windows installer"),
+        )
+    if snapshot.status is BridgeStatus.RESTART_REQUIRED:
+        return CardStatus(
+            translate("Windows restart required"),
+            translate("Restart Windows before using the Xbox App bridge"),
+        )
+    if snapshot.status is BridgeStatus.WAITING_CONTROLLER:
+        return CardStatus(
+            translate("Waiting for DualSense input"),
+            translate("The virtual Xbox 360 controller starts after input"),
+        )
+    if snapshot.status is BridgeStatus.ACTIVE:
+        return CardStatus(
+            translate("Xbox 360 controller active"),
+            translate("Forwarded {count} input reports").format(
+                count=snapshot.forwarded_reports
+            ),
+        )
+    if snapshot.status is BridgeStatus.STALE:
+        return CardStatus(
+            translate("Controller input paused"),
+            translate("Neutral state sent to prevent stuck controls"),
+        )
+    if snapshot.status is BridgeStatus.ERROR:
+        return CardStatus(
+            translate("XInput bridge error"),
+            _short_error(snapshot.last_error),
+        )
+    return CardStatus(
+        translate("XInput bridge unavailable"),
+        _short_error(snapshot.last_error),
+    )
+
+
+def forza_launch_button_status(
     translate: Callable[[str], str],
     *,
+    game_label: str,
     supported: bool,
     scanning: bool,
     installed: bool,
@@ -144,11 +202,55 @@ def fh6_launch_button_status(
     launching: bool,
 ) -> ActionStatus:
     if running:
-        return ActionStatus(translate("FH6 is running"), False)
+        return ActionStatus(
+            translate("{game} is running").format(game=game_label),
+            False,
+        )
     if launching:
-        return ActionStatus(translate("Starting FH6..."), False)
+        return ActionStatus(
+            translate("Starting {game}...").format(game=game_label),
+            False,
+        )
     if scanning:
-        return ActionStatus(translate("Finding FH6..."), False)
+        return ActionStatus(
+            translate("Finding {game}...").format(game=game_label),
+            False,
+        )
     if supported and installed:
-        return ActionStatus(translate("Launch FH6"), True)
-    return ActionStatus(translate("FH6 not found"), False)
+        return ActionStatus(
+            translate("Launch {game}").format(game=game_label),
+            True,
+        )
+    return ActionStatus(
+        translate("{game} not found").format(game=game_label),
+        False,
+    )
+
+
+def should_scan_forza_install(
+    *,
+    supported: bool,
+    installed: bool,
+    scanning: bool,
+    launching: bool,
+    has_result: bool,
+    now: float,
+    last_scan: float,
+    retry_interval: float,
+) -> bool:
+    """Return whether the selected Steam game needs one discovery worker."""
+    return bool(
+        supported
+        and not installed
+        and not scanning
+        and not launching
+        and (not has_result or now - last_scan >= retry_interval)
+    )
+
+
+def fh6_launch_button_status(
+    translate: Callable[[str], str],
+    **state,
+) -> ActionStatus:
+    """Compatibility wrapper for integrations importing the R5 helper."""
+    return forza_launch_button_status(translate, game_label="FH6", **state)

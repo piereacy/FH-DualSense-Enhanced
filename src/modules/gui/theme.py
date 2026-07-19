@@ -59,6 +59,7 @@ ICON = {
     "Profiles": "\U0001F4CB",  # clipboard
     "Settings": "\u2699",        # gear
     "System":   "\U0001F5A5",  # computer
+    "FH6Utilities": "\U0001F3AE",  # gamepad
     "Language": "\U0001F310",  # globe
     "Logs":     "\U0001F4DC",  # scroll
     "About":    "\u24D8",      # information

@@ -29,3 +29,9 @@ PYPROJECT = ROOT / "pyproject.toml"
 LANG = ROOT / "lang"
 ICON_ICO = ROOT / "data" / "icon.ico"
 ICON_PNG = ROOT / "data" / "icon.png"
+XINPUT_ASSETS = ROOT / "data" / "xinput"
+VIGEM_CLIENT_DLL = XINPUT_ASSETS / "ViGEmClient.dll"
+VIGEM_BUS_INSTALLER = XINPUT_ASSETS / "ViGEmBus_1.22.0_x64_x86_arm64.exe"
+CONTROLLER_ICON_MOD = (
+    ROOT / "data" / "mods" / "dualsense_icons" / "ControllerIcons.zip"
+)

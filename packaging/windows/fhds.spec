@@ -73,6 +73,15 @@ datas = [
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "docs" / "THIRD_PARTY_NOTICES.md"), "docs"),
     (str(UPDATE_HELPER), "data"),
+    (str(SRC / "data" / "xinput" / "ViGEmClient.dll"), "data/xinput"),
+    (
+        str(SRC / "data" / "xinput" / "ViGEmBus_1.22.0_x64_x86_arm64.exe"),
+        "data/xinput",
+    ),
+    (
+        str(SRC / "data" / "mods" / "dualsense_icons" / "ControllerIcons.zip"),
+        "data/mods/dualsense_icons",
+    ),
 ]
 datas += collect_data_files("customtkinter")
 datas += collect_data_files("textual")

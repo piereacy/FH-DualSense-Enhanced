@@ -12,6 +12,8 @@
 
 FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，将刹车、油门、发动机、路面、轮胎和碰撞数据转换为 DualSense 反馈。
 
+目前支持 Windows Steam 与 Xbox App 的《极限竞速：地平线 4》《极限竞速：地平线 5》和《极限竞速：地平线 6》使用流程；总览页可以选择并记住平台与游戏。
+
 这是基于 `Forza-Horizon-DualSense-Python 1.6.2` 制作，并参考 `HorizonHaptics 1.3.0` 的非官方增强版本。
 
 ## 相比上游 1.6.2 的增强
@@ -20,7 +22,7 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 - 扩展的自适应扳机加入动态抓地力与 wheelspin、按路面变化的频率区间、分区 ABS 和可选遥测反馈层。
 - USB 和 Bluetooth 使用同一套立体声握把混音；Bluetooth 增加 HD 传输并在不可用时自动兼容回退。
 - 参考社区反馈的默认参数、Default 持久化自动保存、分车辆命名配置和安全恢复出厂设置让配置流程更加可靠。
-- 响应式多语言桌面界面支持滚轮、首次启动匹配系统语言、更新提醒和可选手柄灯效。
+- 响应式多语言桌面界面提供记忆选择的 FH4/FH5/FH6 Steam/Xbox App 启动入口、内置 DualSense 到 XInput 连接桥，以及可还原的 FH6 DualSense 按键图标。
 - 统一的独立 EXE 支持校验更新下载、重启替换，并在替换失败时回滚。
 
 ## 下载
@@ -38,9 +40,10 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 
 ## 必需的游戏设置
 
-### 1. 开启 Steam Input
+### 1. 选择游戏平台
 
-在 Steam 中打开**游戏属性 -> 控制器**，为游戏启用 Steam Input，同时开启 Steam 的 DualSense 振动支持。
+- **Steam：**在**游戏属性 -> 控制器**中，Steam Input 必须保持开启，同时开启 Steam 的 DualSense 振动支持。
+- **Xbox App：**在 FH-DualSense-Enhanced 中选择 Xbox App。内置 XInput 连接桥代替 DS4Windows 或 Steam Input；首次使用可能需要通过 Windows UAC 安装内置 ViGEmBus 驱动，安装不需要联网。
 
 ### 2. 开启 Forza Data Out
 
@@ -61,7 +64,7 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 3. 启动游戏。
 
 > [!IMPORTANT]
-> Steam Input 必须保持开启，但必须在 Forza 游戏设置中关闭“振动”。游戏原生振动会争用并掩盖手柄握把触觉，因此开启游戏内振动时，握把反馈无法正常工作。
+> Steam 模式下 Steam Input 必须保持开启；所有模式都必须在 Forza 游戏设置中关闭“振动”。游戏原生振动会争用并掩盖手柄握把触觉，因此开启游戏内振动时，握把反馈无法正常工作。
 
 ## USB 与 Bluetooth
 
@@ -81,10 +84,11 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 | 找不到 DualSense | 重新连接手柄，并检查 Steam、HidHide 或其他可能占用手柄的软件。 |
 | USB 触觉或 `PaErrorCode -9999` | 检查 DualSense 音频设备，关闭占用它的软件后重新连接 USB；扳机仍可使用。 |
 | Bluetooth 触觉回退 | 重新连接手柄以再次尝试 HD haptics；回退期间扳机仍可使用。 |
+| Xbox App 没有手柄输入 | 在软件中选择 Xbox App，按提示完成 ViGEmBus 设置，并避免让 Steam Input 或 DS4Windows 同时接管同一手柄。 |
 
-## DualSense 按键图标
+## FH6 实用功能
 
-如果希望《极限竞速：地平线 6》显示 PlayStation 按键图标，可使用 [PlayStation Controller Icons (DualSense)](https://www.nexusmods.com/forzahorizon6/mods/2)。游戏更新可能恢复原文件，因此更新后可能需要再次安装 Mod。
+独立的 **FH6 实用功能**页面为 Steam 或 Xbox App 安装提供“中文文字 + 英文语音”文件交换和可还原的 DualSense 按键图标 MOD。Steam 路径自动检测，Xbox App 路径由用户手动选择；语言状态会分别显示当前游戏语言、实际显示语言和语音语言，无法验证的值不会被猜测。游戏更新可能恢复原文件，届时可再次执行。感谢 [@hotline1337](https://www.nexusmods.com/forzahorizon6/mods/2)。
 
 ## 来源与许可证
 

@@ -7,7 +7,11 @@ from modules.forzahorizon.fh6_language import (
     LanguageInspection,
 )
 from modules.forzahorizon import fh6_language_presentation as presentation
-from modules.forzahorizon.fh6_language_presentation import language_view
+from modules.forzahorizon.fh6_language_presentation import (
+    LanguageSummaryView,
+    language_summary_view,
+    language_view,
+)
 
 
 def _t(value):
@@ -67,3 +71,42 @@ def test_view_disables_the_feature_outside_windows(monkeypatch):
 
     assert view.status == "Unavailable in this runtime"
     assert view.action_enabled is False
+
+
+def test_three_line_summary_distinguishes_game_display_and_voice_languages():
+    view = language_summary_view(
+        _inspection(FH6LanguageState.SWAPPED),
+        _t,
+    )
+
+    assert view == LanguageSummaryView(
+        game_language="English",
+        display_language="Chinese",
+        voice_language="English",
+    )
+
+
+def test_xbox_path_support_is_manual_and_does_not_invent_a_language(monkeypatch):
+    monkeypatch.setattr(presentation, "is_windows_steam_supported", lambda: True)
+    missing = language_view(
+        LanguageInspection(FH6LanguageState.NOT_FOUND, None),
+        game_running=False,
+        translate=_t,
+        platform="xbox_app",
+    )
+    unknown = language_view(
+        _inspection(FH6LanguageState.NATIVE, ""),
+        game_running=False,
+        translate=_t,
+        platform="xbox_app",
+    )
+    summary = language_summary_view(
+        _inspection(FH6LanguageState.NATIVE, ""),
+        _t,
+    )
+
+    assert missing.detail == "Choose the Xbox App FH6 install folder to continue."
+    assert unknown.action_enabled is True
+    assert unknown.unknown_language_warning is True
+    assert "Steam" not in unknown.detail
+    assert summary == LanguageSummaryView("Unknown", "Unknown", "Unknown")
