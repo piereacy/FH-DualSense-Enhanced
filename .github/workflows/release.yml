@@ -236,7 +236,7 @@ jobs:
 
             ## 必要设置
 
-            Steam 版保持 Steam Input 与 DualSense vibration 开启；Xbox App 版在软件中选择 Xbox App，不要同时运行 Steam Input 或 DS4Windows 接管同一手柄。所有平台都要在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`，并关闭游戏内振动，否则原生 rumble 会争用并掩盖本项目的握把反馈。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300。本项目仍不会接管或完整复现菜单、CG 和上车过场的游戏原生振动。
+            Steam 版保持 Steam Input 与 DualSense vibration 开启；Xbox App 版在软件中选择 Xbox App，不要同时运行 Steam Input 或 DS4Windows 接管同一手柄。所有平台都要在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`，并关闭游戏内振动，否则原生 rumble 会争用并掩盖本项目的握把反馈。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300。
 
             ---
             > - 设置保存在程序旁边的 `data/user_preferences.json`，更新后继续保留。
@@ -265,7 +265,7 @@ jobs:
 
             ## Required settings
 
-            For Steam, keep Steam Input and DualSense vibration enabled. For Xbox App, select Xbox App inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the same controller. On every platform, enable Forza Data Out at `127.0.0.1:5300` and disable in-game vibration, otherwise native rumble can compete with or mask this project's grip feedback. Allow the app and UDP 5300 through Windows Firewall if packets do not arrive. The project still does not capture or fully reproduce native vibration from menus, cutscenes, or vehicle-entry sequences.
+            For Steam, keep Steam Input and DualSense vibration enabled. For Xbox App, select Xbox App inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the same controller. On every platform, enable Forza Data Out at `127.0.0.1:5300` and disable in-game vibration, otherwise native rumble can compete with or mask this project's grip feedback. Allow the app and UDP 5300 through Windows Firewall if packets do not arrive.
 
             ---
             > - Settings are stored in `data/user_preferences.json` beside the executable and remain across updates.
