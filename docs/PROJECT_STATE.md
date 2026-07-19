@@ -8,7 +8,7 @@
 - 当前阶段：R6 功能、GUI 性能、FH6 三行语言状态和 Xbox App 手动语言目录支持已进入生产代码；完整自动测试、源码 GUI/TUI 冒烟和最终 Windows one-file 构建验收均已通过，当前处于发布前收口。
 - 当前公开稳定版仍是 GitHub Release `R5`。`origin/main` 与 tag `R5` 指向 `031c769`；R6 实现已提交到本地 `379d020`，尚未 push、tag 或发布。
 - 当前开发重心：冻结包含 Windows Xbox App XInput bridge、FH4/FH5/FH6 双平台启动、FH6 双平台文件工具、三行语言状态和 GUI 性能修复的 R6 候选，并在用户确认后执行 push、tag 与 Release。
-- 不属于当前 R6 完成条件：DSX 新适配、原生游戏 rumble 接管、红线手感继续调校和自动更新器的 24 小时节流。
+- 不属于当前 R6 完成条件：DSX 新适配、原生游戏 rumble 接管、红线手感继续调校、自动更新器的 24 小时节流，以及 Xbox App FH6 内容目录自动发现。Xbox 自动发现已明确留到 R7，R6 保持手动选择并缓存路径。
 
 ## 已在代码中实现
 
@@ -79,6 +79,7 @@
 
 - 真实 Xbox App 版 Forza 尚未测试；当前电脑没有对应安装，因此 AUMID 动态发现只有 fixture 覆盖。
 - Xbox App FH6 语言和 MOD 根路径不能自动发现，需要用户手动选择；受保护 package ACL 与未来目录布局变化待确认。
+- R7 已确认的候选任务：自动枚举 Xbox App 游戏卷与常见 `XboxGames`/`Content` 布局，用 FH6 目录结构验证唯一候选，失败或多候选时继续使用手动选择；不得恢复高频无界扫描。
 - Xbox App 当前游戏与语音语言没有可靠元数据来源，因此三行状态会显示未知；这不阻止用户在额外确认后使用交换/还原，但真实 Xbox App 版尚未验证。
 - Forza 游戏内振动必须关闭，否则 native rumble/Steam Input 可能掩盖本项目握把方向与细节；项目仍不复现菜单、CG 和上车过场原生振动。
 - XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板或陀螺仪映射。
@@ -119,9 +120,9 @@
 ## 当前 Git 工作区状态
 
 - 分支：`main`。
-- R6 实现提交：`379d020 feat: prepare Enhanced R6`；其后的本文件更新仅记录发布前交接状态。
+- R6 实现提交：`379d020 feat: prepare Enhanced R6`；发布说明与 README 收口提交：`f9597a2 docs: refine R6 release notes`。
 - `origin/main` 与公开 `R5`：`031c769 docs: refresh R5 release state`。
-- 本文件提交后，本地相对 `origin/main` 领先 9 个提交。
+- 本文件提交后，本地相对 `origin/main` 领先 11 个提交。
 - R6 功能代码、测试、三语文档、翻译、打包资产和老三样均已提交；本文件提交后工作树应保持干净，未执行 reset、stash 或删除用户改动。
 - 线上 R5 规范 EXE 由 GitHub API 确认为 `47,218,192` 字节，SHA-256 digest `4d2a981e99ca094c5d61d1f094c8248d4ba216c68ad624ba7704a0ab906b1e9a`。它是 R6 体积比较基线。
 
