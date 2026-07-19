@@ -1,236 +1,166 @@
-# 项目当前状态
+# FH-DualSense-Enhanced 当前项目状态
 
-## 状态快照
+最后更新时间：2026-07-19
 
-- 最后更新：2026-07-17，Asia/Shanghai。
-- 仓库：`piereacy/FH-DualSense-Enhanced`。
-- 当前工作树：`work/hamza`。
-- 当前分支：`main`。完整 R5 已提交为 `b2569d4`；远端新增的 `324c6d8` README 调整已通过合并提交 `cae277b` 保留并整合。当前相对 `origin/main` 领先 5 个提交，尚未推送。
-- 当前开发身份：`src/pyproject.toml` 内部 PEP 440 版本 `5`，开发名称 `Enhanced R5`；当前公开稳定名称仍为 `Enhanced R4`。
-- 当前公开稳定版：[`FH-DualSense-Enhanced R4`](https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R4)，发布时间 `2026-07-17T07:33:04Z`；`R4` tag 指向 `e7184c2`，`main` 在其后一个仅含发布状态交接的提交 `16ba4e4`。
-- GitHub 仓库已经脱离原项目 fork network；GitHub API 已确认 `isFork=false`、`parent=null`，原有 R1/R2/R3 Release 和 2 个 Star 均保留。
-- 当前阶段：Enhanced R5 的总览运行时状态、FH6“中文文字 + 英文语音”、总览 Steam 启动按钮和新产品图标已完成本地实现与验证。真实 Steam 启动已进入 FH6 画面，最终冻结 R5 EXE 已重建并通过资源、哈希和启动校验；没有 tag、Release 或推送。
-- 发布后校验缺陷已经修复：首次 R4 CI 因 runner 缺少 `Get-FileHash` 生成了不完整 sidecar；该 Release 已删除并在修复提交上重建，最终线上 `.sha256` 为 95 bytes 且与 EXE 精确匹配。
+## 当前阶段
 
-## 当前开发重心
+- 当前开发版本：`Enhanced R6`，`src/pyproject.toml` 内部版本为 `6`。
+- 当前阶段：R6 功能、GUI 性能、FH6 三行语言状态和 Xbox App 手动语言目录支持已进入生产代码；完整自动测试、源码 GUI/TUI 冒烟和最终 Windows one-file 构建验收均已通过，当前处于发布前收口。
+- 当前公开稳定版仍是 GitHub Release `R5`。`origin/main` 与 tag `R5` 指向 `031c769`；R6 实现已提交到本地 `379d020`，尚未 push、tag 或发布。
+- 当前开发重心：冻结包含 Windows Xbox App XInput bridge、FH4/FH5/FH6 双平台启动、FH6 双平台文件工具、三行语言状态和 GUI 性能修复的 R6 候选，并在用户确认后执行 push、tag 与 Release。
+- 不属于当前 R6 完成条件：DSX 新适配、原生游戏 rumble 接管、红线手感继续调校和自动更新器的 24 小时节流。
 
-Enhanced R5 的三项已批准功能、新产品图标和最终冻结构建验收已经在本地完成。用户已明确批准稳定版发布，当前重心是提交前范围审查、推送、`workflow_dispatch stable` 和线上资产复核，不再扩展功能。R3/R4 的 R2 扳机键油门手感差异仍是独立待办：在调整触觉默认值前，必须完成同条件实机 A/B 和最终 trigger frame 来源追踪，不能因为本轮 R5 状态/UI 工作而把该问题写成已解决。
+## 已在代码中实现
 
-## 最近完成的功能
+### 1. Steam/Xbox App 的 FH4、FH5、FH6 启动入口
 
-以下内容已经有生产代码和自动测试：
+- `src/modules/forzahorizon/game_launch.py` 统一保存三代游戏的 Steam App ID、Xbox product ID 和精确 EXE 名。
+- Steam 模式继续验证安装后提交对应 `steam://run/<app-id>`，不直启 EXE。
+- Xbox App 模式运行只读 `Get-StartApps`，只接受 `PackageFamilyName!Application` 形式的 AUMID；精确匹配当前代后以 `shell:AppsFolder\\<AUMID>` 激活。未发现时打开固定 `msxbox://game/?productId=<id>` 产品页，让用户在 Xbox App 中安装或点击开始。
+- `src/modules/gui/overview_tab.py` 记住平台和游戏，平台/游戏选择本身不启动；启动请求在后台执行，Tk 控件只由主线程更新。
+- 当前电脑 `Get-StartApps` 实际返回 223 项，但没有安装任何 Xbox App 版 Forza，因此真实 AUMID 启动尚未执行。产品 ID、匹配和 fallback 已由自动测试覆盖。
 
-### R5 总览运行时状态
+### 2. Windows x64 DualSense-to-XInput bridge
 
-- `src/modules/gui/overview_status.py` 将手柄、Forza 遥测、当前配置和更新器的运行时快照映射为稳定的卡片标题与详情，GUI 不再显示“等待中”“空闲”等无功能占位文本。
-- 手柄卡片区分 USB、Bluetooth、断线等待、DSX、初始化错误和后端不可用；遥测卡片区分启动、等待、接收、丢失和 UDP 绑定错误，并显示有效包计数、来源或静默时间。
-- 当前配置卡片明确显示 `Default` 或命名 Profile；更新卡片区分源码运行方式不可用、等待自动检查、已禁用、检查/下载/校验/安装阶段、进度与错误。
-- `UDPListener` 只把 324-byte 有效包计入快照，线程安全地记录阶段、计数、最后包时间和来源；队列 drain 会保留最后一个有效包，即使其后跟有无效报文。原有静默警告和退出策略未改变。
-- GUI 创建总览页后立即刷新，并由主循环每秒刷新；TUI 和主窗口会保留后端/UDP 错误，不再被下一次普通状态刷新覆盖。
+- `src/modules/dualsense/input_state.py` 解析 USB/Bluetooth 输入报告；`src/modules/dualsense/main.py` 仍是唯一物理 HID reader。
+- `src/modules/xinput/report.py` 把标准按钮、D-pad、摇杆和 L2/R2 扳机键映射为 `XUSB_REPORT`；不增加 deadzone、曲线或 EWMA。
+- `src/modules/xinput/bridge.py` 只保留 latest state；100 ms 无新输入时发送中立，3 s 时移除虚拟 target，停止/重启后不回放旧输入。
+- `src/modules/xinput/service.py` 只在 Windows x64 的 Xbox App 模式挂载 bridge。Steam 模式解除 input consumer、移除虚拟 target，不产生双输入。
+- target 固定为虚拟 Xbox 360 Controller。当前不模拟 Xbox One、不注册 rumble callback、不接管游戏原生振动、不安装或配置 HidHide，也没有复制 DS4Windows GPL 代码。
+- 当前电脑已完成合成 ViGEm target 的 `XInputGetState` 反读；真实 Bluetooth DualSense 已完成从 HID 输入到虚拟 XInput 的端到端读取，并验证 100 ms 中立与 3 s 移除。真实 Xbox App 游戏仍未验证。
 
-### 总览 Steam 启动 FH6
+### 3. 离线 ViGEmBus 引导
 
-- 总览快捷入口新增跨两列“启动 FH6”按钮，只在 Windows Steam 安装已验证且精确 `ForzaHorizon6.exe` 未运行时启用；点击后重新验证并通过 `steam://run/2483190` 交给 Steam，不直启 EXE，也不触碰语言 ZIP。
-- 安装发现和启动请求使用 worker 结果队列，由 GUI 主线程每秒消费，修复了主循环启动前 worker 回调可能永久停在“正在查找 FH6”的竞态。
-- 已找到安装后不再每五秒重复发现，只继续轮询精确进程状态；未找到时才按五秒间隔重试，因此可用按钮不会周期性闪回“正在查找 FH6”。
-- 源码 GUI 连续观察十二秒跨过两个旧扫描周期，按钮保持“启动 FH6”；真实点击显示 Steam 请求提示并进入 FH6 启动画面，满足运行成功证据。
+- Windows bundle 固定携带 `src/data/xinput/ViGEmClient.dll`：130,048 字节，SHA-256 `2BF0CB1D809039573C922737D298A1653D4DBC61408060FF45A9BCFDE82E97D2`。
+- 固定携带官方 `ViGEmBus_1.22.0_x64_x86_arm64.exe`：6,278,576 字节，SHA-256 `89220A7865076B342892F98865F3499FB7C4CFD673159E89D352C360FD014C6A`。
+- `src/modules/xinput/driver.py` 先按真实 client connect 探测兼容 driver；只在缺失、用户确认、固定 SHA-256 和 cache-only Authenticode 均通过后以 `runas` 触发 UAC。安装资源本身不需要联网。
+- ViGEmBus/ViGEmClient 已停止上游维护；代码不自动升级 driver。许可证、版本、哈希和项目链接已写入 `docs/THIRD_PARTY_NOTICES.md` 与 GUI/TUI 关于页。
 
-### FH6 中文文字 + 英文语音按钮
+### 4. 内置 FH6 DualSense 按键图标 MOD
 
-- `src/modules/forzahorizon/fh6_language.py` 只支持 Windows Steam 版 FH6。发现流程会读取 Steam 注册表、全部 `libraryfolders.vdf`、App ID `2483190` 的 manifest、卸载注册表和正在运行的精确 `ForzaHorizon6.exe` 完整路径，不硬编码 C 盘或 `Program Files`。
-- 扫描会只读检查 `media/Stripped/StringTables`，按 ZIP 内 UTF-8 `.str` 内容识别 `CHS.zip`、`EN.zip` 和临时文件是中文、英文、未知还是损坏；未知或损坏状态会拒绝普通启用/还原操作。
-- GUI/TUI 的“系统与更新”页提供重新扫描、选择目录和显式启用/还原按钮。扫描和启动不会自动改名；实际操作前必须再次确认，并要求 FH6 已退出、Steam 游戏语言为 English。
-- 交换使用 `CHS.zip.fhds-swap.tmp` 完成精确三步 rename，每一步前重新检查游戏进程、路径和文件存在性；进程内失败会回滚，进程外中断留下的临时状态只允许通过显式修复处理，不自动删除、复制或猜测文件角色。
-- `fh6_install_path` 是全局缓存提示，不覆盖每次扫描得到的真实结果。Windows 以外平台会显示不支持并禁用操作。
-- 六个非英语 catalog、GUI/TUI 共用展示映射、R5 版本和双语 Release 正文已经同步；冻结 R4 更新器的回归测试确认能选择规范 R5 资产。
+- 用户提供的 `DualSenseIcons 2.1.1` 两个内层归档内容相同，项目只内置一份 `src/data/mods/dualsense_icons/ControllerIcons.zip`：70,188 字节，SHA-256 `9677E50BF04276A9606956819D7760588EA7B986CFAFEBC70396F35630C53A61`。
+- `src/modules/forzahorizon/controller_icons.py` 把同一资源写入普通与 HiRes 两个目标；原文件分别备份，manifest 绑定游戏根路径和哈希，写入失败回滚，FH6 运行时拒绝修改。
+- Steam 路径可自动发现；Xbox App 根路径由用户手动选择并保存为 `fh6_xbox_install_path`。没有在当前真实游戏目录执行安装或还原。
+- GUI/TUI 的独立 `FH6 utilities` 页面提供语言工具、图标扫描、安装、还原和选目录；`SystemTab` 已删除两项工具的卡片、timer、worker 和隐藏入口。工具页、关于页、三语 README、Release 源文案和第三方声明均以 Nexus 链接鸣谢 `@hotline1337`。许可事实只按用户陈述记录，不推断通用再许可。
 
-### 统一产品图标
+### 5. 其他 R6 工作树功能
 
-- 用户最终选择的第二张水墨风 DualSense 赛车图片已规范化为 1024×1024 RGB `src/data/icon.png`，并生成含 16、24、32、48、64、128、256 七档的 `src/data/icon.ico`。
-- Tk 标题栏、系统托盘、Windows 主 EXE、更新 Helper 和 Windows/Linux bundle 复用同一资产对；ICO 哈希契约为 `EDC4EBE4678D6A93B444E32CCE6689073FC0A59E12880E659383AE4F306B8AE4`。
-- 最终 R5 EXE 的 associated icon 已从 PE 提取为 32×32 PNG，与新 ICO 的 32×32 帧逐像素完全一致。
+- `src/modules/gui/widgets.py` 的更新提示点由导航按钮自身 canvas 绘制白点，不再使用带黑底的独立控件。
+- `src/modules/gui/main.py` 把全部页面只挂载一次，导航使用 `tkraise()` 与 `on_show()`/`on_hide()`，不再每次 `pack_forget()` 后重新布局长页面。
+- `src/modules/gui/overview_tab.py` 只发现当前选择的 Steam 游戏；找到路径后停止，未找到时每 30 秒静默重试。状态卡、启动按钮、selector 和 XInput action 只在 presentation 变化时更新，默认平台仍为 Steam。
+- `src/modules/gui/fh6_utilities_tab.py` 与 `src/modules/tui/fh6_utilities_tab.py` 独立承载 FH6 语言和图标工具；页面隐藏时不继续周期发现，找到路径后只保留轻量进程状态检查。两项工具均在 Steam 自动路径和 Xbox App 手动路径上工作。
+- FH4/FH5/FH6 通用启动文案、Steam/Xbox App 说明和全部非英语 catalog 已补齐。
+- `src/modules/forzahorizon/fh6_language.py` 的 `FH6LanguageSummary` 与 `summarize_fh6_languages()` 负责区分游戏语言、实际文字语言和语音语言；GUI/TUI 通过共用 `language_summary_view()` 显示本地化三行，不再暴露原始 `english` token。Steam manifest 可得时显示确定结果；Xbox App 无可靠语言元数据时显示未知并要求额外确认。
+- `README.md`、`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 已保持分语言精简结构，并说明 Steam/Xbox App 使用方式、关闭 Forza 游戏内振动、XInput bridge 与 FH6 图标工具。
+- `.github/workflows/release.yml` 已准备完整中文与英文 R6 说明；尚未创建 R6 tag 或 Release。
 
-### 单一 Console 前端和滚动布局
+## 文档声称与代码事实的边界
 
-- 已删除 `src/modules/gui/variants.py`，不再支持 Stage、Studio、`FHDS_UI_VARIANT`、`FHDS_BUILD_VARIANT` 或 `data/ui_variant.txt`。GUI 固定为单一正式壳层，入口在 `src/modules/gui/main.py`。
-- Windows 构建只生成规范资产 `FH-DualSense-Enhanced-R4.exe` 及同名 `.sha256`，对应配置在 `packaging/windows/fhds.spec` 和 `packaging/windows/build_exe.bat`。
-- `src/modules/gui/controls_tab.py` 的驾驶反馈卡片使用自然高度和可滚动容器，不再被窗口高度压缩。逻辑宽度至少 720 px 时显示两列，较窄时自动切为单列。
-- `src/modules/gui/widgets.py` 的根级 `WheelRouter` 统一处理滚轮。滚轮位于开关等子控件上时仍滚动所在页面；嵌套滚动到达边界后才转交外层；slider 不会被滚轮误改。
-- 总览和配置文件页也改为可滚动页面，避免高 DPI 或小窗口下内容被裁切。
+- 已实现：上述模块、配置字段、GUI/TUI 控件、打包输入和自动测试均存在于当前工作树。
+- 已实机验证：当前电脑的 ViGEm 合成反读、Bluetooth DualSense XInput 端到端和 stale/remove 保护；这些不等同于 Xbox App 版 Forza 已验收。
+- 尚未实机验证：真实 Xbox App 游戏启动与驾驶、clean-machine ViGEmBus 离线安装、真实 Xbox App FH6 语言交换、真实 FH6 MOD 安装/还原、最终冻结 R6 GUI 的完整交互流程。
+- 已由代码、自动测试和源码 GUI 冒烟验证：FH6 游戏语言/实际文字/语音三行显示，以及 Steam/Xbox App 的路径字段隔离；最终冻结包已确认包含对应模块，但未在真实 Xbox App 安装上操作游戏文件。
+- 推测可能兼容：Xbox App FH4/FH5/FH6 使用标准 XInput，现有 bridge 理应可用；没有真实游戏证据前只写为待确认。
 
-### Default 持久化、退出确认和恢复默认
+## 正在进行
 
-- `src/modules/config/preferences.py` 不再在每次启动时覆盖 `Default`。Default 的 Profile 字段会即时保存并跨重启保留。
-- 偏好写入使用临时文件替换；写入失败时返回失败，不再把未落盘操作报告为成功。
-- `src/modules/config/profile_session.py` 只跟踪本次 GUI 会话对 Default Profile 字段的改动。纯 global 设置改动或当前命名 Profile 不触发退出另存提示。
-- 窗口关闭、托盘退出、游戏关闭、遥测超时和更新重启均经过 `src/modules/gui/main.py` 的统一退出入口。
-- Default 在本次会话被调节后，退出弹窗可选择“保存为命名配置并退出”“直接退出”或“取消”。命名输入框默认使用首个空闲的 `profile1`、`profile2` 等名称，保存失败时保持窗口开启。
-- 总览快捷入口、配置文件页和设置页均可执行“恢复默认设置”。恢复操作先生成 `.bak`，重建 Default 和 global 字段、重新检测系统语言、切换到 Default，同时保留已有命名 Profile。
+1. 最终发布候选已生成：`packaging/windows/dist/FH-DualSense-Enhanced-R6.exe` 与同名 `.sha256`。
+2. R6 实现已整理为本地提交 `379d020 feat: prepare Enhanced R6`；远端 README、文档一致性和最终 Git diff 已复核。
+3. 本地已达到“可发布”状态；等待用户对候选 EXE 的最终确认，再 push、创建 `R6` tag 和中英双语 Release。
 
-### 语言和更新提示
+## 尚未完成与下一步顺序
 
-- 第一次启动且不存在有效偏好文件时，`src/modules/config/system_language.py` 根据 Windows 显示语言选择 `en`、`de`、`ja`、`ru`、`tr`、`zh` 或 `zh_tw`；之后仍可手动修改语言。
-- “系统与更新”导航项旁会在发现可用更新、下载中、校验中、等待安装或更新错误时显示白点。进入页面不会提前清除提示。
-- 更新器只接受唯一规范资产 `FH-DualSense-Enhanced-R<n>.exe` 及其 `.sha256`，不再按前端变体选择资产。
-- 应用内六个非英语语言目录已同步 R4 界面行为；用户 README 另按英文、简体中文、日语三个独立页面维护。
+1. 由用户运行最终候选，重点复核页面切换、滚轮、默认 Steam、独立 FH6 实用功能页三行状态、退出保存提示和 Xbox bridge 状态。
+2. 若当前手柄可用，补一次 USB 与 Bluetooth bridge 快速回归；记录连接方式、Steam Input 与 Forza 游戏内振动。没有实际 Forza 驾驶时明确写“未执行”。
+3. 用户确认候选后 push 当前提交，创建 `R6` tag 和 GitHub Release，上传规范 EXE、sidecar、ZUV、启动脚本、LICENSE 与第三方声明。
+4. 从线上 Release 重新下载 EXE 与 sidecar，复核哈希，并在 R6 发布后执行一次 R5 -> R6 自更新验收。
 
-### 独立关于页和正式命名
+## 当前已知 Bug 和限制
 
-- GUI 左侧导航和 TUI 页签均在“日志”之后提供独立“关于与许可证”页面，继续显示 `LICENSE` 要求的署名、原项目与 Sponsor 链接。
-- “握把触觉”不再混入许可证卡片；总览页已删除没有状态或动作的版本工作台。
-- 窗口标题固定为 `FH-DualSense-Enhanced`，Windows `FileDescription` 为 `Enhanced Forza Horizon DualSense haptics`；旧界面代号只留在老三样记录设计来源。
-- `.github/workflows/release.yml` 的 Enhanced R4 正文包含信息对等的完整中文和英文说明。
-
-### 精简并拆分用户 README
-
-- 根 `README.md` 现在是 96 行英文默认首页；`docs/ReadmeZH.md`、`docs/ReadmeJA.md` 是各 96 行的独立简体中文和日语页面，三者顶部可互相切换。
-- 已删除重复的 `docs/ReadmeEN.md`，也删除三语同页锚点、后台行为等小设置、算法与报文说明、版本历史和开发构建命令。
-- README 使用通用资产名 `FH-DualSense-Enhanced-R<n>.exe`，因此发布 R4 后不需要把固定版本号写死在三个语言页面中。
-- README 与契约测试在 R4 分支提交为 `311c268`；移植到 `main` 后生成 `b2bb4ca` 并已推送到 `origin/main`。
-- 三语 README 已移除旧界面代号功能卖点，并用 `IMPORTANT` 明确 Steam Input 保持开启、Forza 游戏内振动必须关闭。R4 分支提交为 `12478e4`，`main` 提交为 `e57e7c1`。
-- 最终窗口标题、总览页、翻译目录、Release workflow 和 Windows 文件描述均已使用正式项目名；青绿色视觉设计保留。
-
-### R4 既有触觉和灯效
-
-- Enhanced R4 已包含红线握把反馈、可选扳机层、转速灯带、挡位 Player LEDs、Bluetooth HD haptics 软限幅和误差反馈等此前提交的功能。
-- R5 本轮没有改变 HID report、Bluetooth `0x36`、Forza 遥测 offset 或任何手感参数。UDP 变更只新增运行时快照和“保留最后一个有效包”的 drain 行为，不改变 324-byte 报文解析布局。
-
-## 正在进行的工作
-
-- R5 业务实现、测试、翻译、Release 正文、新图标和长期文档已提交为 `b2569d4`；三个批准的设计分别为 `11808e8`、`355b2fa` 和 `a990301`。
-- 源码 GUI、冻结 R5 GUI、真实 Steam/FH6 发现与启动、新图标嵌入和全量自动测试已经完成。远端 README 更新已无冲突合并；下一阶段是推送 `main` 并执行已获批准的稳定发布流程。
-- 代码审计已确认基础油门 ramp、默认参数和 adaptive trigger primitive 未被 R4 的 G 力实现删除。R4 的 G 力 force 是加法层，默认最大 `28`，明显大于基础 ramp 最大 `1`；用户报告的实机差异尚不能由现有代码差异解释。
-- R4/R5 的真实 Forza、不同显示缩放和后续自动更新替换仍属于验收/观察项，不应写成已经完成。
-
-## 尚未完成的工作
-
-1. 当前实机文件重扫为 `swapped`：`CHS.zip` 内容为英文、`EN.zip` 内容为中文，临时文件不存在。本轮启动按钮开发没有执行 rename；游戏内“中文文字 + 英文语音”效果和显式还原仍需用户按需验收。
-2. 真实 Enhanced R4 到 R5 的更新替换；需要先存在公开稳定 R5 Release 才能端到端验证。
-3. 在 100% 和 150% Windows 显示缩放下逐档目视检查；本轮可见 GUI 验收沿用当前桌面缩放。
-4. 用户对 Default 跨重启、退出另存、恢复默认和更新白点的完整交互验收。
-5. 用户对 Enhanced R4/R5 触觉、灯效和 Bluetooth 手感的真实 Forza 验收。本轮没有进行游戏内触觉或灯效测试。
-6. 本地 Linux ELF 构建和真实 Linux DualSense 验证；R4 的 GitHub Actions Linux ELF 构建已经通过，FH6 语言功能在非 Windows 平台按设计禁用。
-7. 在同一车辆、路段、Profile 和连接方式下进行 Enhanced R3/Enhanced R4 油门扳机 A/B，记录游戏内振动、Steam Input、最终效果来源、mode 与 force；当前尚未执行。
-
-## 当前已知 Bug 和待确认风险
-
-- 当前自动化和 125% 目视检查未发现长页面裁切或滚轮失效；100% 与 150% 缩放结果仍待确认。
-- FH6 ZIP 角色由 `.str` 内容识别；如果游戏更新改变容器结构、编码或文本特征，扫描会进入 unknown/corrupt 并拒绝普通操作，需要重新验证识别规则，不能放宽为按文件名猜测。
-- 三步 rename 在本进程内失败时会回滚，但断电、强制结束进程或外部工具同时改名仍可能留下 `CHS.zip.fhds-swap.tmp`。此状态只允许显式修复，且必须能唯一识别两份存档的语言角色。
-- Steam 校验文件或游戏更新可能恢复原始 `CHS.zip` / `EN.zip`；应用每次扫描都以文件内容为准，不把缓存路径或上次操作结果当成真实状态。
-- FH6 路径发现覆盖多 Steam library 和非系统盘，但当前只支持 Windows Steam 版；Microsoft Store 或其他发行方式未实现。
-- 更新器设计中的“最多每 24 小时检查一次”尚未实现。当前每次启动约 10 秒后检查，没有持久化节流。
-- 下载校验包含规范文件名、大小、SHA-256 与 `MZ` 头，但没有解析 PE 版本资源或验证代码签名。
-- GUI/TUI 不在应用内展开 Release body，只提供查看 Release 的入口。
-- R5 尚未发布，因此更新 Helper 的真实 R4 到 R5 跨版本替换仍待确认。
-- 仓库脱离 fork network 后，两次 `R4` tag push 都没有创建 Actions run；工作流本身为 active 且 Actions 已启用，最终发布通过 `workflow_dispatch channel=stable` 成功完成。未来稳定 tag 的自动触发是否恢复仍待确认。
-- GitHub Actions 提示 `actions/checkout@v4`、`actions/upload-artifact@v4`、`actions/download-artifact@v4`、`astral-sh/setup-uv@v5` 和 `softprops/action-gh-release@v2` 的 Node.js 20 运行时已弃用并被强制切到 Node.js 24；当前 R4 构建成功，但应在后续维护中升级对应 action major version。
-- 不同 DualSense 固件或 Bluetooth adapter 仍可能拒绝 398 字节 `0x36` 并回退 compatible rumble，社区发生率待确认。
-- 游戏原生振动或 Steam Input 可能掩盖本项目的碰撞方向；Enhanced R4 仍不接管菜单、CG、上车过场等原生振动。
-- 同时运行两个实例会争用默认 UDP 端口 `5300`。
-- 用户报告 Enhanced R4 关闭 G 力阻力时的 R2 扳机键油门手感与 Enhanced R3 明显不同。代码审计只发现油门值为 `0` 时 `rigid(0)` 与 `off()` 的差异，按下后的基础 ramp 理论应兼容；真实原因待受控 A/B，当前不能写成已经定位的代码回归。
+- 真实 Xbox App 版 Forza 尚未测试；当前电脑没有对应安装，因此 AUMID 动态发现只有 fixture 覆盖。
+- Xbox App FH6 语言和 MOD 根路径不能自动发现，需要用户手动选择；受保护 package ACL 与未来目录布局变化待确认。
+- Xbox App 当前游戏与语音语言没有可靠元数据来源，因此三行状态会显示未知；这不阻止用户在额外确认后使用交换/还原，但真实 Xbox App 版尚未验证。
+- Forza 游戏内振动必须关闭，否则 native rumble/Steam Input 可能掩盖本项目握把方向与细节；项目仍不复现菜单、CG 和上车过场原生振动。
+- XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板或陀螺仪映射。
+- ViGEm 上游 EOL；固定哈希不能替代未来安全维护。
+- 更新器仍无跨启动 24 小时节流，真实 R5 到 R6 自更新替换要到 R6 发布后才能完整验收。
+- R2 扳机键基础油门阻力与实验性 G 力层的主观差异尚未做受控 Enhanced R3/Enhanced R4 对照，属于独立后续调校。
+- Linux 本地 build script 的 `numpy`/`sounddevice` 依赖差异仍待确认；本轮 XInput、ViGEm 与 MOD 明确只支持 Windows。
 
 ## 当前技术债
 
-- 遥测业务数据仍使用无类型 `dict`；新增的监听器状态已经使用不可变快照，但 GUI/TUI 设置声明仍有重复，主要依赖测试防止漂移。
-- `wheelspin_*` 内部字段名与 traction/grip UI 术语不一致，直接重命名会破坏 Profile 和 share-code 兼容。
-- 更新器缺少 24 小时节流、PE 版本解析、代码签名和应用内 Release 摘要。
-- 稳定 Release 的 tag push 自动触发在仓库独立化后尚未恢复验证，当前有 `workflow_dispatch stable` 恢复入口。
-- `src/lang/` 仍保留旧 ZUV sentinel 的未使用翻译键。
-- USB audio endpoint 依赖名称 heuristic，没有用户选择和多 host API fallback。
-- DSX 无 ACK、不提供本项目 body haptics，也不接收灯效。
-- 三个独立语言 README 仍有事实重复；契约测试不能发现所有翻译语义漂移。
-- 没有 Enhanced R3/Enhanced R4 全油门行程输出回归测试，也没有可直接记录最终 R2 扳机键效果来源、mode 和 force 的诊断入口。G 力层 `28` 与基础 ramp `1` 的量级差会放大主观差异。
-- FH6 Steam VDF/manifest 读取是针对当前 Steam 文件格式的轻量解析，没有依赖 Valve 官方解析库；相关变化主要依赖 fixture 和真实只读扫描发现。
+- GUI/TUI 分别声明设置 section，依靠测试保持一致。
+- 遥测仍使用未类型化 `dict`。
+- `ProcessWatcher` 的通用退出观察仍按 `forza` 子串匹配；启动器使用精确 EXE 名。
+- USB audio endpoint 仍按名称自动选择，没有用户可选 host API/device。
+- 更新器没有代码签名信任链，只使用 Release sidecar SHA-256 与 MZ 头。
+- ViGEmClient 是项目自有最小 `ctypes` ABI，升级 DLL 时必须重新审计结构布局、错误码、哈希和集成测试。
+- 三份 README 是独立文件，关键事实依赖契约测试和人工语义同步。
 
-## 暂时不要修改的部分
+## 暂时不要修改
 
-- `src/modules/dualsense/bt_haptics.py` 的 report `0x36` 长度、offset、序列、CRC 和 haptics-only speaker omission；修改必须同时具备字节测试和真实硬件探针。
-- `src/modules/dualsense/main.py` 的 `0x02`、`0x31` trigger layout、pending compatible release、单槽队列和 event clear/check 顺序。
-- `src/modules/forzahorizon/udp_listener.py` 的 324 字节 offsets，以及 drain 完整队列但返回最后一个有效 324-byte 报文的语义。
-- `src/modules/forzahorizon/fh6_language.py` 的按钮触发、内容识别、逐步前置检查、临时文件和显式恢复边界；不要改成启动时自动交换，也不要按盘符或文件名猜测状态。
-- `src/modules/loop.py` 的 shared `CollisionSignal`、状态改变写入 gate、静音和 body-haptics failure isolation。
-- 当前单一 Console 边界。不要恢复 Stage、Studio 或基于构建产物的页面分叉。
-- Windows updater 的规范单资产、`.sha256`、Helper 和 `.old` 回滚边界。
-- `LICENSE`、`src/modules/about.py` 和 `docs/THIRD_PARTY_NOTICES.md` 的署名、原项目与第三方声明。
-- 已发布 Enhanced R1、R2、R3、R4 的 tag、Release 和资产；不得移动、覆盖或删除。
+- 不要移动、覆盖或删除已经发布的 `R1`、`R2`、`R3`、`R4`、`R5` tag、Release 和资产。
+- 不要改变 DualSense USB/BT 输入 offset、输出 report 长度、BT CRC、`0x36` 398 字节布局或左右通道映射，除非同时增加字节级测试与真实硬件验证。
+- 不要给 XInput bridge 增加第二个 HID reader、输入队列回放、rumble callback、HidHide 自动配置或默认 Steam 模式 target。
+- 不要把 Xbox App 产品页 fallback 写成安装/启动成功，也不要直启游戏 EXE。
+- 不要把 FH6 图标 MOD 改成无备份覆盖；不要删除 `@hotline1337`、Nexus 链接或第三方声明。
+- 不要绕过 `summarize_fh6_languages()` / `language_summary_view()` 分别在 GUI/TUI 猜测语言，也不要把 Xbox App 的未知语言伪造成英语。
+- 不要在推送前用本地旧 README 整体覆盖用户可能在 GitHub 提交的新文本；必须先 fetch 并逐段语义合并。
 
 ## 最近涉及的关键文件
 
-- GUI：`src/modules/gui/main.py`、`overview_tab.py`、`overview_status.py`、`system_tab.py`、`dialogs.py`、`widgets.py`。
-- FH6 与遥测：`src/modules/forzahorizon/fh6_language.py`、`fh6_language_presentation.py`、`process_watch.py`、`udp_listener.py`。
-- TUI：`src/modules/tui/main.py`、`system_tab.py`。
-- 配置：`src/modules/config/preferences.py`、`profiles.py`、`profile_session.py`、`system_language.py`。
-- 更新器：`src/modules/update/github.py`、`service.py`、`presentation.py`。
-- 构建和发布：`packaging/windows/fhds.spec`、`packaging/windows/build_exe.bat`、`packaging/windows/write_sha256.py`、`.github/workflows/release.yml`。
-- 测试：`tests/gui/test_overview_status.py`、`test_r4_frontend.py`、`tests/forzahorizon/test_fh6_language.py`、`test_fh6_language_presentation.py`、`test_process_watch.py`、`test_udp_listener.py`、`tests/test_updater.py`、`tests/test_enhanced_distribution.py`。
-- 用户文档：`README.md`、`docs/ReadmeZH.md`、`docs/ReadmeJA.md`；`docs/ReadmeEN.md` 已删除。
-- 长期文档：`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DECISIONS.md`。
-- 本轮设计：`docs/superpowers/specs/2026-07-17-r5-overview-runtime-status-design.md`、`docs/superpowers/specs/2026-07-17-r5-fh6-chinese-text-english-voice-design.md`。
+- 应用与配置：`src/main.py`、`src/modules/config/settings.py`、`src/modules/config/preferences.py`、`src/modules/config/paths.py`。
+- XInput：`src/modules/dualsense/input_state.py`、`src/modules/dualsense/main.py`、`src/modules/xinput/`、`src/data/xinput/`。
+- 启动与 MOD：`src/modules/forzahorizon/game_launch.py`、`src/modules/forzahorizon/controller_icons.py`、`src/data/mods/dualsense_icons/ControllerIcons.zip`。
+- 界面：`src/modules/gui/main.py`、`src/modules/gui/overview_tab.py`、`src/modules/gui/fh6_utilities_tab.py`、`src/modules/gui/system_tab.py`、`src/modules/tui/main.py`、`src/modules/tui/fh6_utilities_tab.py`、`src/modules/tui/system_tab.py`。
+- 发布：`packaging/windows/fhds.spec`、`.github/workflows/release.yml`、`docs/THIRD_PARTY_NOTICES.md`、三语 README。
+- 测试：`tests/xinput/`、`tests/dualsense/test_input_state.py`、`tests/dualsense/test_input_consumer.py`、`tests/forzahorizon/test_game_launch.py`、`tests/forzahorizon/test_controller_icons.py`。
 
 ## 当前 Git 工作区状态
 
-- 分支：`main`；R5 代码提交为 `b2569d4 feat: complete Enhanced R5`，远端 README 提交为 `324c6d8 docs: emphasize Forza Horizon 6 at README opening`，二者由本地 `cae277b` 无冲突合并。
-- R4 功能合并提交：`1596b6f merge: integrate Enhanced R4`。
-- 发布校验修复：`f987cc7 fix: validate release checksum sidecar`。
-- 双语校验说明：`e7184c2 docs: note R4 checksum validation`。
-- annotated tag `R4` 解引用后指向 `e7184c2`；Release workflow run `29563348374` 全部成功。
-- `main` 在 `16ba4e4 docs: record R4 publication` 之后新增 `11808e8 docs: design R5 overview runtime status`、`355b2fa docs: design FH6 language swap controls` 和 `a990301 docs: design R5 Steam game launch`。
-- R5 生产代码、测试、六个非英语 catalog、版本/锁文件、新 PNG/ICO、Release workflow 和四份长期文档均已提交；原有 R3/R4 油门扳机诊断记录与远端 README 修改均已保留。
-- 构建产物、截图、缓存和用户偏好文件没有加入 Git。
+- 分支：`main`。
+- R6 实现提交：`379d020 feat: prepare Enhanced R6`；其后的本文件更新仅记录发布前交接状态。
+- `origin/main` 与公开 `R5`：`031c769 docs: refresh R5 release state`。
+- 本文件提交后，本地相对 `origin/main` 领先 9 个提交。
+- R6 功能代码、测试、三语文档、翻译、打包资产和老三样均已提交；本文件提交后工作树应保持干净，未执行 reset、stash 或删除用户改动。
+- 线上 R5 规范 EXE 由 GitHub API 确认为 `47,218,192` 字节，SHA-256 digest `4d2a981e99ca094c5d61d1f094c8248d4ba216c68ad624ba7704a0ab906b1e9a`。它是 R6 体积比较基线。
 
-## 已执行的测试和验证结果
+## 已执行的测试和验证
 
-- R5 最终全量测试：`uv run --project src pytest -q`，结果 `329 passed in 7.28s`。
-- R5 定向回归：最终启动/语言核心为 `20 passed`，图标契约单测为 `1 passed`。完整覆盖非系统盘、多 Steam library、无扫描副作用、启动 URI 与运行中拒绝、启用/还原、Steam 语言门槛、三步 rename 失败回滚、步骤 1/2 中断恢复、unknown/corrupt 拒绝、非 Windows 禁用、总览防闪烁和冻结 R4 选择规范 R5 资产。
-- 真实 FH6 首次只读扫描：从 Steam manifest 自动发现 `C:\Program Files (x86)\Steam\steamapps\common\ForzaHorizon6`，Steam 语言为 `english`，当时状态为 `native`，`CHS.zip` 识别为中文、`EN.zip` 识别为英文。之后的最新重扫为 `swapped`，两份已知哈希对调且临时文件不存在；启动按钮实现与测试没有执行 rename。
-- 真实只读文件指纹：`CHS.zip` 为 `2,988,625` bytes / `50D262CB58A5E2EBEC12213B92F9C8E97424BC9D9520508646CA4BA014B925D3`；`EN.zip` 为 `2,890,321` bytes / `83511B02AADBD33DDFA54B6EA1D4134B74E7219B08B221A9B686753B6DA0F658`。
-- 源码 GUI 可见冒烟：总览实际显示 Bluetooth 手柄已连接、UDP `5300` 等待遥测、当前 `Default` 和源码运行方式下更新不可用；启动按钮完成首次发现后连续十二秒保持“启动 FH6”，不再周期性闪回扫描。真实点击显示“已向 Steam 发送 FH6 启动请求”，随后 FH6 启动画面可见。
-- R5 Windows 最终离线构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R5.exe`，大小 `47,566,499` bytes，SHA-256 `656e9dad476c37a904fa938b6a6111a8628e33e66fdde3828a67601e9cce3041`；95-byte sidecar 复核通过，MZ 头正确，`--help` 退出码为 `0`。
-- R5 版本资源：`FileVersion` 与 `ProductVersion` 均为 `R5`，`OriginalFilename` 为 `FH-DualSense-Enhanced-R5.exe`，`InternalName` 为 `FH-DualSense-Enhanced-R5`，产品名与文件描述正确。PyInstaller archive 包含更新 Helper、FH6 语言模块和总览状态模块，不包含已删除的 UI variants。
-- R5 图标验证：源 PNG 为 1024×1024 RGB；ICO 含七个规定尺寸且 SHA-256 为 `EDC4EBE4678D6A93B444E32CCE6689073FC0A59E12880E659383AE4F306B8AE4`。最终 EXE archive 同时包含 `data/icon.png` 与 `data/icon.ico`，从 PE 提取的 32×32 icon 与 ICO 对应帧四通道平均差为 `0`。
-- 冻结 R5 GUI 可见冒烟：首轮发现真实更新错误详情过长后，将总览错误摘要限制为 64 字符并增加回归测试；最终重建包显示 Bluetooth 已连接、遥测等待、`Default` 和“当前已是最新版本”。系统页的原始语言状态、自动发现路径、Steam `english` 与完整按钮行均已在冻结包中可见。窗口正常关闭、无残留 R5 进程，FH6 两个 ZIP 哈希保持不变且临时交换文件不存在。
-- R5 收尾静态检查：`python -m compileall -q src/modules src/lang`、`uv lock --check --project src` 和 `git diff --check` 均通过；Git 只报告既有的 LF/CRLF 转换提示。
-- 最终发布代码全量测试：`uv run --project src pytest -q`，结果 `301 passed in 7.46s`。
-- 校验修复定向测试：`tests/test_enhanced_distribution.py`、`tests/test_updater.py`、`tests/test_about_and_release.py`，结果 `42 passed in 3.55s`；双语正文更新后 `tests/test_enhanced_distribution.py` 再次为 `20 passed in 4.17s`。
-- README 重构后 R4 分支全量测试：`294 passed in 4.66s`；相对链接检查通过。
-- README 提交移植到稳定 R3 `main` 后全量测试：`242 passed in 4.31s`；GitHub API 已确认英文根首页、中日文页面和 `docs/ReadmeEN.md` 删除均已生效。
-- 强制振动警告更新后 R4 分支全量测试：`295 passed in 4.58s`；稳定 R3 `main` 全量测试：`243 passed in 3.87s`。GitHub API 已确认三语警告和 README 中无旧界面代号。
-- 字节码检查：`python -m compileall -q src/modules src/lang` 与 `python -m py_compile packaging/windows/write_sha256.py`，通过。
-- 空白检查：`git diff --check`，通过；仅有 Git 的 LF/CRLF 提示。
-- 125% Windows 显示缩放目视检查：驾驶反馈页卡片保持自然高度，右侧滚动条可用，底部内容位于滚动区域内，没有再被卡片裁切。
-- 合成滚轮冒烟：鼠标位于子级开关时，单次标准滚轮使页面移动约 36 px；嵌套边界和 slider 保护由 `tests/gui/test_scroll_routing.py` 覆盖。
-- 退出弹窗目视检查：中文标题、说明、默认 `profile1` 输入框及三个操作按钮均完整显示。
-- 修复后本地 Windows 离线构建：PyInstaller `6.21.0` 成功生成唯一 `FH-DualSense-Enhanced-R4.exe`，大小 `46,322,911` bytes，SHA-256 `ba0cb7920bc4d3b0333571328053437cf3c0409abd20b7cadac1a2fbcd977ccf`；95-byte sidecar 与实际文件匹配，`--help` 退出码为 `0`。
-- 最终 GitHub Release EXE 已重新下载独立验证：大小 `45,994,910` bytes，SHA-256 `df31c2edf49d235665348748847aa214a27a78f3b5dac69e87991e73ba019f49`；线上 95-byte sidecar 包含同一哈希，`FileVersion` 和 `ProductVersion` 为 `R4`，`OriginalFilename` 为 `FH-DualSense-Enhanced-R4.exe`。
-- GitHub Actions run `29563348374` 的 `prepare`、`bundle`、`exe`、`elf`、`release` 全部成功；新增 `Verify EXE checksum sidecar` 步骤通过。最终 R4 Release 为 Latest、非 Draft、非 Prerelease，包含 8 个资产及信息对等的完整中文/英文正文。
-- PyInstaller archive 包含 `data/FH-DualSense-Update-Helper.exe`、`modules.gui.about_tab` 和 `modules.tui.about_tab`，不包含 `ui_variant` 或 `variants`；`--help` 退出码为 `0`。
-- 最终冻结 GUI 已完成隐藏和普通启动冒烟，均未产生新 crash log 或残留进程；当前自动化桌面环境未从进程 API 取得 Tk 窗口标题，因此独立关于页的最终可见布局仍未人工点击检查。窗口标题由源码与契约测试确认。
-- Enhanced R5 真实 USB/Bluetooth Forza 触觉测试：本轮未执行；仅在源码 GUI 中观察到 Bluetooth 连接状态。
-- 本轮游戏内振动状态：仅进入 FH6 启动画面，未检查或调整游戏内振动，不能据此形成触觉结论。
-- 本轮 Steam Input 状态：启动交由 Steam URI 以保留 Steam 上下文，但未读取或调整用户的 Steam Input 开关，状态未知。
+- 2026-07-19 当前工作树完整测试：`uv run --project src pytest -q`，结果 `483 passed in 7.73s`。
+- 源码 GUI 冒烟：构造全部 tab，逐项调用新 `_select_nav()` 并处理 Tk event，结果通过；页面没有重建或启动 backend。
+- Textual 冒烟：在禁用 backend 启动的测试壳中切换 `FH6 utilities -> System -> Language`，结果通过。
+- `uv run --project src python -m compileall -q src/modules src/lang`、`uv lock --check --project src` 与 `git diff --check` 已通过；`git diff --check` 只有 Git 的 LF/CRLF 提示，没有空白错误。
+- 三行语言、Xbox App 手动目录、GUI/TUI 页面与分发契约定向测试：`61 passed in 3.84s`；完整测试已经包含这些用例。
+- 翻译键完整性：此前缺键失败已修复，完整测试通过。
+- 源码 GUI 三行语言冒烟：向独立 FH6 页面注入已交换的 English 安装状态，控件实际输出 `Current FH6 game language: English / Actual display language: Chinese / Voice language: English`，结果通过。
+- 最终 Windows one-file：`51,814,190` 字节（`49.414 MiB`），SHA-256 `60791BAC18461FEC522423A18691BB148472087E2788980473DF8DDDBE3AC649`；相对 R5 增加 `4,595,998` 字节（`4.383 MiB`，`9.73%`），低于 `52 MiB` 停止线，也未超过长期 `5 MiB` 或 `10%` 门槛。
+- 最终产物的 `.sha256 --check`、`MZ` 头、PE `FileVersion/ProductVersion=R6`、产品名、文件名、`--help`、最终 icon 和 PyInstaller 内置 Helper/ViGEm/MOD/FH6 语言与工具模块均已校验；`dist` 仅包含 EXE、sidecar、`LICENSE` 和 `THIRD_PARTY_NOTICES.md`。
+- 当前电脑 ViGEm 合成 target：已用系统 `XInputGetState` 反向读取按键、摇杆和扳机，并在移除后确认 slot 消失。
+- 真实 Bluetooth DualSense：已验证输入报告进入虚拟 XInput target，以及 100 ms 中立、3 s 移除；没有记录真实 Xbox App Forza 驾驶结果。
+- Xbox 启动只读探测：`Get-StartApps` 返回 223 项，无 Forza AUMID；没有修改 package 或 Xbox App 状态。
+- FH6 MOD：在临时 fixture 目录验证安装、双目标还原、游戏更新后备份刷新、partial 无备份拒绝和运行中拒绝；未写入真实游戏目录。
 
 ## 尚未执行或失败的验证
 
-- 最新只读重扫已检测到 FH6 ZIP 为 `swapped`，但本轮启动按钮开发没有执行 rename；游戏内“中文文字 + 英文语音”效果和显式还原流程尚未完整记录。
-- 100% 与 150% 显示缩放的逐档人工目视检查尚未执行。
-- 真实手柄、Forza 遥测、触觉和灯效验证尚未执行。
-- 本地 Linux ELF 构建和真实 Linux 运行尚未执行；GitHub Actions 的 Linux ELF 构建已成功。
-- R5 稳定版尚未发布，因此真实 R4 到 R5 自动更新替换尚未执行。
-- 第一次本地构建因 PyPI TLS 握手中断而失败；确认 PyInstaller 和依赖已存在于 uv 缓存后，以 `UV_OFFLINE=1` 重建成功。
-- 首次 R4 CI 的 sidecar 缺少哈希，根因是 runner 的 Windows PowerShell 没有 `Get-FileHash` 且旧 BAT 未传播错误；首次 Release 已删除。最终发布改用 `packaging/windows/write_sha256.py`，并由 CI 上传前复核，问题已经解决。
+- GUI 一次挂载、差异渲染和独立 FH6 页面后的早期 R6 Windows EXE 曾通过默认 Steam 与独立页面目视检查，但已由最终 `51,814,190` 字节候选替代，不得上传旧产物。
+- 最终候选的 sidecar、PE 版本、最终 icon、内置资产和 `--help` 已通过；最新三行补丁已做源码控件冒烟，但最终 EXE 的完整 GUI 交互仍待用户验收。
+- clean-machine ViGEmBus 离线安装尚未执行；当前电脑已有兼容 bus。
+- 真实 Xbox App 版 FH4/FH5/FH6 启动、输入和驾驶尚未执行。
+- 真实 FH6 图标 MOD 安装/还原与游戏内显示尚未执行。
+- R6 tag、GitHub Release、线上重新下载和 R5 -> R6 自更新尚未执行。
 
-## 下一次会话开始时优先阅读
+## 下一次 Codex 会话交接
+
+开始时优先阅读：
 
 1. `AGENTS.md`
 2. 本文件 `docs/PROJECT_STATE.md`
 3. `docs/ARCHITECTURE.md`
 4. `docs/DECISIONS.md`
-5. `docs/superpowers/specs/2026-07-17-r5-overview-runtime-status-design.md`
-6. `docs/superpowers/specs/2026-07-17-r5-fh6-chinese-text-english-voice-design.md`
-7. `docs/superpowers/specs/2026-07-17-r5-overview-steam-launch-design.md`
-8. `src/modules/gui/main.py`、`overview_tab.py`、`overview_status.py`、`system_tab.py`
-9. `src/modules/forzahorizon/fh6_language.py`、`fh6_language_presentation.py`、`process_watch.py`、`udp_listener.py`
-10. `git status --short --branch`、`git diff` 和最近 10 条提交
+5. `docs/superpowers/specs/2026-07-19-r6-xbox-app-xinput-bridge-design.md`
+6. `src/modules/xinput/bridge.py`
+7. `src/modules/forzahorizon/game_launch.py`
+8. `src/modules/forzahorizon/controller_icons.py`
 
-下一次会话建议首先处理的具体任务：完整 R5 已完成本地构建与验收，用户已明确批准发布；先审查并提交当前 R5 范围，再推送 `main`、执行 `workflow_dispatch stable`，最后重新下载线上 EXE 与 sidecar 复核。R3/R4 扳机差异仍按原计划处理：增加仅用于诊断的效果来源、mode 和 force 记录，并在相同车辆、路段、Profile、连接方式下做 A/B；两轮都必须记录游戏内振动和 Steam Input 状态。保留现有青绿色视觉设计和新水墨风图标，不恢复界面变体。
+建议首先处理的具体任务：让用户运行最终候选 `packaging/windows/dist/FH-DualSense-Enhanced-R6.exe`，确认 GUI 与可用硬件行为。候选已低于体积停止线；用户确认后复核远端、push 当前 R6 提交、创建 `R6` tag 和双语 Release，并从线上重新下载资产校验哈希。
