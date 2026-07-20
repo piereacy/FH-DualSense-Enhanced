@@ -1,6 +1,7 @@
 # R7 Bluetooth 到 USB 握把触觉交接实施计划
 
 日期：2026-07-20
+状态：自动测试通过但实机验证失败，停止执行；后续计划不得把本方案写成修复完成
 
 对应规格：`docs/superpowers/specs/2026-07-20-r7-bt-usb-haptics-teardown-design.md`
 
