@@ -1,7 +1,7 @@
 # Enhanced R7 传输切换、触觉续航与反馈页面拆分设计
 
 日期：2026-07-20  
-状态：用户已确认；主体实现已完成，Bluetooth -> USB 握把触觉重置修正待实现和实机验证
+状态：用户已确认；主体实现已完成，R7 HID 输出契约修正待实现和实机验证
 
 ## 1. 背景与目标
 
@@ -73,21 +73,21 @@ GUI/TUI 的 `UsbAudioLifecycle` 与遥测线程仍可共用一个 `UsbAudioHapti
 
 允许 BT -> USB 提交时出现不超过约 `1 s` 的短暂无握把输出；不允许切换后长期只剩扳机输出。USB -> BT 同样必须自动恢复 Bluetooth HD body haptics。
 
-### 2.4 Bluetooth -> USB 的一次性音频触觉重置
+### 2.4 恢复 R6 HID 输出契约并隔离热切换
 
-真实硬件已确认以下边界：Bluetooth 冷启动和 USB 冷启动的握把触觉都正常；只有程序运行中的 Bluetooth -> USB handover 会出现“扳机仍工作、状态显示 USB、PortAudio callback 活跃，但握把完全无输出”。因此该问题不是 UDP、PCM renderer、USB endpoint 枚举或一般性的 USB 启动失败，而是 handover 后控制器内部触觉模式没有回到 USB audio haptics。
+真实硬件进一步确认：重启电脑后 R6 的 USB 和 Bluetooth 握把触觉正常；运行当前 R7 后，即使退出 R7 再运行 R6，R6 的 USB 与 Bluetooth 握把触觉也会失效，直到再次重启。因此问题不是 Bluetooth -> USB handover 独有故障，而是 R7 向控制器写入了跨进程保留的错误状态。PortAudio、UDP 和进程内 worker 无法单独解释“R7 退出后 R6 仍失效”。
 
-现有候选实现照搬 HorizonHaptics 的注释，把 `valid_flag0 0x20` 当成 `HAPTICS_SELECT`，并把 `valid_flag1 0x20` 当成 `HAPTICS_CONTROL_ENABLE`。该解释与 Linux `hid-playstation` 的 DualSense 输出协议以及完整 SetState 布局不一致：真正的 `HAPTICS_SELECT` 是 `valid_flag0 0x02`，并用于选择 compatible rumble；`valid_flag0 0x20` 属于 speaker volume control，`valid_flag1 0x20` 也不是 USB audio-haptics 接管位。生产实现必须删除这两个错误的 `0x20` 声明和输出。
+当前 R7 照搬 HorizonHaptics 的注释，把 `valid_flag0 0x20` 当成 `HAPTICS_SELECT`，并把 `valid_flag1 0x20` 当成 `HAPTICS_CONTROL_ENABLE`。该解释与 Linux `hid-playstation` 的 DualSense 输出协议以及完整 SetState 布局不一致：真正的 `HAPTICS_SELECT` 是 `valid_flag0 0x02`；`valid_flag0 0x20` 实际表示 speaker volume 字段有效。R7 从全零缓冲区构造报告，因此携带该位等价于明确把 speaker volume 写为零。后续仅取消有效位不会恢复已经写入控制器的值，R6 也不会主动覆盖该字段。`valid_flag1 0x20` 同样不是 USB audio-haptics 接管位。
 
-BT -> USB handover 的 USB handle 已验证并提交后，由现有唯一 HID I/O thread 排队一次专用重置报告：
+生产实现采用最小恢复方案：
 
-1. 保留当前 L2/R2 扳机键和 visual 状态。
-2. `valid_flag0` 包含扳机所有权 `0x0C` 和 compatible-vibration release `0x01`。
-3. 明确不设置 `HAPTICS_SELECT 0x02`，左右 compatible motor byte 均为零。
-4. 该报告成功写入一次后清除 pending 状态；后续恢复普通 trigger/visual 报告，不在每帧重复 `0x01`。
-5. `HapticManager` 继续负责选择 USB PCM 或 Bluetooth `0x36` backend，但不得直接另开 HID handle 或自行写协议报告。
+1. 删除两个错误的 `0x20` 常量、`DualSense.set_usb_audio_haptics_enabled()`、对应实例状态和所有调用。
+2. 普通 USB/BT HID 状态报告恢复 R6 的字节契约：始终声明 L2/R2 扳机键字段，只有存在 compatible rumble 时才声明并写入 motor 字段；R7 已有的 visual 字段继续按自身有效位输出。
+3. `HapticManager` 只负责选择 USB PCM、Bluetooth `0x36` 或 compatible fallback，不再向控制器请求任何未经协议确认的“音频触觉模式”。
+4. 保留 R7 的候选预验证、同一身份约束、USB 优先、原子 handover、PortAudio hot-plug refresh、callback 健康检查和失败回退。
+5. BT -> USB 或 USB -> BT 提交后只依赖既有 backend 生命周期切换，不额外排队任何猜测性的 HID 重置报告。
 
-这一序列的目的不是启用 compatible rumble，而是终止该模式并让控制器重新接受 USB 四声道 PCM 的握把通道。冷启动 USB 不改变现有报告序列；Bluetooth `0x36` 封包、CRC、采样率和握把混音保持不变。若专用报告写入失败，沿用现有 HID 断线处理，不得仅凭 PortAudio callback 活跃记录“握把触觉已经恢复”。
+已经失败的单次 `valid_flag0 0x01` 重置候选不能作为上述方案的验证：它同时引入了新的协议写入和时序变化。生产实现不得保留该重置。对于已经被旧 R7 候选写入错误状态的控制器，测试前必须重启电脑或彻底断电重置；新候选的目标是从干净状态开始不再污染控制器，而不是继续猜测一个恢复命令。
 
 协议字段含义以 Sony 维护的 Linux `hid-playstation` 实现为主，并用公开的 DualSense HID 逆向记录交叉核对；HorizonHaptics 只保留为效果设计参考，不再把其两处 `0x20` 注释作为协议依据。
 
@@ -167,8 +167,8 @@ DualSense：
 - 候选 open 或 input validation 失败时，当前 handle、snapshot、trigger state 和 BT haptics 不变；
 - 有效候选只提交一次，handover 不播放 startup pulse，当前输出只重放一次；
 - USB -> BT fallback 也要求同一身份和有效 input report。
-- Bluetooth -> USB 提交只排队一次 USB audio-haptics 重置报告；报告的 `valid_flag0` 必须包含 `0x0C | 0x01`、排除 `0x02` 和错误的 `0x20`，两个 compatible motor byte 为零。
-- 重置报告必须先于恢复后的普通 USB trigger/visual 报告，且不会在后续遥测帧重复；Bluetooth 和 USB 冷启动报告保持既有行为。
+- USB/BT 普通状态报告必须与 R6 的对应 HID 字节契约一致，不包含错误的 `valid_flag0 0x20`、`valid_flag1 0x20` 或额外的单次 `0x01` 重置。
+- USB PCM 与 Bluetooth `0x36` backend 切换不得调用 HID 音频模式 setter；冷启动、BT -> USB 和 USB -> BT 都复用同一普通状态报告路径。
 
 USB audio：
 
@@ -206,7 +206,7 @@ git diff --check
 
 触觉体验记录必须同时注明：连接方式、Steam Input 状态和 Forza 游戏内振动状态。方向性、碰撞和握把反馈验收时应关闭游戏内振动，避免原生 rumble 掩盖项目输出。
 
-当前实机结果必须保留为失败证据：错误 `0x20` 候选版能够完成 BT -> USB、启动 USB stream 并确认 callback 活跃，也消除了 R2 扳机键反复脉冲，但握把仍完全消失。只有新的单次 `0x01` 重置候选通过同一套冷启动基线和 BT -> USB 测试后，才允许把该问题标记为修复。
+当前实机结果必须保留为失败证据：错误 `0x20` 候选版能够启动 USB stream 并确认 callback 活跃，却会让握把失效并污染之后启动的 R6；单次 `0x01` 重置候选同样失败。只有恢复 R6 HID 字节契约的新候选依次通过 R6 干净基线、候选 USB/Bluetooth 冷启动、退出候选后再次运行 R6、BT -> USB 和 USB -> BT 测试，才允许把该问题标记为修复。
 
 ## 7. 明确不做
 
