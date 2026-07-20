@@ -1,7 +1,7 @@
 # Enhanced R7 传输切换、触觉续航与反馈页面拆分设计
 
 日期：2026-07-20  
-状态：用户已确认，尚未实现
+状态：用户已确认；主体实现已完成，Bluetooth -> USB 握把触觉重置修正待实现和实机验证
 
 ## 1. 背景与目标
 
@@ -72,6 +72,24 @@ stateDiagram-v2
 GUI/TUI 的 `UsbAudioLifecycle` 与遥测线程仍可共用一个 `UsbAudioHaptics`，但所有 start/stop 都通过上述原子边界。这样保留“没有新 UDP 帧时也能检查 USB endpoint”的既有能力，同时消除 R7 refresh 引入的并发终止风险。
 
 允许 BT -> USB 提交时出现不超过约 `1 s` 的短暂无握把输出；不允许切换后长期只剩扳机输出。USB -> BT 同样必须自动恢复 Bluetooth HD body haptics。
+
+### 2.4 Bluetooth -> USB 的一次性音频触觉重置
+
+真实硬件已确认以下边界：Bluetooth 冷启动和 USB 冷启动的握把触觉都正常；只有程序运行中的 Bluetooth -> USB handover 会出现“扳机仍工作、状态显示 USB、PortAudio callback 活跃，但握把完全无输出”。因此该问题不是 UDP、PCM renderer、USB endpoint 枚举或一般性的 USB 启动失败，而是 handover 后控制器内部触觉模式没有回到 USB audio haptics。
+
+现有候选实现照搬 HorizonHaptics 的注释，把 `valid_flag0 0x20` 当成 `HAPTICS_SELECT`，并把 `valid_flag1 0x20` 当成 `HAPTICS_CONTROL_ENABLE`。该解释与 Linux `hid-playstation` 的 DualSense 输出协议以及完整 SetState 布局不一致：真正的 `HAPTICS_SELECT` 是 `valid_flag0 0x02`，并用于选择 compatible rumble；`valid_flag0 0x20` 属于 speaker volume control，`valid_flag1 0x20` 也不是 USB audio-haptics 接管位。生产实现必须删除这两个错误的 `0x20` 声明和输出。
+
+BT -> USB handover 的 USB handle 已验证并提交后，由现有唯一 HID I/O thread 排队一次专用重置报告：
+
+1. 保留当前 L2/R2 扳机键和 visual 状态。
+2. `valid_flag0` 包含扳机所有权 `0x0C` 和 compatible-vibration release `0x01`。
+3. 明确不设置 `HAPTICS_SELECT 0x02`，左右 compatible motor byte 均为零。
+4. 该报告成功写入一次后清除 pending 状态；后续恢复普通 trigger/visual 报告，不在每帧重复 `0x01`。
+5. `HapticManager` 继续负责选择 USB PCM 或 Bluetooth `0x36` backend，但不得直接另开 HID handle 或自行写协议报告。
+
+这一序列的目的不是启用 compatible rumble，而是终止该模式并让控制器重新接受 USB 四声道 PCM 的握把通道。冷启动 USB 不改变现有报告序列；Bluetooth `0x36` 封包、CRC、采样率和握把混音保持不变。若专用报告写入失败，沿用现有 HID 断线处理，不得仅凭 PortAudio callback 活跃记录“握把触觉已经恢复”。
+
+协议字段含义以 Sony 维护的 Linux `hid-playstation` 实现为主，并用公开的 DualSense HID 逆向记录交叉核对；HorizonHaptics 只保留为效果设计参考，不再把其两处 `0x20` 注释作为协议依据。
 
 ## 3. 前端布局与性能
 
@@ -149,6 +167,8 @@ DualSense：
 - 候选 open 或 input validation 失败时，当前 handle、snapshot、trigger state 和 BT haptics 不变；
 - 有效候选只提交一次，handover 不播放 startup pulse，当前输出只重放一次；
 - USB -> BT fallback 也要求同一身份和有效 input report。
+- Bluetooth -> USB 提交只排队一次 USB audio-haptics 重置报告；报告的 `valid_flag0` 必须包含 `0x0C | 0x01`、排除 `0x02` 和错误的 `0x20`，两个 compatible motor byte 为零。
+- 重置报告必须先于恢复后的普通 USB trigger/visual 报告，且不会在后续遥测帧重复；Bluetooth 和 USB 冷启动报告保持既有行为。
 
 USB audio：
 
@@ -185,6 +205,8 @@ git diff --check
 5. 在 Windows `100%`、`125%`、`150%` 下切换页面、最大化、还原并滚动长页面，确认无控件整组闪烁，顶栏无明显连续锯齿或底边缺口。
 
 触觉体验记录必须同时注明：连接方式、Steam Input 状态和 Forza 游戏内振动状态。方向性、碰撞和握把反馈验收时应关闭游戏内振动，避免原生 rumble 掩盖项目输出。
+
+当前实机结果必须保留为失败证据：错误 `0x20` 候选版能够完成 BT -> USB、启动 USB stream 并确认 callback 活跃，也消除了 R2 扳机键反复脉冲，但握把仍完全消失。只有新的单次 `0x01` 重置候选通过同一套冷启动基线和 BT -> USB 测试后，才允许把该问题标记为修复。
 
 ## 7. 明确不做
 
