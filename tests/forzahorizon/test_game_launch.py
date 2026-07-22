@@ -16,6 +16,10 @@ def _game_root(tmp_path: Path, key: str) -> Path:
     return root
 
 
+def _gaming_root_payload(relative: str) -> bytes:
+    return b"RGBX" + (1).to_bytes(4, "little") + relative.encode("utf-16-le") + b"\0\0"
+
+
 def test_registry_has_all_supported_steam_games_and_stable_default():
     assert game_launch.DEFAULT_FORZA_GAME_KEY == "fh6"
     assert game_launch.FORZA_GAME_KEYS == ("fh4", "fh5", "fh6")
@@ -88,6 +92,83 @@ def test_path_validation_accepts_an_xbox_game_wrapper_with_content_child(tmp_pat
     assert install is not None
     assert install.root == content.resolve()
     assert install.source == "Manual Xbox App"
+
+
+def test_xbox_library_roots_use_the_drive_marker_and_default_folder(tmp_path):
+    drive = tmp_path / "Drive"
+    configured = drive / "Games" / "Xbox"
+    default = drive / "XboxGames"
+    configured.mkdir(parents=True)
+    default.mkdir()
+    (drive / ".GamingRoot").write_bytes(_gaming_root_payload("Games\\Xbox"))
+
+    assert game_launch.xbox_library_roots(drive_roots=[drive]) == [
+        configured.resolve(),
+        default,
+    ]
+
+
+@pytest.mark.parametrize("value", ("..\\Outside", "C:\\XboxGames", "\\XboxGames"))
+def test_xbox_library_roots_reject_unsafe_gaming_root_values(tmp_path, value):
+    drive = tmp_path / "Drive"
+    default = drive / "XboxGames"
+    default.mkdir(parents=True)
+    (drive / ".GamingRoot").write_bytes(_gaming_root_payload(value))
+
+    assert game_launch.xbox_library_roots(drive_roots=[drive]) == [default]
+
+
+@pytest.mark.parametrize("key", game_launch.FORZA_GAME_KEYS)
+def test_discovers_each_xbox_game_from_a_gaming_root_library(tmp_path, key):
+    definition = game_launch.get_forza_game(key)
+    drive = tmp_path / f"Drive-{key}"
+    library = drive / "Custom Xbox Library"
+    content = library / f"Installed {definition.full_name}" / "Content"
+    content.mkdir(parents=True)
+    (content / definition.executable_name).write_bytes(b"MZ")
+    (drive / ".GamingRoot").write_bytes(
+        _gaming_root_payload("Custom Xbox Library")
+    )
+
+    install = game_launch.discover_xbox_forza_install(
+        key,
+        drive_roots=[drive],
+    )
+
+    assert install is not None
+    assert install.game is definition
+    assert install.root == content.resolve()
+    assert install.source == "Xbox App library"
+    assert install.steam_language == ""
+
+
+def test_xbox_discovery_does_not_recurse_beyond_direct_game_folders(tmp_path):
+    library = tmp_path / "XboxGames"
+    nested = library / "Category" / "Forza Horizon 6" / "Content"
+    nested.mkdir(parents=True)
+    (nested / "ForzaHorizon6.exe").write_bytes(b"MZ")
+
+    assert game_launch.discover_xbox_forza_install(
+        "fh6",
+        library_roots=[library],
+    ) is None
+
+
+def test_xbox_discovery_rejects_a_direct_symlink_outside_the_library(tmp_path):
+    library = tmp_path / "XboxGames"
+    external = tmp_path / "External" / "Content"
+    library.mkdir()
+    external.mkdir(parents=True)
+    (external / "ForzaHorizon6.exe").write_bytes(b"MZ")
+    try:
+        (library / "Forza Horizon 6").symlink_to(external.parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("Directory symlinks are unavailable in this Windows environment")
+
+    assert game_launch.discover_xbox_forza_install(
+        "fh6",
+        library_roots=[library],
+    ) is None
 
 
 def test_exact_process_detection_distinguishes_each_generation(tmp_path, monkeypatch):

@@ -73,6 +73,26 @@ def test_discovers_fh6_from_a_non_system_steam_library(tmp_path):
     assert found.source == "Steam manifest"
 
 
+def test_discovers_fh6_language_files_from_an_xbox_library(tmp_path):
+    library = tmp_path / "XboxGames"
+    content = library / "Forza Horizon 6" / "Content"
+    tables = content / language.TABLES_RELATIVE
+    tables.mkdir(parents=True)
+    (content / language.GAME_EXE).write_bytes(b"MZ")
+    _write_language_zip(tables / language.CHS_NAME, CHINESE)
+    _write_language_zip(tables / language.EN_NAME, ENGLISH)
+    install = language.validate_game_root(content, source="test")
+    assert install is not None
+
+    found = language.discover_xbox_fh6_install(library_roots=[library])
+
+    assert found is not None
+    assert found.root == install.root
+    assert found.string_tables == install.string_tables
+    assert found.source == "Xbox App library"
+    assert found.steam_language == ""
+
+
 def test_read_only_discovery_and_inspection_never_rename_archives(tmp_path):
     install = _game(tmp_path)
     before = {

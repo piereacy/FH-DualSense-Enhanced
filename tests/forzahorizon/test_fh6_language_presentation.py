@@ -105,7 +105,9 @@ def test_xbox_path_support_is_manual_and_does_not_invent_a_language(monkeypatch)
         _t,
     )
 
-    assert missing.detail == "Choose the Xbox App FH6 install folder to continue."
+    assert missing.detail == (
+        "Automatic detection failed. Rescan or choose the Xbox App FH6 install folder."
+    )
     assert unknown.action_enabled is True
     assert unknown.unknown_language_warning is True
     assert "Steam" not in unknown.detail

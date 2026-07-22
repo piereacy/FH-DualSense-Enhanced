@@ -88,7 +88,7 @@ Both connections use the same telemetry decisions and support adaptive triggers,
 
 ## FH6 utilities
 
-The dedicated **FH6 utilities** page provides Chinese-text plus English-voice file swapping and a reversible DualSense icon MOD for Steam or Xbox App installations. Steam paths are detected automatically; Xbox App paths are selected manually. Language status separately shows game, display, and voice language without inventing values that cannot be verified. Game updates may restore files, so reapply a utility when needed. Thanks to icon MOD author [@hotline1337](https://github.com/hotline1337): [Nexus Mods MOD page](https://www.nexusmods.com/forzahorizon6/mods/2).
+The dedicated **FH6 utilities** page provides Chinese-text plus English-voice file swapping and a reversible DualSense icon MOD for Steam or Xbox App installations. Steam and Xbox App install folders are detected automatically, with manual selection retained as a fallback. Language status separately shows game, display, and voice language without inventing values that cannot be verified. Game updates may restore files, so reapply a utility when needed. Thanks to icon MOD author [@hotline1337](https://github.com/hotline1337): [Nexus Mods MOD page](https://www.nexusmods.com/forzahorizon6/mods/2).
 
 ## Credits and license
 

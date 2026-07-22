@@ -2,6 +2,13 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-07-22：Xbox App 平面文件安装采用受限自动发现
+
+- 状态：生产代码和自动测试已完成；当前 Windows 已验证 `.GamingRoot -> C:\XboxGames` 解析，但本机没有真实 Xbox App FH4/FH5/FH6，游戏目录与权限仍待用户环境验收。
+- 背景：FH6 语言和图标工具此前只能缓存路径或让用户手动选择。Microsoft GDK flat-file 安装允许用户为每个磁盘配置游戏目录，默认常见位置为 `XboxGames`；对整盘、`WindowsApps` 或无限递归扫描既慢又会触碰不必要的权限边界。
+- 决定：新增通用 `discover_xbox_forza_install()`。Windows 只枚举本地 fixed/removable drive，读取每盘最多 4096 字节的 `RGBX` `.GamingRoot` 相对路径并兼容默认 `XboxGames`；每个库只验证库根、标准游戏名和最多 512 个直属目录。候选必须保留在库根内，并通过 FH4/FH5/FH6 对应精确 EXE；FH6 语言和图标还分别要求自身资源目录。成功路径缓存到 `fh6_xbox_install_path`，手动选择与直接 `Content` 仍作为 fallback。
+- 边界：不枚举网络或光驱，不扫描 `WindowsApps`、整盘或任意递归子目录，不绕过 ACL，不直启发现到的 EXE，也不把未知 Xbox App 游戏语言伪造成 English。显式手动选择继续用 serial 抢占后台发现。真实 Xbox App 安装验证完成前，只能写成生产代码与自动测试已实现。
+
 ## 2026-07-22：Xbox bridge 和物理 HID 故障采用分层自恢复
 
 - 状态：生产代码与自动测试已完成；真实 DualSense Edge、Xbox App 和 30 至 60 分钟 Bluetooth 压力测试未执行。
@@ -24,7 +31,7 @@
 - 状态：生产代码和自动测试已完成；真实 Xbox App FH6 目录仍待用户环境验收。
 - 根因：FH6 实用功能页面显示后会立即启动后台语言与图标扫描，旧代码在 scan busy 时直接丢弃随后选中的目录且不提示。另一个失败路径是用户选择 Xbox App 展示的游戏外层目录，而验证器只检查所选目录本身是否直接包含 `ForzaHorizon6.exe` 和资源目录；返回 `None` 后界面仍显示原状态，看起来像按钮没有反应。
 - 决定：GUI 的显式目录选择允许抢占同类后台扫描，以递增 serial 使旧 worker 结果失效；无效手动选择显示 toast。通用根验证只额外尝试所选目录的直接 `Content` 子目录，语言与图标工具共用该结果并保存解析后的 payload 根目录。
-- 边界：仍不扫描驱动器、`WindowsApps`、整个 `XboxGames` 或任意递归子目录，不绕过访问控制，也不伪造 Xbox App 游戏语言。文件修改仍要求精确 EXE、目标资源、备份和游戏未运行验证。
+- 边界：本条当时的“不扫描驱动器或 `XboxGames`”已由同日后续的受限自动发现决定替代。仍不扫描 `WindowsApps`、整盘或任意递归子目录，不绕过访问控制，也不伪造 Xbox App 游戏语言。文件修改仍要求精确 EXE、目标资源、备份和游戏未运行验证。
 
 ## 2026-07-21：Xbox App 蓝牙输入采用 input-first 与 latest-only 调度
 
@@ -114,7 +121,7 @@
 
 - 状态：GUI/TUI 生产代码、共用展示层、六个非英语 catalog、自动测试和包含本决定的 R6 one-file 发布已完成；真实 Xbox App 游戏验证仍待完成。
 - 背景：独立 FH6 页面仍显示原始 `Steam 语言：english`，遗漏了用户已确认的“当前游戏语言 / 实际显示语言 / 语音语言”三行界面。语言包交换本质只依赖经过内容识别的 `CHS.zip`、`EN.zip` 与同目录事务，不要求文件一定来自 Steam；Xbox App 版可以复用同一安全操作，但当前没有可靠的自动安装目录或游戏语言元数据来源。
-- 决定：GUI/TUI 必须共同消费 `summarize_fh6_languages()` 与 `language_summary_view()`，常驻显示三行本地化状态。Steam 继续自动发现并读取 manifest；Xbox App 只验证用户手动选择并保存的 `fh6_xbox_install_path`。Xbox App 或 Steam 手动路径无法证明当前游戏与语音语言时显示未知，启用前要求额外确认，不得为了显示“英语 / 中文 / 英语”而伪造 token。
+- 决定：GUI/TUI 必须共同消费 `summarize_fh6_languages()` 与 `language_summary_view()`，常驻显示三行本地化状态。Steam 继续自动发现并读取 manifest；Xbox App 当时只验证用户手动选择并保存的 `fh6_xbox_install_path`，该路径发现范围现已由 2026-07-22 的受限自动发现决定扩展。Xbox App 或 Steam 手动路径无法证明当前游戏与语音语言时显示未知，启用前要求额外确认，不得为了显示“英语 / 中文 / 英语”而伪造 token。
 - 安全边界：两种平台继续要求 Windows、精确 FH6 根目录、可识别的中英文 ZIP、游戏未运行、用户显式确认、三步同目录 rename 和失败回滚。平台扩展不允许自动交换、扫描受保护 Xbox package、静默提权或弱化中断恢复。
 - 替代关系：本决定完成并替代下方“先建立 FH6 有效语言摘要，三行前端统一延后”；同时只替代 2026-07-17 决定中的 Steam-only 平台范围，原有事务与确认边界继续有效。
 
@@ -150,7 +157,7 @@
 - 状态：Windows 生产代码、GUI/TUI 入口、打包资产、哈希、临时目录自动测试和冻结 R6 EXE 已实现；真实 Steam/Xbox 游戏目录写入和游戏内图标显示仍未执行。
 - 背景：用户已取得 MOD 集成许可，并要求软件内安装，避免用户手工寻找普通与 HiRes 两个目标。游戏更新或验证文件会恢复原件，覆盖前必须保留可靠还原路径。
 - 决定：EXE 只携带一份 `DualSenseIcons 2.1.1` 的 `ControllerIcons.zip`，安装前校验固定 SHA-256，把两份不同原件分别备份到按已解析游戏根路径隔离的应用数据目录，再用同一 MOD 写入两个目标。安装、还原、部分状态修复都必须由用户显式触发；FH6 运行中拒绝修改，失效或不完整备份时拒绝静默覆盖。
-- 平台：Steam 根目录可自动发现；Xbox App 根目录当前手动选择并保存在 global 字段。该工具仅 Windows/FH6，不能泛化为 FH4/FH5 或 Linux 支持。
+- 平台：Steam 根目录通过 manifest 自动发现；Xbox App 根目录现通过受限 flat-file 发现或手动 fallback 获得，并保存在 global 字段。该图标工具仍仅支持 Windows/FH6，不能泛化为 FH4/FH5 或 Linux 支持。
 - 归属：GUI/TUI 的独立 `FH6 utilities` 页面、关于页、三语 README、双语 Release 和 `docs/THIRD_PARTY_NOTICES.md` 必须以可点击 Nexus 链接鸣谢 `@hotline1337`。许可证说明只记录用户陈述的集成许可，不推断作者授予了更广泛的再许可。
 - 后果：后续修改目标路径、资源版本或作者信息时必须同步哈希契约、事务测试、打包 spec、关于页和发布归属；不能用简单覆盖复制替代备份协议。
 

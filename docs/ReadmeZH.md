@@ -88,7 +88,7 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 
 ## FH6 实用功能
 
-独立的 **FH6 实用功能**页面为 Steam 或 Xbox App 安装提供“中文文字 + 英文语音”文件交换和可还原的 DualSense 按键图标 MOD。Steam 路径自动检测，Xbox App 路径由用户手动选择；语言状态会分别显示当前游戏语言、实际显示语言和语音语言，无法验证的值不会被猜测。游戏更新可能恢复原文件，届时可再次执行。感谢图标 MOD 作者 [@hotline1337](https://github.com/hotline1337)：[Nexus Mods MOD 页面](https://www.nexusmods.com/forzahorizon6/mods/2)。
+独立的 **FH6 实用功能**页面为 Steam 或 Xbox App 安装提供“中文文字 + 英文语音”文件交换和可还原的 DualSense 按键图标 MOD。Steam 与 Xbox App 安装目录都会自动检测，手动选择继续作为兜底；语言状态会分别显示当前游戏语言、实际显示语言和语音语言，无法验证的值不会被猜测。游戏更新可能恢复原文件，届时可再次执行。感谢图标 MOD 作者 [@hotline1337](https://github.com/hotline1337)：[Nexus Mods MOD 页面](https://www.nexusmods.com/forzahorizon6/mods/2)。
 
 ## 来源与许可证
 

@@ -148,6 +148,10 @@ def validate_game_root(
     )
     if install is None:
         return None
+    return _fh6_install(install)
+
+
+def _fh6_install(install: game_launch.ForzaInstall) -> FH6Install:
     return FH6Install(
         root=install.root,
         string_tables=(install.root / TABLES_RELATIVE).resolve(),
@@ -177,12 +181,23 @@ def discover_fh6_install(
     )
     if install is None:
         return None
-    return FH6Install(
-        root=install.root,
-        string_tables=(install.root / TABLES_RELATIVE).resolve(),
-        source=install.source,
-        steam_language=install.steam_language,
+    return _fh6_install(install)
+
+
+def discover_xbox_fh6_install(
+    cached_path: str | os.PathLike = "",
+    *,
+    drive_roots: list[Path] | None = None,
+    library_roots: list[Path] | None = None,
+) -> FH6Install | None:
+    install = game_launch.discover_xbox_forza_install(
+        FH6_GAME,
+        cached_path,
+        drive_roots=drive_roots,
+        library_roots=library_roots,
+        required_directories=(TABLES_RELATIVE,),
     )
+    return _fh6_install(install) if install is not None else None
 
 
 def is_fh6_running(install: FH6Install | None = None) -> bool:

@@ -88,7 +88,7 @@ FH-DualSense-Enhanced は Forza Horizon の Data Out テレメトリを読み取
 
 ## FH6 ユーティリティ
 
-専用の **FH6 ユーティリティ**ページでは、Steam または Xbox App のインストール先に対して中国語テキスト + 英語音声のファイル交換と、復元可能な DualSense ボタンアイコン MOD を利用できます。Steam のパスは自動検出し、Xbox App のパスは手動で選択します。言語状態は現在のゲーム言語、実際の表示言語、音声言語を個別に表示し、確認できない値は推測しません。ゲーム更新で元のファイルに戻った場合は再度適用してください。アイコン MOD 作者 [@hotline1337](https://github.com/hotline1337)：[Nexus Mods MOD ページ](https://www.nexusmods.com/forzahorizon6/mods/2)。
+専用の **FH6 ユーティリティ**ページでは、Steam または Xbox App のインストール先に対して中国語テキスト + 英語音声のファイル交換と、復元可能な DualSense ボタンアイコン MOD を利用できます。Steam と Xbox App のインストール先は自動検出され、手動選択もフォールバックとして利用できます。言語状態は現在のゲーム言語、実際の表示言語、音声言語を個別に表示し、確認できない値は推測しません。ゲーム更新で元のファイルに戻った場合は再度適用してください。アイコン MOD 作者 [@hotline1337](https://github.com/hotline1337)：[Nexus Mods MOD ページ](https://www.nexusmods.com/forzahorizon6/mods/2)。
 
 ## クレジットとライセンス
 

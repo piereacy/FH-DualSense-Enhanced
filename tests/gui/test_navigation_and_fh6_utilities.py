@@ -272,6 +272,8 @@ def test_fh6_tools_exist_only_in_the_dedicated_gui_and_tui_pages():
         assert "Actual display language: {language}" in source
         assert "Voice language: {language}" in source
         assert "Steam language: {language}" not in source
+        assert "discover_xbox_fh6_install" in source
+        assert "discover_xbox_forza_install" in source
     assert "_start_fh6_scan" in gui_utilities
     assert "_start_icon_scan" in gui_utilities
     assert "_scan_fh6" in tui_utilities

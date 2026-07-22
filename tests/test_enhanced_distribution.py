@@ -171,6 +171,9 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "控制器连接真值" in workflow
     assert "动态红线估计器" in workflow
     assert "转速灯条" in workflow
+    assert "`.GamingRoot`" in workflow
+    assert "自动读取本地磁盘" in workflow
+    assert "discover Xbox App flat-file installs" in workflow
     assert "direct `Content` payload" in workflow
     assert "事务式并排安装" in workflow
     assert "temporary Bluetooth signal gap" in workflow
@@ -256,6 +259,9 @@ def test_readme_defaults_to_english_with_separate_language_pages():
     assert "社区" in chinese
     assert "community" in english.lower()
     assert "コミュニティ" in japanese
+    assert "Xbox App install folders are detected automatically" in english
+    assert "Xbox App 安装目录都会自动检测" in chinese
+    assert "Xbox App のインストール先は自動検出" in japanese
 
 
 def test_readmes_are_original_enhanced_project_documentation():

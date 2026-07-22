@@ -10,6 +10,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from types import MappingProxyType
 
@@ -81,6 +82,11 @@ _GAME_DEFINITIONS = (
 FORZA_GAMES = MappingProxyType({game.key: game for game in _GAME_DEFINITIONS})
 FORZA_GAME_KEYS = tuple(FORZA_GAMES)
 DEFAULT_FORZA_GAME_KEY = "fh6"
+
+_GAMING_ROOT_MAGIC = b"RGBX"
+_GAMING_ROOT_HEADER_SIZE = 8
+_MAX_GAMING_ROOT_BYTES = 4096
+_MAX_XBOX_LIBRARY_CHILDREN = 512
 
 
 def get_forza_game(game: str | ForzaGame) -> ForzaGame:
@@ -221,6 +227,188 @@ def _unique_paths(paths: Iterable[str | os.PathLike]) -> list[Path]:
         seen.add(key)
         result.append(path)
     return result
+
+
+def _decode_gaming_root(payload: bytes) -> str:
+    """Decode the bounded Xbox `.GamingRoot` drive marker payload."""
+    if (
+        len(payload) <= _GAMING_ROOT_HEADER_SIZE
+        or payload[:4] != _GAMING_ROOT_MAGIC
+        or int.from_bytes(payload[4:8], "little") <= 0
+    ):
+        return ""
+    try:
+        value = payload[_GAMING_ROOT_HEADER_SIZE:].decode("utf-16-le")
+    except UnicodeDecodeError:
+        return ""
+    return value.split("\0", 1)[0].strip()
+
+
+def _gaming_root_library(drive_root: Path) -> Path | None:
+    marker = drive_root / ".GamingRoot"
+    try:
+        with marker.open("rb") as stream:
+            payload = stream.read(_MAX_GAMING_ROOT_BYTES + 1)
+    except OSError:
+        return None
+    if len(payload) > _MAX_GAMING_ROOT_BYTES:
+        return None
+    value = _decode_gaming_root(payload)
+    if not value or any(ord(character) < 32 for character in value):
+        return None
+    relative = Path(value)
+    if (
+        relative.is_absolute()
+        or relative.anchor
+        or relative.drive
+        or any(part in ("", ".", "..") for part in relative.parts)
+    ):
+        return None
+    try:
+        resolved_drive = drive_root.resolve()
+        candidate = (resolved_drive / relative).resolve()
+    except OSError:
+        return None
+    if candidate == resolved_drive or resolved_drive not in candidate.parents:
+        return None
+    return candidate
+
+
+def windows_local_drive_roots() -> list[Path]:
+    """Enumerate local fixed/removable drive roots without spawning PowerShell."""
+    if not is_windows_steam_supported():
+        return []
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        get_logical_drives = kernel32.GetLogicalDrives
+        get_logical_drives.argtypes = []
+        get_logical_drives.restype = ctypes.c_uint32
+        get_drive_type = kernel32.GetDriveTypeW
+        get_drive_type.argtypes = [ctypes.c_wchar_p]
+        get_drive_type.restype = ctypes.c_uint
+        mask = int(get_logical_drives())
+    except (AttributeError, OSError):
+        log.exception("Could not enumerate local Windows drive roots")
+        return []
+
+    roots: list[Path] = []
+    for index in range(26):
+        if not mask & (1 << index):
+            continue
+        root = f"{chr(ord('A') + index)}:\\"
+        # DRIVE_REMOVABLE=2, DRIVE_FIXED=3. Network and optical drives are
+        # deliberately excluded so discovery cannot block on remote media.
+        if int(get_drive_type(root)) in (2, 3):
+            roots.append(Path(root))
+    return roots
+
+
+def xbox_library_roots(
+    *,
+    drive_roots: Iterable[str | os.PathLike] | None = None,
+) -> list[Path]:
+    """Return existing Xbox flat-file library roots from bounded drive hints."""
+    drives = windows_local_drive_roots() if drive_roots is None else drive_roots
+    candidates: list[Path] = []
+    for drive in _unique_paths(drives):
+        configured = _gaming_root_library(drive)
+        if configured is not None:
+            candidates.append(configured)
+        candidates.append(drive / "XboxGames")
+
+    libraries: list[Path] = []
+    for candidate in _unique_paths(candidates):
+        try:
+            if candidate.is_dir():
+                libraries.append(candidate)
+        except OSError:
+            continue
+    return libraries
+
+
+def _xbox_install_candidates(library: Path, game: ForzaGame) -> list[Path]:
+    preferred = [library, library / game.full_name, library / game.short_name]
+    children: list[Path] = []
+    try:
+        for child in islice(library.iterdir(), _MAX_XBOX_LIBRARY_CHILDREN):
+            try:
+                if child.is_dir():
+                    children.append(child)
+            except OSError:
+                continue
+    except OSError:
+        return _unique_paths(preferred)
+
+    target = _normalize_app_name(game.full_name)
+
+    def score(path: Path) -> tuple[int, int, str]:
+        name = _normalize_app_name(path.name)
+        if name == target:
+            rank = 0
+        elif target in name or "forzahorizon" in name:
+            rank = 1
+        else:
+            rank = 2
+        return rank, len(name), name
+
+    children.sort(key=score)
+    return _unique_paths(preferred + children)
+
+
+def discover_xbox_forza_install(
+    game: str | ForzaGame,
+    cached_path: str | os.PathLike = "",
+    *,
+    drive_roots: Iterable[str | os.PathLike] | None = None,
+    library_roots: Iterable[str | os.PathLike] | None = None,
+    required_directories: Iterable[str | os.PathLike] = (),
+) -> ForzaInstall | None:
+    """Discover one validated Xbox App flat-file install without recursion."""
+    if (
+        drive_roots is None
+        and library_roots is None
+        and not is_windows_steam_supported()
+    ):
+        return None
+    definition = get_forza_game(game)
+    required = tuple(required_directories)
+    if cached_path:
+        cached = validate_forza_root(
+            definition,
+            cached_path,
+            source="Cached Xbox App path",
+            required_directories=required,
+        )
+        if cached is not None:
+            return cached
+
+    libraries = (
+        xbox_library_roots(drive_roots=drive_roots)
+        if library_roots is None
+        else _unique_paths(library_roots)
+    )
+    for library in libraries:
+        try:
+            if not library.is_dir():
+                continue
+            resolved_library = library.resolve()
+        except OSError:
+            continue
+        for candidate in _xbox_install_candidates(library, definition):
+            install = validate_forza_root(
+                definition,
+                candidate,
+                source="Xbox App library",
+                required_directories=required,
+            )
+            if install is not None and (
+                install.root == resolved_library
+                or resolved_library in install.root.parents
+            ):
+                return install
+    return None
 
 
 def steam_roots_from_registry() -> list[Path]:

@@ -21,12 +21,17 @@ from modules.forzahorizon.controller_icons import (
     restore_controller_icons,
     validate_controller_icon_root,
 )
-from modules.forzahorizon.game_launch import discover_forza_install, is_forza_game_running
+from modules.forzahorizon.game_launch import (
+    discover_forza_install,
+    discover_xbox_forza_install,
+    is_forza_game_running,
+)
 from modules.forzahorizon.fh6_language import (
     FH6Install,
     FH6LanguageError,
     LanguageInspection,
     discover_fh6_install,
+    discover_xbox_fh6_install,
     enable_chinese_text_english_voice,
     inspect_language_state,
     is_fh6_running,
@@ -274,7 +279,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
         W.Hint(
             card,
             t(
-                "Windows Steam and Xbox App editions. Steam paths are detected automatically; choose the Xbox App install folder manually."
+                "Windows Steam and Xbox App editions. Install folders are detected automatically; manual selection remains available."
             ),
             wrap=self.app.px(640),
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
@@ -359,11 +364,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 elif platform == STEAM_PLATFORM:
                     install = discover_fh6_install(context_hint)
                 else:
-                    install = (
-                        validate_game_root(context_hint, source="Xbox App")
-                        if context_hint
-                        else None
-                    )
+                    install = discover_xbox_fh6_install(context_hint)
                 inspection = inspect_language_state(install)
                 running = is_fh6_running(install) if install is not None else False
             except Exception as exc:
@@ -709,7 +710,13 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                     )
                     root = install.root if install is not None else None
                 else:
-                    root = validate_controller_icon_root(cached_path) if cached_path else None
+                    required = tuple(relative.parent for relative in CONTROLLER_ICON_TARGETS)
+                    install = discover_xbox_forza_install(
+                        "fh6",
+                        cached_path,
+                        required_directories=required,
+                    )
+                    root = install.root if install is not None else None
                 inspection = inspect_controller_icons(root)
                 running = is_forza_game_running("fh6") if root is not None else False
             except Exception as exc:
@@ -795,7 +802,9 @@ class FH6UtilitiesTab(ctk.CTkFrame):
         elif state is ControllerIconState.NOT_FOUND:
             status = t("FH6 installation not found")
             detail = (
-                t("Choose the Xbox App FH6 install folder to continue.")
+                t(
+                    "Automatic detection failed. Rescan or choose the Xbox App FH6 install folder."
+                )
                 if self._icon_platform != STEAM_PLATFORM
                 else t("Run FH6 at least once, then rescan or choose its install folder.")
             )

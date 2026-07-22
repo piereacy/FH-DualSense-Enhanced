@@ -83,7 +83,9 @@ def language_view(
             translate("FH6 installation not found"),
             translate("Run FH6 at least once, then rescan or choose its install folder.")
             if platform == STEAM_PLATFORM
-            else translate("Choose the Xbox App FH6 install folder to continue."),
+            else translate(
+                "Automatic detection failed. Rescan or choose the Xbox App FH6 install folder."
+            ),
             "",
             "",
             False,

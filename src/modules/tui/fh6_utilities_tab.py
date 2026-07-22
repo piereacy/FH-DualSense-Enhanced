@@ -21,10 +21,15 @@ from modules.forzahorizon.controller_icons import (
     restore_controller_icons,
     validate_controller_icon_root,
 )
-from modules.forzahorizon.game_launch import discover_forza_install, is_forza_game_running
+from modules.forzahorizon.game_launch import (
+    discover_forza_install,
+    discover_xbox_forza_install,
+    is_forza_game_running,
+)
 from modules.forzahorizon.fh6_language import (
     FH6Install,
     discover_fh6_install,
+    discover_xbox_fh6_install,
     enable_chinese_text_english_voice,
     inspect_language_state,
     is_fh6_running,
@@ -91,7 +96,7 @@ class FH6UtilitiesTab(VerticalScroll):
         yield Label(t("FH6 Chinese text + English voice"), classes="section")
         yield Label(
             t(
-                "Windows Steam and Xbox App editions. Steam paths are detected automatically; choose the Xbox App install folder manually."
+                "Windows Steam and Xbox App editions. Install folders are detected automatically; manual selection remains available."
             ),
             classes="hint",
         )
@@ -327,14 +332,9 @@ class FH6UtilitiesTab(VerticalScroll):
                     context_hint,
                 )
             else:
-                install = (
-                    await asyncio.to_thread(
-                        validate_game_root,
-                        context_hint,
-                        source="Xbox App",
-                    )
-                    if context_hint
-                    else None
+                install = await asyncio.to_thread(
+                    discover_xbox_fh6_install,
+                    context_hint,
                 )
             inspection = await asyncio.to_thread(inspect_language_state, install)
             running = (
@@ -497,11 +497,15 @@ class FH6UtilitiesTab(VerticalScroll):
                 )
                 root = install.root if install is not None else None
             else:
-                root = (
-                    await asyncio.to_thread(validate_controller_icon_root, cached_path)
-                    if cached_path
-                    else None
+                install = await asyncio.to_thread(
+                    discover_xbox_forza_install,
+                    "fh6",
+                    cached_path,
+                    required_directories=tuple(
+                        relative.parent for relative in CONTROLLER_ICON_TARGETS
+                    ),
                 )
+                root = install.root if install is not None else None
             inspection = await asyncio.to_thread(inspect_controller_icons, root)
             running = (
                 await asyncio.to_thread(is_forza_game_running, "fh6")
@@ -543,7 +547,9 @@ class FH6UtilitiesTab(VerticalScroll):
         elif state is ControllerIconState.NOT_FOUND:
             status = t("FH6 installation not found")
             detail = (
-                t("Choose the Xbox App FH6 install folder to continue.")
+                t(
+                    "Automatic detection failed. Rescan or choose the Xbox App FH6 install folder."
+                )
                 if self._icon_platform != STEAM_PLATFORM
                 else t("Run FH6 at least once, then rescan or choose its install folder.")
             )
