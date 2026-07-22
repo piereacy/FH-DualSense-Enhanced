@@ -179,8 +179,12 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "temporary Bluetooth signal gap" in workflow
     assert "transactional side-by-side installation" in workflow
     assert "runtime.log" in workflow
-    assert "[@hotline1337](https://github.com/hotline1337)" in workflow
-    assert "https://www.nexusmods.com/forzahorizon6/mods/2" in workflow
+    assert "[@hotline1337](https://github.com/hotline1337)" not in workflow
+    assert "https://www.nexusmods.com/forzahorizon6/mods/2" not in workflow
+    for readme_path in ("README.md", "docs/ReadmeZH.md", "docs/ReadmeJA.md"):
+        readme = _source(readme_path)
+        assert "@hotline1337" in readme
+        assert "https://www.nexusmods.com/forzahorizon6/mods/2" in readme
     assert "disable in-game vibration" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow

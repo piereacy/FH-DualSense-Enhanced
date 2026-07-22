@@ -129,7 +129,7 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 `src/modules/forzahorizon/controller_icons.py` 是独立于遥测、触觉与启动器的显式文件事务。Windows bundle 只携带一份固定 SHA-256 的 `ControllerIcons.zip`，安装时把它分别写入 `media/UI/Textures/Data_Bound` 与 `media/UI/Textures/HiRes/Data_Bound`。两个原文件在首次修改前分别复制到应用数据目录，manifest 绑定已解析的游戏根路径和原始哈希；写入使用同目录临时文件与 replace，失败时回滚。检测到游戏更新后的新原件时先刷新备份，检测到部分安装但无完整有效备份时拒绝继续。
 
-工具只在用户点击并确认后安装、还原或修复；FH6 运行中拒绝写入。Steam 路径复用 manifest 发现，Xbox App 路径复用上节的受限 flat-file 自动发现；两者成功后都缓存规范 payload 根目录，手动选择外层游戏目录或直接 `Content` payload 仍是 fallback。GUI/TUI 通过各自的 `fh6_utilities_tab.py` 把语言与图标工具组合成独立页面，`SystemTab` 不持有两者的字段、timer 或 worker。该页首次显示、path hint/平台变化和显式操作后扫描；未找到时只在可见期间每 30 秒静默重试，找到后停止文件发现，已知路径期间只保留轻量进程状态刷新。工具页和关于页均链接 Nexus 来源并鸣谢 `@hotline1337`；该归属同时保存在三语 README、Release body 和 `docs/THIRD_PARTY_NOTICES.md`。Linux bundle 不携带 MOD。
+工具只在用户点击并确认后安装、还原或修复；FH6 运行中拒绝写入。Steam 路径复用 manifest 发现，Xbox App 路径复用上节的受限 flat-file 自动发现；两者成功后都缓存规范 payload 根目录，手动选择外层游戏目录或直接 `Content` payload 仍是 fallback。GUI/TUI 通过各自的 `fh6_utilities_tab.py` 把语言与图标工具组合成独立页面，`SystemTab` 不持有两者的字段、timer 或 worker。该页首次显示、path hint/平台变化和显式操作后扫描；未找到时只在可见期间每 30 秒静默重试，找到后停止文件发现，已知路径期间只保留轻量进程状态刷新。工具页和关于页均链接 Nexus 来源并鸣谢 `@hotline1337`；该归属同时保存在三语 README 和 `docs/THIRD_PARTY_NOTICES.md`，Release body 不重复。Linux bundle 不携带 MOD。
 
 ## 4. 遥测输入层
 

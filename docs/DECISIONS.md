@@ -158,7 +158,7 @@
 - 背景：用户已取得 MOD 集成许可，并要求软件内安装，避免用户手工寻找普通与 HiRes 两个目标。游戏更新或验证文件会恢复原件，覆盖前必须保留可靠还原路径。
 - 决定：EXE 只携带一份 `DualSenseIcons 2.1.1` 的 `ControllerIcons.zip`，安装前校验固定 SHA-256，把两份不同原件分别备份到按已解析游戏根路径隔离的应用数据目录，再用同一 MOD 写入两个目标。安装、还原、部分状态修复都必须由用户显式触发；FH6 运行中拒绝修改，失效或不完整备份时拒绝静默覆盖。
 - 平台：Steam 根目录通过 manifest 自动发现；Xbox App 根目录现通过受限 flat-file 发现或手动 fallback 获得，并保存在 global 字段。该图标工具仍仅支持 Windows/FH6，不能泛化为 FH4/FH5 或 Linux 支持。
-- 归属：GUI/TUI 的独立 `FH6 utilities` 页面、关于页、三语 README、双语 Release 和 `docs/THIRD_PARTY_NOTICES.md` 必须以可点击 Nexus 链接鸣谢 `@hotline1337`。许可证说明只记录用户陈述的集成许可，不推断作者授予了更广泛的再许可。
+- 归属：GUI/TUI 的独立 `FH6 utilities` 页面、关于页、三语 README 和 `docs/THIRD_PARTY_NOTICES.md` 必须以可点击 Nexus 链接鸣谢 `@hotline1337`；2026-07-22 决定 Release 正文不重复该鸣谢。许可证说明只记录用户陈述的集成许可，不推断作者授予了更广泛的再许可。
 - 后果：后续修改目标路径、资源版本或作者信息时必须同步哈希契约、事务测试、打包 spec、关于页和发布归属；不能用简单覆盖复制替代备份协议。
 
 ## 2026-07-19：先建立 FH6 有效语言摘要，三行前端统一延后（已被同日后续决定替代）
