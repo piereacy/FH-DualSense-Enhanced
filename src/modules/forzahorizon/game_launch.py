@@ -307,23 +307,40 @@ def validate_forza_root(
     path = Path(root).expanduser()
     if path.name.casefold() == definition.executable_name.casefold():
         path = path.parent
-    try:
-        resolved = path.resolve()
-        required = tuple((resolved / Path(relative)).resolve() for relative in required_directories)
-    except OSError:
-        return None
-    if not (resolved / definition.executable_name).is_file():
-        return None
-    if any(directory.parent != resolved and resolved not in directory.parents for directory in required):
-        return None
-    if any(not directory.is_dir() for directory in required):
-        return None
-    return ForzaInstall(
-        game=definition,
-        root=resolved,
-        source=source,
-        steam_language=steam_language,
-    )
+    # Xbox App commonly presents the user with the game wrapper while the
+    # directly modifiable flat-file payload lives in its Content child. Accept
+    # either exact selection without recursively searching unrelated folders.
+    candidates = (path, path / "Content")
+    seen: set[str] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+            identity = str(resolved).casefold()
+            if identity in seen:
+                continue
+            seen.add(identity)
+            required = tuple(
+                (resolved / Path(relative)).resolve()
+                for relative in required_directories
+            )
+        except OSError:
+            continue
+        if not (resolved / definition.executable_name).is_file():
+            continue
+        if any(
+            directory.parent != resolved and resolved not in directory.parents
+            for directory in required
+        ):
+            continue
+        if any(not directory.is_dir() for directory in required):
+            continue
+        return ForzaInstall(
+            game=definition,
+            root=resolved,
+            source=source,
+            steam_language=steam_language,
+        )
+    return None
 
 
 def _manifest_install(

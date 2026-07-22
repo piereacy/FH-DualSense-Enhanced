@@ -69,10 +69,16 @@ class LightingController:
     @staticmethod
     def _tachometer(telemetry, settings, now):
         max_rpm = max(0.0, _number(telemetry.get("max_rpm", 0.0)))
+        effective_redline_rpm = max(
+            0.0,
+            _number(telemetry.get("effective_redline_rpm", 0.0)),
+        )
         rpm = max(0.0, _number(telemetry.get("rpm", 0.0)))
-        if max_rpm <= 0.0:
+        redline_rpm = effective_redline_rpm or max_rpm
+        if redline_rpm <= 0.0:
             return (0, 0, 0)
-        ratio = rpm / max_rpm
+        ratio = rpm / redline_rpm
+        limiter_active = bool(telemetry.get("rev_limiter_active", False))
         start = _clamp01(getattr(settings, "tachometer_start_ratio", 0.70))
         flash = max(start + 0.01, _clamp01(
             getattr(settings, "tachometer_flash_ratio", 0.93)
@@ -90,7 +96,7 @@ class LightingController:
         )
         if ratio < start:
             color = (0, 0, 0)
-        elif ratio >= flash:
+        elif limiter_active or ratio >= flash:
             rate = max(0.0, _number(getattr(settings, "tachometer_flash_rate_hz", 10.0)))
             visible = rate <= 0.0 or int(_number(now) * rate * 2.0) % 2 == 0
             color = redline_color if visible else (0, 0, 0)

@@ -325,7 +325,12 @@ class FH6UtilitiesTab(ctk.CTkFrame):
         manual_path: str = "",
         silent: bool = False,
     ):
-        if self._fh6_scan_busy or self._fh6_operation_busy or self.app._tearing_down:
+        manual_path = str(manual_path).strip()
+        if self._fh6_operation_busy or self.app._tearing_down:
+            return
+        # A folder explicitly chosen by the user supersedes an automatic scan.
+        # The serial below makes the older worker result harmless when it returns.
+        if self._fh6_scan_busy and not manual_path:
             return
         self._fh6_scan_serial += 1
         serial = self._fh6_scan_serial
@@ -416,6 +421,8 @@ class FH6UtilitiesTab(ctk.CTkFrame):
         self._fh6_inspection = inspection
         self._fh6_game_running = running
         self._fh6_error = error
+        if manual and install is None:
+            self.app.toast(t("FH6 installation not found"))
         if install is not None:
             field = (
                 "fh6_install_path"
@@ -668,7 +675,11 @@ class FH6UtilitiesTab(ctk.CTkFrame):
         manual_path: str = "",
         silent: bool = False,
     ):
-        if self._icon_scan_busy or self._icon_operation_busy or self.app._tearing_down:
+        manual_path = str(manual_path).strip()
+        if self._icon_operation_busy or self.app._tearing_down:
+            return
+        # Manual selection must win over a page-opening background discovery.
+        if self._icon_scan_busy and not manual_path:
             return
         platform = normalize_forza_platform(self.settings.preferred_forza_platform)
         cached_path = self._icon_saved_path(platform)
@@ -756,6 +767,8 @@ class FH6UtilitiesTab(ctk.CTkFrame):
         self._icon_inspection = inspection
         self._icon_game_running = running
         self._icon_error = error
+        if manual and inspection.root is None:
+            self.app.toast(t("FH6 installation not found"))
         if inspection.root is not None:
             field = "fh6_install_path" if platform == STEAM_PLATFORM else "fh6_xbox_install_path"
             resolved = str(inspection.root)

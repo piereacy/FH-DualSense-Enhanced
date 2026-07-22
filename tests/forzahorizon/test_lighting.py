@@ -40,6 +40,42 @@ def test_tachometer_uses_teal_gradient_and_flashes_at_redline():
     assert redline_off.lightbar == (0, 0, 0)
 
 
+def test_tachometer_uses_the_shared_dynamic_redline_when_available():
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+    controller = LightingController()
+
+    state = controller.update(
+        _telemetry(
+            rpm=7200.0,
+            max_rpm=9000.0,
+            effective_redline_rpm=7500.0,
+        ),
+        settings,
+        1.0,
+    )
+
+    assert state.lightbar == (178, 27, 56)
+
+
+def test_confirmed_limiter_event_forces_the_tachometer_flash():
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+
+    state = LightingController().update(
+        _telemetry(
+            rpm=6000.0,
+            max_rpm=9000.0,
+            effective_redline_rpm=7500.0,
+            rev_limiter_active=True,
+        ),
+        settings,
+        1.0,
+    )
+
+    assert state.lightbar == (178, 27, 56)
+
+
 def test_gear_player_leds_progress_from_one_to_five():
     settings = Settings()
     settings.enable_gear_player_leds = True

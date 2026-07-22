@@ -109,7 +109,7 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 ### 3.4 Windows FH6 语言包按钮
 
-`src/modules/forzahorizon/fh6_language.py` 是独立于遥测与手柄后端的 Windows FH6 工具层。Steam 模式复用 `game_launch.py` 的安装候选发现与精确进程检测；Xbox App 模式不尝试扫描受保护 package，而是只验证用户选择并保存到 `fh6_xbox_install_path` 的根目录。两条路径都要求根目录同时存在 `ForzaHorizon6.exe` 与 `media/Stripped/StringTables`；生产代码不假定盘符或 `Program Files`。语言工具仍只接受 FH6，通用启动模块不能导入语言交换逻辑。
+`src/modules/forzahorizon/fh6_language.py` 是独立于遥测与手柄后端的 Windows FH6 工具层。Steam 模式复用 `game_launch.py` 的安装候选发现与精确进程检测；Xbox App 模式不尝试扫描受保护 package，而是只验证用户选择并保存到 `fh6_xbox_install_path` 的目录。用户可以选择直接包含 payload 的根目录，或选择直接父目录后由验证器尝试唯一固定的 `Content` 子目录；这不是系统盘或 `XboxGames` 递归发现。最终根目录必须同时存在 `ForzaHorizon6.exe` 与 `media/Stripped/StringTables`，生产代码不假定盘符或 `Program Files`。GUI 中显式选择会用新 serial 取代仍在运行的自动扫描，旧 worker 的结果因 serial 不匹配而丢弃；无效选择会产生可见提示。语言工具仍只接受 FH6，通用启动模块不能导入语言交换逻辑。
 
 语言状态不是内存布尔值，而是每次从 `CHS.zip`、`EN.zip` 和 `CHS.zip.fhds-swap.tmp` 的实际存在性与 ZIP 内多个 `.str` UTF-8 样本判定。可识别状态为原始、已交换、可恢复的中断状态、缺失、未知和损坏。只有一份可识别中文包和一份可识别英文包时才允许动作；Steam manifest 明确不是 English 时禁止启用，Steam 手动路径或 Xbox App 无法读取游戏语言时必须额外确认。普通状态轮询、启动扫描和手动选目录全部只读。
 
@@ -129,7 +129,7 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 `src/modules/forzahorizon/controller_icons.py` 是独立于遥测、触觉与启动器的显式文件事务。Windows bundle 只携带一份固定 SHA-256 的 `ControllerIcons.zip`，安装时把它分别写入 `media/UI/Textures/Data_Bound` 与 `media/UI/Textures/HiRes/Data_Bound`。两个原文件在首次修改前分别复制到应用数据目录，manifest 绑定已解析的游戏根路径和原始哈希；写入使用同目录临时文件与 replace，失败时回滚。检测到游戏更新后的新原件时先刷新备份，检测到部分安装但无完整有效备份时拒绝继续。
 
-工具只在用户点击并确认后安装、还原或修复；FH6 运行中拒绝写入。Steam 路径复用通用发现，Xbox App 路径当前由用户手动选择并保存为 `fh6_xbox_install_path`。GUI/TUI 通过各自的 `fh6_utilities_tab.py` 把语言与图标工具组合成独立页面，`SystemTab` 不持有两者的字段、timer 或 worker。该页首次显示、path hint/平台变化和显式操作后扫描；未找到时只在可见期间每 30 秒静默重试，找到后停止文件发现，已知路径期间只保留轻量进程状态刷新。工具页和关于页均链接 Nexus 来源并鸣谢 `@hotline1337`；该归属同时保存在三语 README、Release body 和 `docs/THIRD_PARTY_NOTICES.md`。Linux bundle 不携带 MOD。
+工具只在用户点击并确认后安装、还原或修复；FH6 运行中拒绝写入。Steam 路径复用通用发现，Xbox App 路径当前由用户手动选择并保存为 `fh6_xbox_install_path`；与语言工具相同，外层游戏目录和直接 `Content` payload 都可作为选择入口。GUI/TUI 通过各自的 `fh6_utilities_tab.py` 把语言与图标工具组合成独立页面，`SystemTab` 不持有两者的字段、timer 或 worker。该页首次显示、path hint/平台变化和显式操作后扫描；未找到时只在可见期间每 30 秒静默重试，找到后停止文件发现，已知路径期间只保留轻量进程状态刷新。工具页和关于页均链接 Nexus 来源并鸣谢 `@hotline1337`；该归属同时保存在三语 README、Release body 和 `docs/THIRD_PARTY_NOTICES.md`。Linux bundle 不携带 MOD。
 
 ## 4. 遥测输入层
 
@@ -173,7 +173,7 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 `src/modules/forzahorizon/redline.py` 在 `src/modules/loop.py` 的同一遥测帧中先生成共享的 `effective_redline_rpm`、`rev_limiter_active` 和置信度。Forza Data Out 没有显式断油标志，因此未学习时根据仪表 `max_rpm` 使用受限经验曲线，并保证估计值不低于已经稳定观察到的发动机转速；高油门、稳定同挡、接近预测红线且无离合或严重打滑时，检测相对功率/扭矩骤降或非正功率。候选事件需要继续保持同一挡位 120 ms 才确认，连续三个接近的候选以中位数建立学习值，之后允许缓慢修正。车辆 ordinal、PI 或仪表转速范围变化会重置学习；菜单中暂时归零的车辆身份不会清除已有结果。
 
-估计器不修改 UDP parser 返回的原始 `max_rpm`。R2 扳机键红线和握把红线读取 `effective_redline_rpm`，已经确认的断油事件还能短暂强制红线 active；发动机连续底噪、灯效和其他 RPM 归一化仍读取原始 `max_rpm`。这样避免参考实现中覆盖共享 telemetry 后连带改变无关效果。学习状态只存在于当前进程和当前车辆，不写入 Profile，也不跨启动持久化。
+估计器不修改 UDP parser 返回的原始 `max_rpm`。R2 扳机键红线、握把红线和 `LightingController` 转速灯条读取 `effective_redline_rpm`，已经确认的断油事件还能短暂强制红线反馈与灯条闪烁；动态估计不可用时灯条回退到原始 `max_rpm`。发动机连续底噪和其他未明确迁移的 RPM 归一化仍读取原始范围，避免覆盖共享 telemetry 后连带改变无关效果。学习状态只存在于当前进程和当前车辆，不写入 Profile，也不跨启动持久化。
 
 当前 L2 顺序：
 

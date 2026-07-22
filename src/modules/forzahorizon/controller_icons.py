@@ -16,7 +16,7 @@ from pathlib import Path
 
 from modules.config import paths
 
-from .game_launch import is_forza_game_running
+from .game_launch import is_forza_game_running, validate_forza_root
 
 log = logging.getLogger("fhds.controller_icons")
 
@@ -61,20 +61,21 @@ def _sha256(path: Path) -> str:
 
 
 def validate_controller_icon_root(root: str | os.PathLike) -> Path | None:
-    candidate = Path(root).expanduser()
-    if candidate.name.casefold() == "forzahorizon6.exe":
-        candidate = candidate.parent
+    install = validate_forza_root(
+        "fh6",
+        root,
+        required_directories=tuple(relative.parent for relative in TARGETS),
+    )
+    if install is None:
+        return None
+    resolved = install.root
     try:
-        resolved = candidate.resolve()
         targets = tuple((resolved / relative).resolve() for relative in TARGETS)
     except OSError:
         return None
     if any(target.parent != resolved and resolved not in target.parents for target in targets):
         return None
     if not all(target.is_file() for target in targets):
-        return None
-    # Steam and current Xbox App packages both expose this game executable.
-    if not (resolved / "ForzaHorizon6.exe").is_file():
         return None
     return resolved
 

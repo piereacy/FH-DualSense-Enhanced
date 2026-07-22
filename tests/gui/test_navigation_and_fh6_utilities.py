@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from modules.config import preferences
 from modules.config.settings import Settings
@@ -8,6 +9,7 @@ from modules.forzahorizon.fh6_language import (
     LanguageInspection,
 )
 from modules.gui.fh6_utilities_tab import FH6UtilitiesTab
+from modules.gui import fh6_utilities_tab
 from modules.gui.main import TriggerGUI
 from modules.gui.overview_tab import OverviewTab
 
@@ -147,6 +149,68 @@ def test_fh6_language_utility_uses_the_selected_platform_path():
 
     assert tab._language_saved_path("steam") == "D:/Steam/FH6"
     assert tab._language_saved_path("xbox_app") == "E:/Xbox/FH6"
+
+
+def test_manual_xbox_folder_supersedes_an_automatic_gui_scan(monkeypatch):
+    started = []
+
+    class _Thread:
+        def __init__(self, *, target, name, daemon):
+            self.target = target
+
+        def start(self):
+            started.append(self.target)
+
+    monkeypatch.setattr(fh6_utilities_tab.threading, "Thread", _Thread)
+    tab = FH6UtilitiesTab.__new__(FH6UtilitiesTab)
+    tab.app = SimpleNamespace(_tearing_down=False)
+    tab.settings = Settings(preferred_forza_platform="xbox_app")
+    tab._fh6_scan_busy = True
+    tab._fh6_operation_busy = False
+    tab._fh6_scan_serial = 4
+    tab._fh6_install = None
+    tab._fh6_silent_scan = True
+    tab._fh6_error = ""
+    tab._fh6_last_scan = 0.0
+    tab._fh6_platform = "xbox_app"
+    tab._render_fh6_status = lambda: None
+
+    tab._start_fh6_scan(rediscover=False, manual_path="E:/Xbox/FH6")
+
+    assert tab._fh6_active_serial == 5
+    assert tab._fh6_scan_busy is True
+    assert len(started) == 1
+
+
+def test_manual_xbox_icon_folder_supersedes_an_automatic_gui_scan(monkeypatch):
+    started = []
+
+    class _Thread:
+        def __init__(self, *, target, name, daemon):
+            self.target = target
+
+        def start(self):
+            started.append(self.target)
+
+    monkeypatch.setattr(fh6_utilities_tab.threading, "Thread", _Thread)
+    tab = FH6UtilitiesTab.__new__(FH6UtilitiesTab)
+    tab.app = SimpleNamespace(_tearing_down=False)
+    tab.settings = Settings(preferred_forza_platform="xbox_app")
+    tab._icon_scan_busy = True
+    tab._icon_operation_busy = False
+    tab._icon_scan_serial = 8
+    tab._icon_inspection = fh6_utilities_tab.inspect_controller_icons(None)
+    tab._icon_silent_scan = True
+    tab._icon_error = ""
+    tab._icon_last_scan = 0.0
+    tab._icon_platform = "xbox_app"
+    tab._render_icon_status = lambda: None
+
+    tab._start_icon_scan(rediscover=False, manual_path="E:/Xbox/FH6")
+
+    assert tab._icon_active_serial == 9
+    assert tab._icon_scan_busy is True
+    assert len(started) == 1
 
 
 def test_xbox_language_scan_saves_only_the_xbox_path(monkeypatch, tmp_path):

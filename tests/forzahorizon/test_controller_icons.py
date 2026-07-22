@@ -27,6 +27,19 @@ def test_bundled_mod_is_one_verified_archive_for_both_targets():
     assert len(controller_icons.TARGETS) == 2
 
 
+def test_icon_root_accepts_an_xbox_game_wrapper_with_content_child(tmp_path):
+    wrapper = tmp_path / "Xbox FH6"
+    content = wrapper / "Content"
+    content.mkdir(parents=True)
+    (content / "ForzaHorizon6.exe").write_bytes(b"MZ")
+    for relative in controller_icons.TARGETS:
+        target = content / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"original")
+
+    assert controller_icons.validate_controller_icon_root(wrapper) == content.resolve()
+
+
 def test_windows_spec_bundles_one_mod_archive_and_linux_does_not():
     root = Path(__file__).resolve().parents[2]
     windows = (root / "packaging/windows/fhds.spec").read_text(encoding="utf-8")

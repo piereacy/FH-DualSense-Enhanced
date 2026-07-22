@@ -71,6 +71,25 @@ def test_path_validation_rejects_another_forza_generation(tmp_path):
     assert game_launch.validate_forza_root("fh5", fh4) is None
 
 
+def test_path_validation_accepts_an_xbox_game_wrapper_with_content_child(tmp_path):
+    wrapper = tmp_path / "Xbox FH6"
+    content = wrapper / "Content"
+    tables = content / "media/Stripped/StringTables"
+    tables.mkdir(parents=True)
+    (content / "ForzaHorizon6.exe").write_bytes(b"MZ")
+
+    install = game_launch.validate_forza_root(
+        "fh6",
+        wrapper,
+        source="Manual Xbox App",
+        required_directories=("media/Stripped/StringTables",),
+    )
+
+    assert install is not None
+    assert install.root == content.resolve()
+    assert install.source == "Manual Xbox App"
+
+
 def test_exact_process_detection_distinguishes_each_generation(tmp_path, monkeypatch):
     root = _game_root(tmp_path, "fh5")
     calls = []

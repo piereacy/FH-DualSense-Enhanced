@@ -170,6 +170,8 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "Enhanced R7 English notes" in workflow
     assert "控制器连接真值" in workflow
     assert "动态红线估计器" in workflow
+    assert "转速灯条" in workflow
+    assert "direct `Content` payload" in workflow
     assert "事务式并排安装" in workflow
     assert "temporary Bluetooth signal gap" in workflow
     assert "transactional side-by-side installation" in workflow
