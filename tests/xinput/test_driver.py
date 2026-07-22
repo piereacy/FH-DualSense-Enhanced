@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from modules.config import paths
 from modules.xinput.driver import (
     DriverProbe,
@@ -76,6 +74,19 @@ def test_validate_installer_rejects_bad_authenticode_signature():
         raise AssertionError("unsigned installer was accepted")
 
 
+def test_authenticode_api_failure_is_reported_as_a_validation_error():
+    def fail_signature(_path):
+        raise OSError("wintrust unavailable")
+
+    try:
+        validate_installer(paths.VIGEM_BUS_INSTALLER, signature_verifier=fail_signature)
+    except Exception as exc:
+        assert "Authenticode" in str(exc)
+        assert "wintrust unavailable" in str(exc)
+    else:
+        raise AssertionError("signature verifier failure escaped validation")
+
+
 def _install_with(result, probe_status=DriverProbeStatus.AVAILABLE):
     return install_and_probe(
         paths.VIGEM_BUS_INSTALLER,
@@ -122,3 +133,22 @@ def test_installer_failure_is_preserved():
         exit_code=5,
         error="installer failed",
     )
+
+
+def test_installer_runner_and_post_probe_exceptions_become_stable_results():
+    runner_failure = install_and_probe(
+        paths.VIGEM_BUS_INSTALLER,
+        signature_verifier=lambda _path: True,
+        runner=lambda _path: (_ for _ in ()).throw(OSError("cannot elevate")),
+    )
+    probe_failure = install_and_probe(
+        paths.VIGEM_BUS_INSTALLER,
+        signature_verifier=lambda _path: True,
+        runner=lambda _path: InstallResult(InstallStatus.SUCCESS, exit_code=0),
+        probe=lambda: (_ for _ in ()).throw(OSError("bus query failed")),
+    )
+
+    assert runner_failure.status is InstallStatus.FAILED
+    assert "cannot elevate" in runner_failure.error
+    assert probe_failure.status is InstallStatus.RESTART_REQUIRED
+    assert "bus query failed" in probe_failure.error

@@ -4,6 +4,23 @@ This is a color-language reference only. No character art, branded font, or
 third-party visual asset is bundled. Never hardcode page colors elsewhere.
 """
 
+import sys
+
+
+WINDOWS_FONT_FAMILIES = {
+    "zh": "Microsoft YaHei UI",
+    "zh_tw": "Microsoft JhengHei UI",
+    "ja": "Yu Gothic UI",
+}
+
+
+def ui_font_family(language: str, platform: str | None = None) -> str:
+    """Return the explicit UI font for the selected interface language."""
+    platform = sys.platform if platform is None else platform
+    if not platform.startswith("win"):
+        return "Roboto"
+    return WINDOWS_FONT_FAMILIES.get(language.lower(), "Segoe UI")
+
 # Background tiers ---------------------------------------------------------
 BG_DEEP   = ("#e8fbf9", "#101a1d")
 BG_MAIN   = ("#f7fffe", "#142327")

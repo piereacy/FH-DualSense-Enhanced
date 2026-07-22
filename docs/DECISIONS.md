@@ -2,9 +2,109 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-07-22：Xbox bridge 和物理 HID 故障采用分层自恢复
+
+- 状态：生产代码与自动测试已完成；真实 DualSense Edge、Xbox App 和 30 至 60 分钟 Bluetooth 压力测试未执行。
+- 背景：旧物理 HID worker 遇到未预期异常会永久退出，“立即重新连接”只能给已经死亡的线程排队；旧 ViGEm worker 的一次 `target.update()` 异常同样永久停止。XInput 在 100 ms 后中立、3 秒后移除 target，还会让 Forza 运行中面对 player slot 消失和重新出现。Bluetooth `0x36` 约每 10.667 ms 写入 398 字节，弱适配器或 Windows HID 栈长期运行时仍可能先失去输入，再被 3 秒 watchdog 判断整只手柄掉线。
+- 决定：物理 HID 保持唯一 reader，但 `_io()` 改为同一 worker 内的 session supervisor，异常后关闭当前 handle 并按 0.25、1、5 秒上限恢复；手动 reconnect 在 worker 已死亡时先重启它。XInput 在 100 ms 输入空档只发送一次中立并保留 target/player slot，ViGEm 瞬时异常按同样有界退避重建 session。Bluetooth HD 已发送且连续 350 ms 无有效输入时，先尽力发送零采样 `0x36`，再把当前连接降级到 compatible rumble，不等待整只手柄掉线。
+- 诊断：完整输入校验和 CRC 不放宽；连续拒绝限频记录，恢复后记录边沿，HID open 日志包含 PID。GUI、TUI 和 headless 共用 2 MiB、两个备份的 `data/runtime.log`，用于收集用户所说“玩到后面不认手柄”的跨会话证据。
+- 边界：没有把 DualSense Edge 与普通 DualSense 写成完全实机等价，也没有改变 `dist-usb-audio-gate-1` 已接受的 BT → USB 握把生命周期、HID offsets、`0x36` 布局、CRC、扳机或握把算法。真实长时间测试无法执行时必须明确写未执行，不能用自动测试替代。
+
+## 2026-07-22：红线使用共享动态估计器且保留原始 `max_rpm`
+
+- 状态：生产代码、自动测试和独立 R7 候选已完成；真实车辆断油学习与手感验收待完成。
+- 背景：现有握把和 R2 扳机键都按 `rpm / max_rpm` 判断，仪表最大刻度明显高于实际断油的车辆可能永远达不到阈值。参考 [TiansuoLi 的 dynamic-redline 分支](https://github.com/TiansuoLi/Forza-Horizon-DualSense-Python/tree/feature/dynamic-redline-rgb-shiftlights) 后确认可通过高油门功率切断事件学习实际红线，但该分支当前实现会覆盖共享 `t["max_rpm"]`、依赖精确 `0 W`，而且换挡备用分支会被前置挡位复位和 debounce 阻断，因此不直接复制。
+- 决定：新增 `src/modules/forzahorizon/redline.py`。学习前使用按仪表范围变化并限制在 `80%..98%` 的经验预测；候选必须位于预测红线附近，在高油门、稳定同挡、低离合和非严重打滑条件下出现非正功率，或同时出现相对功率骤降及扭矩骤降/RPM 回落。事件继续保持原挡位 120 ms 才确认，排除自动/手动换挡；三个相近候选用中位数建立学习值，后续样本可平滑修正，候选队列有界。
+- 数据边界：`src/modules/loop.py` 只新增 `effective_redline_rpm`、`rev_limiter_active` 和置信度，不覆盖 UDP 原始 `max_rpm`。R2 扳机键与握把共享派生红线；发动机底噪和灯效仍使用原始仪表范围。第一次真实断油确认即可短暂输出事件，三次聚类后再改变连续接近红线阈值。
+- 后果：大红区车辆不再永久依赖固定仪表比例，换挡、离合和明显空转不会用于训练。Forza 没有公开的 limiter flag，本实现仍属于遥测推断；学习不跨应用重启持久化，真实 FH4/FH5/FH6 多车型结果必须在实机验收后再写成已验证。
+
+## 2026-07-21：Xbox App 蓝牙输入采用 input-first 与 latest-only 调度
+
+- 状态：生产代码和自动测试已完成；独立 R7 候选与真实 Xbox App/Bluetooth 手感验收待完成。
+- 根因：Steam Input 自己读取 DualSense，不经过本项目的 ViGEm bridge；Xbox App 模式则经过 `DualSense HID I/O thread -> XInputBridge -> ViGEm X360`。Bluetooth HD haptics 每约 `10.667 ms` 产生一个 398 字节 `0x36` pending，旧调度只要看到任意 pending output 就把本轮读取限制为一条。Windows HID 输入因此可能积压，而每条旧报告又在实际读取时获得新时间戳，bridge 会把积压逐条当成实时输入；USB body haptics 走音频 endpoint，所以不出现同一竞争。
+- 决定：继续保留唯一物理 HID reader。只在 XInput consumer 启用时，I/O thread 优先把当前输入队列 drain 到最新，只向 consumer 发布最新有效报告；单批达到安全上限时先继续追赶，再写出单槽合并后的输出。没有 consumer 的 Steam 路径保持原有输出优先行为。
+- 输出合并：同一轮有 Bluetooth `0x36` 时，其 state block 已带最新 L2/R2 扳机键和灯效；若普通 pending frame 没有 compatible rumble，则省略重复的 `0x31`。显式 compatible rumble 和全零释放不省略，`0x36` 的 398 字节、3 kHz、32 帧、CRC 和左右声道契约不变。
+- 验收：自动测试必须证明积压只提交最后有效状态、损坏尾包能回退到前一有效状态、连续 haptics pending 不阻止 drain、rumble release 不被吞掉。真实验收使用 Xbox bridge + Bluetooth + Steam Input 关闭，对照 body haptics 开/关检查操控延迟，并同时确认握把、L2/R2 扳机键、USB 路径和 Steam 模式无回归；在真实 Xbox App 游戏完成前不得宣称已实机修复。
+
+## 2026-07-20：BT → USB 先等待 Windows USB 音频端点，再初始化 PortAudio
+
+- 状态：生产代码和自动测试已完成；独立 Windows one-file 候选与真实 DualSense 验证待完成，不能写成已修复或发布。
+- 证据：旧 `0x08 / 0x02` 候选在实机上记录 `Bluetooth control teardown accepted` 和 `transport handover complete: BT -> USB`，随后仍报 `No four-channel DualSense audio endpoint found` 且 USB 握把没有输出；同一时刻新启动的独立 sounddevice 进程可以枚举活动的四声道 DualSense WASAPI endpoint。当前锁定的 sounddevice 模块在 import 尾部立即调用 `_initialize()`，因此 Bluetooth 冷启动阶段的提前 import 会让 PortAudio 在 USB endpoint 出现前冻结设备快照。该现象解释了为什么系统已经显示 USB/充电，而旧进程仍看不到 USB 音频端点。
+- 决定：`src/modules/haptics/audio.py` 不再顶层导入 sounddevice，只有 `UsbAudioHaptics.start()` 才延迟加载。启用 body haptics 的 BT → USB 在稳定 USB 候选出现后非阻塞等待 3 秒，期间 Bluetooth 输入、L2/R2 扳机键和 `0x36` 握把触觉继续工作；随后用 `src/modules/haptics/windows_endpoint.py` 只读枚举 Windows MMDevices registry，确认活动的 DualSense USB render endpoint。endpoint 未就绪或探测异常时保留 Bluetooth 并按既有 1/2/5 秒退避，后续重试不重复 settle；关闭 body haptics 时直接放行。
+- 边界：readiness probe 不得导入 sounddevice、调用 PortAudio 私有 `_terminate()`/`_initialize()`、打开静音 stream、加入 callback 心跳或新增 lifecycle lock。readiness 通过后继续使用既有候选输入验证、静音和 `0x08 / 0x02` teardown；本决定没有把 teardown 返回成功当成握把修复证据，也没有改变 Enhanced R6 stream 参数和 start/stop 状态语义。
+- 验收：固定 Forza 游戏内振动关闭、Steam 模式 Steam Input 开启，验证 USB 冷启动、Bluetooth 冷启动、BT → USB、退出候选后 R6、USB → BT。BT → USB 允许约 3 秒保持 Bluetooth 后再出现约 1 秒交接空档；最终必须显示 USB、恢复 USB 握把、L2/R2 扳机键不反复脉冲，且不能留下跨进程污染。
+
+## 2026-07-20：BT → USB 交接显式结束旧 Bluetooth 触觉会话
+
+- 状态：实机失败，已由上方“先等待 Windows USB 音频端点，再初始化 PortAudio”决定替代。保留本条记录为什么 `0x08 / 0x02` 仍存在于交接尾部，但不得再把它单独描述为待验证修复。
+- 证据：恢复 Enhanced R6 USB 生命周期后，USB 与 Bluetooth 冷启动握把都正常，但同一手柄从 Bluetooth 切到 USB 后 USB 握把消失；退出并重启应用、拔插 USB 都不能恢复，只有让手柄完全关机后再启动才能恢复。HID 输入、L2/R2 扳机键与连接状态已经进入 USB，因此结论不是“整只手柄仍走蓝牙”，而是握把执行器最可能仍被固件锁在旧 Bluetooth `0x36` 会话。Sony 未公开确认该内部状态机，此处属于由实机行为支持的工程判断。
+- 方案：保持候选 USB handle 先打开并读取有效报告。仅在 BT → USB 边界，由唯一 I/O thread 先发送现有静音 `0x36` 与扳机 release，再通过旧 BT handle 调用 `send_feature_report()` 发送 48 字节 `0x08 / 0x02`。包布局和 `0x53` seed CRC 来自 DS5Dongle 的 `bt_power_off_controller()`；返回正数后才提交 USB。命令异常或返回非正数时关闭候选、保留当前 BT 快照与输出，并使用既有 1/2/5 秒退避。
+- 结果：实机中 feature report 返回正数且 HID 已提交 USB，但 USB 握把仍无输出；所以“旧 Bluetooth 触觉会话未结束”不是充分根因，report 被接受也不是 USB audio readiness。继续保留该命令必须服从上方 3 秒 endpoint gate，不能再单独扩展 HID flag、双 transport 输出或 PortAudio 私有 refresh。
+
+## 2026-07-20：R7 USB 握把触觉生命周期完整恢复 Enhanced R6
+
+- 状态：生产代码、自动测试和 Windows one-file 候选已完成；真实 DualSense 游戏内结果待用户验证，不能写成已修复。
+- 新的同机 A/B 已排除“只在 handover 后失败”：电脑重启后先运行已发布 R6，USB 握把触觉正常；同一启动会话随后运行规范 R7 候选，USB 冷启动即完全没有握把触觉。R7 仍能打开正确的四声道 DualSense WASAPI endpoint，Core Audio session 为 active，但连续只读采样显示四个 channel peak 全为零。这证明 R7 USB 回归不应继续被归因于 UDP、HID transport 显示或单纯的 endpoint 缺失。
+- 决定把 `src/modules/haptics/audio.py`、`src/modules/haptics/lifecycle.py` 和 `src/modules/haptics/manager.py` 的 USB lifecycle 恢复为 Enhanced R6 语义：不做私有 PortAudio snapshot refresh，不做 callback 心跳判活，不增加 lifecycle lock 或显式 backoff；GUI/TUI 在周期 eligibility sync 时启动共享 stream，headless 在同一 transport epoch 启动失败后用既有闩锁避免逐帧重开。测试层只额外保留“transport routing 不调用未经验证 HID audio-mode setter”的协议保护。
+- 本决定替代下方同日决定中“保留 PortAudio hotplug refresh、实例级 `RLock`、callback 心跳和统一 1 秒 backoff”的部分，也替代同日全项目审计决定中的相同触觉恢复条款。那些实现曾通过自动测试和静音开流探针，但真实 R6/R7 A/B 证明其不能作为可接受的 R7 USB 生命周期继续保留。
+- 本决定不回退 R7 的 controller topology、候选 handle 有效输入预验证、原子 HID handover、USB 优先、电量/transport 快照、switching 脉冲抑制、Bluetooth `0x36` 后端、反馈分页或 DPI/UI 改动。保留这些代码只表示架构仍在，不表示 BT → USB 后的 USB 握把音频已经实机通过。
+- 验证边界：新候选必须依次验证 USB 冷启动、退出后 R6 USB、Bluetooth 冷启动、退出后 R6 Bluetooth 和 BT → USB → BT；每段记录 Forza 游戏内振动与 Steam Input。允许 handover 约 1 秒静默，但不能永久失去握把触觉，也不能污染随后运行的 R6。
+
+## 2026-07-20：R7 热插拔、反馈分页、状态框和窗口 resize 按根因修复
+
+- 现场日志证明 UDP、`HapticMixer`、碰撞和红线事件在故障时仍在运行；HID 已从 Bluetooth 成功切到 USB，但同一进程随后报告找不到四声道 DualSense 音频端点。新启动的独立 Python 进程却能枚举该 WASAPI endpoint，因此“只有扳机、没有握把”不是 UDP 回归，而是 PortAudio 在 Bluetooth 启动阶段建立的设备快照没有吸收 USB hotplug。
+- 当时的并发回归认为 GUI lifecycle 与 telemetry manager 可能同时对同一个 `UsbAudioHaptics` 启动，因此加入实例级 `RLock`、PortAudio refresh 和 stream health probe。该实现与结论已由上方“完整恢复 Enhanced R6”决定替代；保留本条仅记录曾采用过的推理路径。
+- 当时根据 BT → USB 现场为 `OutputStream` 增加 callback 心跳、1 秒超时重建和统一 1 秒 backoff。后续 USB 冷启动 A/B 证明 R7 仍失败，因此这些生产行为已由上方决定撤销；真实硬件结果仍以 `PROJECT_STATE.md` 为准。
+- 后续实机证据推翻了“只在 handover 后假启动”的边界：重启电脑后 R6 正常，但运行 R7 后即使退出 R7，随后启动的 R6 在 USB 与 Bluetooth 下也会失去握把触觉，直到再次重启。这证明 R7 写入了跨进程保留的控制器状态；PortAudio、UDP 或进程内 worker 不能单独解释该现象。
+- 协议复核确认 R7 新增的 `valid_flag0 0x20` 不是 haptics select，而是 speaker volume 字段有效位；报告从全零缓冲区构造，因此它会明确把 speaker volume 写为零。`valid_flag1 0x20` 也不是通用 USB audio-haptics 接管位。关闭 R7 时只取消有效位不会恢复已经写入的值，R6 也不会覆盖它。该错误来自直接采用 HorizonHaptics 的错误注释而没有核对完整 SetState 布局。
+- 决定恢复 Enhanced R6 的普通 HID 输出契约：删除两个错误 `0x20`、DualSense audio-mode setter 和 `HapticManager` 调用；不保留已经实机失败的单次 `0x01` 重置。R7 的候选预验证、原子 handover和 USB 优先继续保留；本条原先同时保留的 PortAudio refresh、callback 健康检查和显式失败退避已经由上方决定撤销。新候选必须从重启后的干净状态验证，并证明退出后再次运行 R6 不受污染，才能标记修复。
+- 自动 handover 改为非破坏性预验证：候选 handle 必须先打开并读到有效输入，成功后才静音旧输出并原子替换；失败时当前 BT/USB handle、状态和 pending output 保持不变。稳定失败候选与未知身份读取按 1、2、5 秒退避，候选消失即清除；切换不播放启动 R2 扳机键脉冲。这样保留 USB 优先与自动恢复，同时不再用“先断旧连接、再试新连接”的方式制造往返和脉冲。
+- 前端输出类型按用户心智模型完全分离：`Trigger feedback` 与 `Grip haptics` 各自拥有开关、常用调节和实验区域；字段分组集中在 `src/modules/feedback_schema.py`，GUI/Console 只负责渲染，不再各自复制反馈分组。实验性扳机功能仍默认折叠且默认关闭。
+- 顶部 Profile/控制器控件不再追求全胶囊外形，改为 28 logical px 高、8 logical px 圆角的小型状态框；所有关键尺寸为 4 的倍数，并缓存相同 presentation，目标是在 100%、125%、150%、175%、200% 下保持整数 device pixel。
+- 页面仍然只 `grid()` 一次并用 `tkraise()` 切换；最大化/拖拽时只有可见页的 `FastScroll` 接受尺寸回流，40 ms debounce 只应用最新尺寸，反馈卡片另以 80 ms 合并列数变化且不先 `grid_forget()`。系统更新卡片把 snapshot 转为稳定 presentation，仅在文本、进度、动作或 Release 可见性改变时修改控件。不能为了性能退回销毁/重建页面或周期性无条件重排。
+- 自动测试和真实 USB 静音四声道开流只能证明恢复路径可以启动，不能替代 BT 到 USB、USB 到 BT、Forza 手感和各缩放率目测；这些结果必须在 `PROJECT_STATE.md` 单独标注。
+
+## 2026-07-20：全项目审计把外部输入、运行健康和双界面退出纳入统一边界
+
+- 状态：生产代码与自动回归已实现；Windows 最终冻结构建、真实 DualSense、真实 Linux 和混合 DPI 验收分别以 `docs/PROJECT_STATE.md` 的当前记录为准。
+- 范围：审计覆盖上游继承代码与 Enhanced R1 到 R7 的配置、启动、遥测、DualSense、扳机、握把触觉、GUI/TUI、FH 工具、XInput、更新器、构建、许可证和测试，不把结论限定为 R7 新增模块。
+- 外部数据决定：偏好 JSON、Profile 分享码、UDP、GitHub Release/sidecar 和更新 transaction 都必须在进入运行时前做类型、有限数、结构、长度或路径归属校验。Profile 分享码采用有界解压，名称去除控制字符并限制长度，TUI 动态文本转义 Rich markup。配置写入使用唯一临时文件和原子替换；无法先保护现有有效配置时，恢复出厂和损坏恢复必须失败关闭。
+- 启动健康决定：更新健康 ACK 不是“进程或窗口已经创建”。headless 必须完成 controller、可选 XInput 与 UDP listener 初始化；GUI/TUI 必须完成 backend、listener 和 telemetry worker 启动。ACK callback 只能执行一次，失败让新版退出并由 Helper 回滚。
+- 退出一致性决定：GUI 与 TUI 的所有正常退出源都经过各自统一 `request_close()`，只在当前 `Default` Profile 的 Profile 字段变化时提供命名保存。更新 Helper 必须延迟到该决定完成后调度；强杀、崩溃和断电仍无法提示。
+- 触觉恢复决定：GUI/TUI 的 USB audio lifecycle 和 headless 的 `HapticManager` 都在启动失败后限频自动重试。该策略允许临时设备错误自行恢复，同时禁止逐遥测帧重开 PortAudio。
+- 环境和平台决定：主程序不读取当前工作目录中的 dotenv 文件，环境覆盖由 shell、IDE、CI 或 launcher 显式注入。Linux hidraw wrapper 的 `timeout_ms` 接口独立于 PyPI hidapi；Linux 构建使用锁文件环境，Windows 单元测试与脚本语法检查不能写成真实 Linux 验收。
+
+## 2026-07-19：版本化 EXE 更新改为持久化事务和健康提交
+
+- 状态：生产代码、自动测试和审计后冻结 R7 构建已完成；R7 尚未发布。真实已发布 R6 到 R7 的隔离升级使用审计前候选完成，验证了规范文件名、健康 ACK、快捷方式 target/icon/参数/工作目录迁移和旧文件清理；审计后候选未重复启动真实 EXE 的演练，当前由定向自动测试覆盖。
+- 背景：R6 旧 Helper 会把新版字节写进旧版本文件名，并留下 `.old`，导致文件名、版本资源、快捷方式和回滚状态不一致。仅靠进程退出后 rename 无法覆盖断电、启动即退、杀毒锁文件、快捷方式部分失败和新旧进程竞争。
+- 决定：R7 以后按规范文件名并排安装新版，以原子 transaction journal 记录阶段、绝对路径、版本、哈希、PID、公开启动参数、随机 token 和快捷方式进度。新版必须在 30 秒内写出 token、版本、路径、哈希一致的健康 ACK，并继续存活约 3 秒；之后才迁移快捷方式和删除旧版。正常路径不创建 `.old`，失败则保留并重启旧版。
+- PyInstaller 边界：one-file 外层 bootloader 与内层应用可以使用不同 PID。随机 token 是 ACK 身份凭据，Helper 监视自己启动的外层进程存活，不要求 ACK PID 等于 `Popen.pid`。
+- R6 兼容：只有当前文件名版本、内置 PE 版本与真实 `.old` 的 PE 版本严格匹配时，才运行一次第二阶段 legacy bootstrap。它恢复规范 R6、安装规范 R7 并走相同健康提交；快捷方式部分失败时保留真实 R6，不保留 `.old`，也不回滚健康 R7。
+- 快捷方式与目录收口：健康提交后枚举同目录中所有严格命名且版本更低的规范 EXE，逐个迁移当前用户 Known Folders 与已知 pinned 目录中的精确 target，并保留参数、工作目录和 icon index。成功后静默删除旧规范 EXE及严格同名的 `.exe.old`、`.exe.sha256`，包括更早更新遗留的 R5 `.old`；不执行 `*.exe`/`*.old` 通配清理。无匹配静默成功；某一旧版部分失败时提示一次、记录 journal 并只保留该规范旧版，后续启动继续修复。
+- 后果：主程序不得覆盖 `sys.executable`，启动恢复不得按文件存在性盲删。构建必须使用 `src/uv.lock` 中固定 PyInstaller；完成/回滚 journal 的保留期、跨启动 24 小时检查节流和代码签名仍是后续工作。
+
+## 2026-07-19：DualSense 在线状态以有效输入为真值，传输切换归 I/O thread
+
+- 状态：生产代码、自动测试、状态展示和配置迁移已实现；当前会话尚未枚举到真实 DualSense，因此 Enhanced R7 的关机、USB/Bluetooth 双向 handover、电量和触觉恢复仍待硬件验证。
+- 背景：旧逻辑把仍持有 HID handle 当成在线，并在检测到 HidHide 或关闭自动重连时永久跳过 input watchdog。结果可能在手柄关机后仍显示已连接，也无法在同一手柄插入 USB 或拔线回 Bluetooth 时更新 transport。
+- 决定：`ControllerSnapshot` 是 GUI/TUI 与其他消费者的唯一 native 状态事实。只有完整、report ID 正确且 Bluetooth CRC 有效的输入报告才能建立或刷新连接、电量和 latest input；约 3 秒无有效输入就清除旧状态。HidHide 只做诊断，`persistent` 不再改变 watchdog。
+- 并发边界：所有 HID open/read/write/close、立即重连和 handover 继续在单一 I/O thread 串行执行。空闲输入 backlog 可批量丢弃，但 pending trigger/haptics 输出必须优先；XInput 只消费 latest parsed state，不能增加第二个 reader。
+- 身份与切换：轻量拓扑约每秒 enumerate，新路径连续两次出现才稳定，未知身份 feature report 只读取一次并缓存。自动切换必须证明同一身份，双传输并存时 USB 优先；目标打开失败尝试恢复旧路径。传输 handover 不受完全掉线自动重连开关限制；失败目标 cooldown 与 switching 脉冲规则由 2026-07-20 后续决定补充。
+- 配置：新安装默认开启 `enable_reconnect`；旧偏好通过 `r7_enable_reconnect_default` marker 只强制开启一次，之后尊重用户关闭，不改任何驾驶或命名 Profile 字段。“立即重新连接”是真实 I/O 命令，“重新扫描”仍只刷新设备列表。
+- 电量：只显示硬件报告的 10% 档和充电状态，不伪造个位数。仅使用电池且为 10% 时电量文本变红，连接点保持绿色；DSX 不额外打开物理 HID，也不伪造电量。
+
+## 2026-07-19：Windows GUI 以 Per-Monitor v2 为目标并公开实际 DPI 状态
+
+- 状态：manifest、runtime hook、源码 probe、自动测试、最终 PE manifest 提取和系统页诊断已验证；不同缩放显示器间移动和运行中缩放的真实视觉验收待完成。
+- 背景：旧代码在 GUI 构造阶段调用 `SetProcessDpiAwareness(2)`，既不是明确的 Per-Monitor v2，也可能因调用过晚而由 Windows 位图拉伸，造成部分用户界面模糊。文档此前把目标声明误写成已经成立。
+- 决定：主 EXE 与 Update Helper 都嵌入 `PerMonitorV2, PerMonitor` manifest 和旧系统 fallback；PyInstaller runtime hook 与 `src/main.py` 在任何 Tk/CustomTkinter 窗口前执行 bootstrap。manifest 已确定后 API 返回 access denied 不是失败，必须查询实际 thread/window awareness 和 DPI。
+- 展示：系统页和日志显示实际 awareness 与缩放率，不是 PMv2 时提示用户检查 Windows 兼容性高 DPI 覆盖。程序不改注册表、不引入第三个缩放滑块，也不以 bitmap stretch 或迟到的 awareness 调用掩盖问题。
+- CustomTkinter 边界：CTk 继续管理自身 widget/window scaling，项目不重复乘缩放系数。混合显示器、动态 scale、睡眠/唤醒、扩展坞和远程桌面属于发布前人工验证项，在完成前不能写成已实机验证。
+
 ## 2026-07-19：FH6 三行语言状态落地，并把手动文件工具扩展到 Xbox App
 
-- 状态：GUI/TUI 生产代码、共用展示层、六个非英语 catalog 和自动测试已实现；包含本决定的最终 R6 one-file 重建与真实 Xbox App 游戏验证待完成。
+- 状态：GUI/TUI 生产代码、共用展示层、六个非英语 catalog、自动测试和包含本决定的 R6 one-file 发布已完成；真实 Xbox App 游戏验证仍待完成。
 - 背景：独立 FH6 页面仍显示原始 `Steam 语言：english`，遗漏了用户已确认的“当前游戏语言 / 实际显示语言 / 语音语言”三行界面。语言包交换本质只依赖经过内容识别的 `CHS.zip`、`EN.zip` 与同目录事务，不要求文件一定来自 Steam；Xbox App 版可以复用同一安全操作，但当前没有可靠的自动安装目录或游戏语言元数据来源。
 - 决定：GUI/TUI 必须共同消费 `summarize_fh6_languages()` 与 `language_summary_view()`，常驻显示三行本地化状态。Steam 继续自动发现并读取 manifest；Xbox App 只验证用户手动选择并保存的 `fh6_xbox_install_path`。Xbox App 或 Steam 手动路径无法证明当前游戏与语音语言时显示未知，启用前要求额外确认，不得为了显示“英语 / 中文 / 英语”而伪造 token。
 - 安全边界：两种平台继续要求 Windows、精确 FH6 根目录、可识别的中英文 ZIP、游戏未运行、用户显式确认、三步同目录 rename 和失败回滚。平台扩展不允许自动交换、扫描受保护 Xbox package、静默提权或弱化中断恢复。
@@ -12,7 +112,7 @@
 
 ## 2026-07-19：GUI 页面常驻、差异渲染并拆出 FH6 实用功能
 
-- 状态：GUI/TUI 生产代码与自动测试已实现；首次 R6 one-file 已验证页面边界，但三行/Xbox 语言补丁使该产物过时，最终重建和视觉验收待完成。
+- 状态：GUI/TUI 生产代码、自动测试与包含三行/Xbox 语言补丁的 R6 one-file 发布已完成；混合 DPI 和更多系统环境的视觉验收仍待完成。
 - 背景：CustomTkinter 原本在每次左侧导航时对完整页面执行 `pack_forget()` 和重新 `pack()`，会触发长页面重复布局；总览每秒无条件重配启动按钮、selector 和 XInput action，并每五秒切换 Steam 安装扫描状态，造成所有页面切换卡顿和快速入口抖动。FH6 语言与图标工具又长期在系统页运行两个五秒文件扫描。
 - 导航决定：所有 GUI tab frame 创建后只 `grid()` 到同一内容单元格一次，切换只允许 `tkraise()`，并通过可选 `on_show()`/`on_hide()` 管理页面私有任务。失败时恢复上一页，不重建 Settings 或控件。根 `WheelRouter` 继续依赖当前最上层页面的指针命中结果。
 - 探测决定：总览只扫描当前选择的 Steam 游戏；找到有效安装后停止，未找到时每 30 秒静默重试，path hint 变化或显式启动验证失效才重新发现。Xbox AUMID 仍只在点击启动时查找。按钮、游戏/平台 selector 和 XInput action 只在 presentation tuple 变化时更新，精确进程检测可以保持轻量轮询。
@@ -30,7 +130,7 @@
 
 ## 2026-07-19：Xbox App 使用内置 Xbox 360 XInput bridge，并提供显式启动入口
 
-- 状态：生产代码、自动测试、当前电脑 ViGEm 反向读取和 Bluetooth DualSense bridge 已实现；真实 Xbox App 版 Forza、clean-machine driver 安装、最终冻结 EXE 与 USB/Bluetooth 游戏内回归仍待验收。
+- 状态：基础 bridge 设计仍有效；其中“3 秒移除 target”已由 2026-07-22 的分层自恢复决定替代为“100 ms 中立后保留 player slot”。真实 Xbox App 版 Forza、clean-machine driver 安装和 USB/Bluetooth 游戏内回归仍待验收。
 - 背景：Xbox App 版 Forza 不会像 Steam Input 那样直接把 DualSense 映射为 XInput。用户要求程序自身完成基础输入桥，并要求 Steam 模式不产生双输入。ViGEmBus 只能稳定提供 Xbox 360 target，不能生成真正的 Xbox One target。
 - 决定：Windows x64 增加 `preferred_forza_platform`。Steam 模式完全停止 bridge；Xbox App 模式由现有 DualSense I/O thread 作为唯一 HID reader，发布 latest input 给独立 ViGEm worker，映射为虚拟 Xbox 360 Controller。100 ms 无输入先中立化，3 s 移除 target；停止或重连不得回放旧输入。当前不注册 rumble callback、不接管游戏原生振动、不安装或配置 HidHide，也不复制 DS4Windows GPL 代码。
 - 驱动：固定内置 ViGEmBus `1.22.0` 安装器和 x64 `ViGEmClient.dll`。兼容性以实际 client connect/target add 为准，不按版本号强制升级；缺少 driver 时只在用户确认、SHA-256 与 cache-only Authenticode 均通过后触发 UAC。ViGEm 已归档/EOL，软件不提供 driver 自动更新。
@@ -39,7 +139,7 @@
 
 ## 2026-07-19：FH6 DualSense 按键图标以可还原事务内置
 
-- 状态：Windows 生产代码、GUI/TUI 入口、打包资产、哈希与临时目录自动测试已实现；真实 Steam/Xbox 游戏目录写入、冻结 EXE 界面和游戏内图标显示仍未执行。
+- 状态：Windows 生产代码、GUI/TUI 入口、打包资产、哈希、临时目录自动测试和冻结 R6 EXE 已实现；真实 Steam/Xbox 游戏目录写入和游戏内图标显示仍未执行。
 - 背景：用户已取得 MOD 集成许可，并要求软件内安装，避免用户手工寻找普通与 HiRes 两个目标。游戏更新或验证文件会恢复原件，覆盖前必须保留可靠还原路径。
 - 决定：EXE 只携带一份 `DualSenseIcons 2.1.1` 的 `ControllerIcons.zip`，安装前校验固定 SHA-256，把两份不同原件分别备份到按已解析游戏根路径隔离的应用数据目录，再用同一 MOD 写入两个目标。安装、还原、部分状态修复都必须由用户显式触发；FH6 运行中拒绝修改，失效或不完整备份时拒绝静默覆盖。
 - 平台：Steam 根目录可自动发现；Xbox App 根目录当前手动选择并保存在 global 字段。该工具仅 Windows/FH6，不能泛化为 FH4/FH5 或 Linux 支持。
@@ -190,13 +290,13 @@
 - 构建：`FHDS_BUILD_VARIANT` 为每个 EXE 内置 `data/ui_variant.txt`；文件名分别为 `FH-DualSense-Enhanced-R4-Miku-Console.exe`、`...-Miku-Stage.exe` 和 `...-Miku-Studio.exe`。源码环境变量 `FHDS_UI_VARIANT` 只用于预览。
 - 后果：本段只保留选择过程的历史依据，不再约束当前代码。当前约束以上述单一 Console 决定为准。
 
-## 2026-07-16：Windows 独立 EXE 使用内置更新器，ZUV 保留为可选入口
+## 2026-07-16：Windows 独立 EXE 使用内置更新器，ZUV 保留为可选入口（安装事务已被 2026-07-19 决定替代）
 
-- 状态：查询、下载、校验、待安装恢复、Helper 替换/回滚、GUI/TUI 控件和自动测试已实现；真实已发布 R4 到 R5 的端到端更新尚无法执行。
+- 状态：这是内置更新器的历史起点。Release 查询、下载、校验、GUI/TUI 和 ZUV 边界继续有效；下述 `.old` 替换/回滚机制已被本文顶部 R7 事务更新决定替代。
 - 背景：只下载 EXE 的用户不应再为了更新安装 Python、uv 或理解 ZUV；Windows 运行中的 EXE 又不能可靠地自行覆盖。
-- 决定：仅冻结后的 Windows EXE 启用内置更新。它只接受仓库稳定 `R<n>` Release 中的 `FH-DualSense-Enhanced-R<n>.exe` 和同名 `.sha256`，以 `.part` 下载并检查长度、SHA-256、`MZ` 头。用户确认后由内置的独立 Helper 等待旧 PID、生成 `.old`、替换、重启，并在失败时回滚。
+- 历史决定：仅冻结后的 Windows EXE 启用内置更新。它只接受仓库稳定 `R<n>` Release 中的 `FH-DualSense-Enhanced-R<n>.exe` 和同名 `.sha256`，以 `.part` 下载并检查长度、SHA-256、`MZ` 头。R4 到 R6 的 Helper 会等待旧 PID、生成 `.old`、替换、重启并在失败时回滚；R7 以后不得继续采用这套安装步骤。
 - 边界：源码、Linux 和 ZUV 运行不执行 EXE 自替换；不静默提权。ZUV 和 `win_start.bat` 继续保留，作为兼容、开发和网络备用入口，而不是 R4 独立 EXE 的依赖。
-- 已知差距：当前每次启动约 10 秒后检查一次，尚无跨启动 24 小时节流；只检查 `MZ` 头而未解析 PE 版本资源，也没有代码签名信任链；这些不能在文档中写成已实现。
+- 仍有效的差距：当前每次启动约 10 秒后检查一次，尚无跨启动 24 小时节流，也没有代码签名信任链。R7 只在严格识别 R6 legacy bootstrap 时解析 PE 固定版本资源，该检查不是发布者身份验证。
 
 ## 2026-07-16：Enhanced R4 重做握把红线强度曲线并保留既有默认分工
 

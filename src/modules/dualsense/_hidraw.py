@@ -23,7 +23,7 @@ def enumerate(vendor_id: int = 0, product_id: int = 0) -> list[dict]:
     for node in sorted(glob.glob("/dev/hidraw*")):
         try:
             with open(f"/sys/class/hidraw/{os.path.basename(node)}/device/uevent") as f:
-                fields = dict(l.strip().split("=", 1) for l in f if "=" in l)
+                fields = dict(line.strip().split("=", 1) for line in f if "=" in line)
             bus, vid, pid = (int(p, 16) for p in fields["HID_ID"].split(":"))
         except (OSError, KeyError, ValueError):
             continue
@@ -51,7 +51,9 @@ class device:
         # hidapi semantics: byte 0 of the buffer is the report id on the way in,
         # and the returned list includes that report id at index 0. The kernel
         # fills the rest via the HIDIOCGFEATURE ioctl.
-        buf = array.array("B", bytes([report_id]) + bytes(length))
+        if length < 1:
+            raise ValueError("feature report length must include the report id")
+        buf = array.array("B", bytes([report_id]) + bytes(length - 1))
         fcntl.ioctl(self._fd, _ioc(3, _HID_TYPE, _HIDIOCGFEATURE_NR, len(buf)), buf, True)
         return list(buf)
 
@@ -61,6 +63,9 @@ class device:
 
     def read(self, size, timeout_ms=0):
         # MARK: catch OSError (EBADF) - fd may close between caller's connected-check and read
+        # Keep the hidapi keyword name: the shared I/O loop calls
+        # ``read(..., timeout_ms=0)`` on both native hidapi and this shim.
+        del timeout_ms
         try:
             return os.read(self._fd, size)
         except (BlockingIOError, OSError):

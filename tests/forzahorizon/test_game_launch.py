@@ -75,7 +75,7 @@ def test_exact_process_detection_distinguishes_each_generation(tmp_path, monkeyp
     root = _game_root(tmp_path, "fh5")
     calls = []
 
-    def find(_needles, *, exact_name):
+    def find(_needles, *, exact_name, strict=False):
         calls.append(exact_name)
         if exact_name == "ForzaHorizon5.exe":
             return GameProcess(exact_name, str(root / exact_name), 55)
@@ -95,11 +95,30 @@ def test_launch_uses_selected_game_steam_uri(tmp_path, monkeypatch, key):
     assert install is not None
     opened = []
     monkeypatch.setattr(game_launch, "is_windows_steam_supported", lambda: True)
-    monkeypatch.setattr(game_launch, "is_forza_game_running", lambda *_args: False)
+    monkeypatch.setattr(
+        game_launch, "is_forza_game_running", lambda *_args, **_kwargs: False
+    )
 
     game_launch.launch_forza_via_steam(install, open_uri=opened.append)
 
     assert opened == [install.game.steam_run_uri]
+
+
+def test_launch_refuses_when_the_process_table_cannot_be_verified(tmp_path, monkeypatch):
+    root = _game_root(tmp_path, "fh6")
+    install = game_launch.validate_forza_root("fh6", root)
+    assert install is not None
+    monkeypatch.setattr(game_launch, "is_windows_steam_supported", lambda: True)
+    monkeypatch.setattr(
+        game_launch,
+        "is_forza_game_running",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            game_launch.ProcessScanError("process table unavailable")
+        ),
+    )
+
+    with pytest.raises(game_launch.ForzaLaunchError, match="Could not verify"):
+        game_launch.launch_forza_via_steam(install, open_uri=lambda _uri: None)
 
 
 def test_decode_start_apps_accepts_single_or_multiple_json_rows():
@@ -134,7 +153,9 @@ def test_xbox_aumid_discovery_ignores_same_named_steam_shortcut():
 def test_xbox_launch_activates_installed_aumid(monkeypatch):
     opened = []
     monkeypatch.setattr(game_launch, "is_windows_steam_supported", lambda: True)
-    monkeypatch.setattr(game_launch, "is_forza_game_running", lambda *_args: False)
+    monkeypatch.setattr(
+        game_launch, "is_forza_game_running", lambda *_args, **_kwargs: False
+    )
 
     result = game_launch.launch_forza_via_xbox_app(
         "fh4",
@@ -149,7 +170,9 @@ def test_xbox_launch_activates_installed_aumid(monkeypatch):
 def test_xbox_launch_falls_back_to_selected_product_page(monkeypatch):
     opened = []
     monkeypatch.setattr(game_launch, "is_windows_steam_supported", lambda: True)
-    monkeypatch.setattr(game_launch, "is_forza_game_running", lambda *_args: False)
+    monkeypatch.setattr(
+        game_launch, "is_forza_game_running", lambda *_args, **_kwargs: False
+    )
 
     result = game_launch.launch_forza_via_xbox_app(
         "fh6",

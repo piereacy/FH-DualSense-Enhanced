@@ -3,7 +3,13 @@ import math
 import pytest
 
 from modules.config.settings import Settings
-from modules.dualsense.adaptive_trigger import M_OFF, M_RIGID, M_VIBRATE, M_VIBRATE_ZONES
+from modules.dualsense.adaptive_trigger import (
+    M_OFF,
+    M_RIGID,
+    M_VIBRATE,
+    M_VIBRATE_ZONES,
+    vibrate,
+)
 from modules.forzahorizon.collision import CollisionSignal
 from modules.forzahorizon.effects import Controller, TriggerAnimations, _AsymmetricEwma
 
@@ -307,6 +313,7 @@ def test_no_pedal_resets_traction_latch_and_ewma():
 
 def test_l2_abs_and_r2_traction_can_coexist_with_both_pedals(monkeypatch):
     settings = Settings()
+    settings.enable_abs = True
     controller = Controller(settings)
     telemetry = _telemetry(
         brake=255,
@@ -418,6 +425,23 @@ def test_r2_trigger_uses_rev_limiter_when_traction_is_clear():
     assert frame[1][:2] == (settings.rev_limit_freq, settings.rev_limit_amp)
 
 
+def test_r2_trigger_uses_shared_effective_redline_without_overwriting_max_rpm():
+    settings = Settings()
+    settings.enable_rev_limiter = True
+    animation = TriggerAnimations()
+    telemetry = _telemetry(
+        rpm=8200.0,
+        max_rpm=10000.0,
+        effective_redline_rpm=8500.0,
+    )
+
+    frame = animation.rev_buzz(telemetry, settings, 1.0)
+
+    assert frame is not None
+    assert frame[1][:2] == (settings.rev_limit_freq, settings.rev_limit_amp)
+    assert telemetry["max_rpm"] == 10000.0
+
+
 def test_r2_traction_keeps_priority_over_rev_limiter():
     settings = Settings()
     settings.enable_rev_limiter = True
@@ -437,6 +461,7 @@ def test_r2_traction_keeps_priority_over_rev_limiter():
 
 def test_abs_requires_brake_and_minimum_speed():
     settings = Settings()
+    settings.enable_abs = True
     animation = TriggerAnimations()
     slipping = _telemetry(brake=255, tire_slip_ratio_fl=1.0)
 
@@ -447,6 +472,7 @@ def test_abs_requires_brake_and_minimum_speed():
 
 def test_abs_uses_longitudinal_slip_as_primary_and_combined_as_weaker_auxiliary():
     settings = Settings()
+    settings.enable_abs = True
     longitudinal = TriggerAnimations().abs_pulse(
         _telemetry(brake=255, tire_slip_ratio_fl=1.0), settings, 1.0
     )
@@ -460,6 +486,7 @@ def test_abs_uses_longitudinal_slip_as_primary_and_combined_as_weaker_auxiliary(
 
 def test_abs_speed_is_a_gate_not_an_intensity_input():
     settings = Settings()
+    settings.enable_abs = True
     common = dict(brake=255, tire_slip_ratio_fl=1.0)
 
     slow = TriggerAnimations().abs_pulse(_telemetry(speed=10.0, **common), settings, 1.0)
@@ -470,6 +497,7 @@ def test_abs_speed_is_a_gate_not_an_intensity_input():
 
 def test_abs_frequency_and_amplitude_rise_with_slip():
     settings = Settings()
+    settings.enable_abs = True
     low = TriggerAnimations().abs_pulse(
         _telemetry(brake=255, tire_slip_ratio_fl=0.4), settings, 1.0
     )
@@ -484,6 +512,7 @@ def test_abs_frequency_and_amplitude_rise_with_slip():
 
 def test_abs_keeps_the_top_three_zones_at_maximum_wall_strength():
     settings = Settings()
+    settings.enable_abs = True
 
     frame = TriggerAnimations().abs_pulse(
         _telemetry(brake=255, tire_slip_ratio_fl=1.0), settings, 1.0
@@ -496,6 +525,7 @@ def test_abs_keeps_the_top_three_zones_at_maximum_wall_strength():
 
 def test_abs_holds_the_last_dynamic_pulse_for_100_ms():
     settings = Settings()
+    settings.enable_abs = True
     animation = TriggerAnimations()
     active = _telemetry(brake=255, tire_slip_ratio_fl=1.0)
     clear = _telemetry(brake=255)
@@ -519,6 +549,17 @@ def test_turbo_boost_resistance_is_opt_in_and_adds_r2_force():
 
     assert boosted[0] == M_RIGID
     assert boosted[1][1] > 0
+
+
+def test_negative_manual_resistance_curve_fails_safe_without_dividing_by_zero():
+    settings = Settings()
+    settings.brake_curve = -1.0
+
+    frame = TriggerAnimations().brake_resistance(
+        _telemetry(brake=settings.brake_deadzone), settings
+    )
+
+    assert frame[0] == M_OFF
 
 
 def test_g_force_resistance_uses_elapsed_time_smoothing_and_can_release():
@@ -583,3 +624,18 @@ def test_optional_trigger_surface_uses_rumble_strip_then_yields_when_pressed():
         settings.trigger_rumble_strip_amp,
     )
     assert pressed[0] == M_RIGID
+
+
+def test_invalid_numeric_tuning_fails_closed_in_trigger_primitives_and_idle_buzz():
+    assert vibrate(float("nan"), float("inf")) == (M_VIBRATE, (0, 0))
+
+    settings = Settings()
+    settings.idle_period_s = 0.0
+    frame = TriggerAnimations().idle_buzz(
+        _telemetry(speed=0.0, accel=10),
+        settings,
+        now=1.0,
+    )
+
+    assert frame is not None
+    assert frame[0] == M_VIBRATE

@@ -8,7 +8,10 @@ from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
 from modules.update import UpdatePhase
-from modules.update.presentation import localized_status
+from modules.update.presentation import (
+    UpdateStatusPresentation,
+    update_status_presentation,
+)
 
 from . import theme as T
 from . import widgets as W
@@ -17,7 +20,9 @@ from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 log = logging.getLogger("fhds")
 
 class SystemTab(SettingsTab):
-    SECTIONS = SYSTEM_SECTIONS
+    SWITCH_SECTIONS: tuple = ()
+    SECTIONS: list = SYSTEM_SECTIONS
+    EXPERIMENTAL_SECTIONS: tuple = ()
     SHOW_RESET = False
     SHOW_EXPERIMENTAL = False
     PAGE_TITLE = "System and updates"
@@ -34,8 +39,12 @@ class SystemTab(SettingsTab):
         self._update_progress: ctk.CTkProgressBar | None = None
         self._update_action: ctk.CTkButton | None = None
         self._release_button: ctk.CTkButton | None = None
+        self._update_presentation: UpdateStatusPresentation | None = None
         self._controller_card: "W.Card | None" = None
         self._dsx_note: "W.Hint | None" = None
+        self._display_card: "W.Card | None" = None
+        self._dpi_status: ctk.CTkLabel | None = None
+        self._dpi_warning: ctk.CTkLabel | None = None
         self._updates_card: "W.Card | None" = None
         super().__init__(parent, app)
         threading.Thread(target=self._enumerate_async, daemon=True).start()
@@ -44,6 +53,7 @@ class SystemTab(SettingsTab):
     def _build(self):
         self._build_controller_card()
         self._build_dsx_note()
+        self._build_display_card()
         self._build_updates_card()
         # Standard sections from SYSTEM_SECTIONS
         super()._build()
@@ -70,7 +80,13 @@ class SystemTab(SettingsTab):
         actions = ctk.CTkFrame(card, fg_color="transparent")
         actions.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
         W.SecondaryButton(actions, t("Rescan"), self._on_rescan, width=120
-                          ).pack(side="left")
+                          ).pack(side="left", padx=(0, T.PAD_SM))
+        W.SecondaryButton(
+            actions,
+            t("Reconnect now"),
+            self._on_reconnect_now,
+            width=150,
+        ).pack(side="left")
 
     def _build_dsx_note(self):
         # Shown in place of the controller card while DSX owns the controller.
@@ -86,7 +102,7 @@ class SystemTab(SettingsTab):
         controller card for an explanatory note when DSX is on."""
         if self._controller_card is None or self._dsx_note is None:
             return
-        anchor = self._updates_card
+        anchor = self._display_card or self._updates_card
         if anchor is None:
             anchor = next(
                 (widget for widget in self._scroll.pack_slaves()
@@ -156,6 +172,27 @@ class SystemTab(SettingsTab):
             actions, t("View release"), self._open_update_release, width=120
         )
 
+    def _build_display_card(self):
+        card = self._display_card = W.Card(self._scroll)
+        card.pack(fill="x", pady=(0, T.PAD_MD))
+        W.H2(card, t("Display scaling")).pack(
+            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_SM)
+        )
+        self._dpi_status = W.Body(card, "")
+        self._dpi_status.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
+        self._dpi_warning = W.Warning(card, "", wrap=self.app.px(640))
+        self._dpi_warning.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
+        self.set_dpi_snapshot(self.app.dpi_snapshot)
+
+    def set_dpi_snapshot(self, snapshot):
+        if self._dpi_status is not None:
+            self._dpi_status.configure(text=self.app.dpi_status_text(snapshot))
+        if self._dpi_warning is not None:
+            warning = "" if snapshot.per_monitor_v2 else t(
+                "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override."
+            )
+            self._dpi_warning.configure(text=warning)
+
     # MARK: controller list -------------------------------------------------
 
     def _attached_serial(self) -> str:
@@ -198,6 +235,13 @@ class SystemTab(SettingsTab):
 
     def _on_rescan(self):
         threading.Thread(target=self._enumerate_async, daemon=True).start()
+
+    def _on_reconnect_now(self):
+        controller = getattr(self.app, "_ds", None)
+        reconnect = getattr(controller, "force_reconnect", None)
+        if callable(reconnect):
+            reconnect()
+            log.info("Immediate DualSense reconnect requested")
 
     def _enumerate_async(self):
         try:
@@ -289,22 +333,43 @@ class SystemTab(SettingsTab):
         if self.app._tearing_down:
             return
         snapshot = self.app._update_service.snapshot()
-        if self._update_status is not None:
-            self._update_status.configure(text=localized_status(snapshot, t))
-        if self._update_progress is not None:
-            self._update_progress.set(snapshot.progress)
-        if self._update_action is not None:
-            self._update_action.pack_forget()
-            if snapshot.phase is UpdatePhase.AVAILABLE:
-                self._update_action.configure(text=t("Download update"), state="normal")
-                self._update_action.pack(side="left", padx=(0, T.PAD_SM))
-            elif snapshot.phase is UpdatePhase.READY:
-                self._update_action.configure(text=t("Restart and install"), state="normal")
-                self._update_action.pack(side="left", padx=(0, T.PAD_SM))
-        if self._release_button is not None:
-            self._release_button.pack_forget()
-            if snapshot.release is not None:
-                self._release_button.pack(side="left")
+        current = update_status_presentation(snapshot, t)
+        previous = self._update_presentation
+        if current != previous:
+            self._update_presentation = current
+            if (
+                self._update_status is not None
+                and (previous is None or current.status != previous.status)
+            ):
+                self._update_status.configure(text=current.status)
+            if (
+                self._update_progress is not None
+                and (previous is None or current.progress != previous.progress)
+            ):
+                self._update_progress.set(current.progress)
+            if self._update_action is not None and (
+                previous is None or current.action != previous.action
+            ):
+                if current.action is None:
+                    if previous is not None and previous.action is not None:
+                        self._update_action.pack_forget()
+                else:
+                    action_text = (
+                        "Download update"
+                        if current.action == "download"
+                        else "Restart and install"
+                    )
+                    self._update_action.configure(text=t(action_text), state="normal")
+                    if previous is None or previous.action is None:
+                        self._update_action.pack(side="left", padx=(0, T.PAD_SM))
+            if self._release_button is not None and (
+                previous is None
+                or current.release_visible != previous.release_visible
+            ):
+                if current.release_visible:
+                    self._release_button.pack(side="left")
+                elif previous is not None and previous.release_visible:
+                    self._release_button.pack_forget()
         self.app.root.after(250, self._refresh_update_status)
 
     def _refresh_widgets(self):

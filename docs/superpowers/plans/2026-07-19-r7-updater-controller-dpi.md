@@ -1,7 +1,7 @@
 # Enhanced R7 运行时基础设施实施计划
 
 日期：2026-07-19
-状态：实施中
+状态：生产实现与自动验证收口中；真实 DualSense 和混合 DPI 验收待完成
 
 对应规格：`docs/superpowers/specs/2026-07-19-r7-updater-controller-dpi-design.md`
 
@@ -39,6 +39,7 @@
 - 使用 Windows Shell Link COM 的标准库 `ctypes` 边界，精确匹配规范化旧 EXE 绝对路径；保留参数、工作目录、显示状态、描述、AppUserModel 属性和图标索引。
 - 只有图标路径也精确指向旧 EXE 时才改到新版；保存后重新读取验证并通知 Explorer 刷新。
 - 测试无快捷方式、多位置、多参数、旧 EXE 图标、部分失败和后续重试；无匹配静默成功，部分失败保留旧版本并进入 `cleanup_pending`。
+- 健康提交后扫描同目录全部严格命名且版本更低的规范 EXE，分别迁移快捷方式并删除成功项；同时删除严格同名的 `.exe.old`、`.exe.sha256`，包括旧 R5 更新残留。测试必须证明不删除任意其他 EXE/`.old`、同版或更高版本。
 
 ## 6. 扩展 DualSense 输入验证和状态模型
 

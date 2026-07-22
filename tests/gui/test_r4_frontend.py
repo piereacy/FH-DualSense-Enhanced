@@ -54,6 +54,40 @@ def test_driving_layout_switches_to_one_column_before_cards_clip():
     assert responsive_column_count(719) == 1
 
 
+def test_feedback_resize_is_debounced_and_reuses_existing_grid_items():
+    source = (ROOT / "src/modules/gui/settings_tab.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    settings_tab = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SettingsTab"
+    )
+    resize_debounce = next(
+        node.value
+        for node in settings_tab.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "RESIZE_DEBOUNCE_MS"
+            for target in node.targets
+        )
+    )
+    layout = next(
+        node
+        for node in settings_tab.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_apply_responsive_layout"
+    )
+    calls = {
+        node.func.attr
+        for node in ast.walk(layout)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+
+    assert ast.literal_eval(resize_debounce) == 80
+    assert "grid" in calls
+    assert "grid_forget" not in calls
+
+
 def test_windows_spec_bundles_update_helper_once_per_exe():
     spec = (ROOT / "packaging/windows/fhds.spec").read_text(encoding="utf-8")
 

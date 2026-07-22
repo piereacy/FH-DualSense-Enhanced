@@ -1,15 +1,14 @@
 [project]
 name = "fh-dualsense-enhanced"
-version = "6"
+version = "7"
 description = "Enhanced Forza Horizon DualSense adaptive triggers and body haptics."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "customtkinter>=5.2.2",
-    "dotenv>=0.9.9",
     "hidapi>=0.15.0",
     "numpy>=2.1.0",
-    "pillow>=11.0.0",
+    "pillow>=12.3.0",
     "psutil>=7.2.2",
     "pystray>=0.19.5",
     "sounddevice>=0.5.1",
@@ -18,13 +17,16 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=9.0.0"]
+dev = [
+    "pyinstaller==6.16.0",
+    "pyrefly==1.1.1",
+    "pytest>=9.0.0",
+]
 
 [tool.pyrefly]
-project-includes = ["src"]
-search-path = ["src"]
+project-includes = ["."]
+search-path = ["."]
 ignore-errors-in-generated-code = true
-python-interpreter-path = ".venv/Scripts/python.exe"
 
 [tool.pyrefly.errors]
 bad-argument-type = false

@@ -72,7 +72,8 @@ def _ramp(value, deadzone, baseline, max_force, curve, ceiling):
     if value < deadzone:
         return baseline
     r = min(1.0, (value - deadzone) / max(ceiling - deadzone, 1))
-    return baseline + (max_force - baseline) * (r ** curve)
+    exponent = max(0.01, float(curve))
+    return baseline + (max_force - baseline) * (r ** exponent)
 
 def _wall_state(value, engaged, engage_at, release_at):
     """Hysteresis: enter wall at >= engage_at, leave at < release_at."""
@@ -171,9 +172,9 @@ class TriggerAnimations:
         if handbrake_full_throttle:
             return vibrate(s.rev_limit_freq, s.rev_limit_amp)
 
-        max_rpm = t["max_rpm"]
-        rpm_ratio = t["rpm"] / max_rpm if max_rpm > 0 else 0.0
-        if rpm_ratio > s.rev_limit_ratio:
+        limit_rpm = t.get("effective_redline_rpm", t["max_rpm"])
+        rpm_ratio = t["rpm"] / limit_rpm if limit_rpm > 0 else 0.0
+        if t.get("rev_limiter_active", False) or rpm_ratio > s.rev_limit_ratio:
             self._rev_until = now + max(0.0, s.rev_limit_hold_ms) / 1000.0
         if now < self._rev_until:
             return vibrate(s.rev_limit_freq, s.rev_limit_amp)
@@ -187,7 +188,13 @@ class TriggerAnimations:
             return None
         if not (1 <= t["accel"] <= s.idle_accel_max):
             return None
-        loud = (now / s.idle_period_s) % 1.0 < 0.5
+        try:
+            period = float(s.idle_period_s)
+        except (TypeError, ValueError, OverflowError):
+            period = 0.5
+        if not math.isfinite(period) or period <= 0.0:
+            period = 0.5
+        loud = (now / period) % 1.0 < 0.5
         amp = s.idle_amp_high if loud else s.idle_amp_low
         return vibrate(s.idle_freq, amp)
 

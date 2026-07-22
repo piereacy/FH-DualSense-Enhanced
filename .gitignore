@@ -226,6 +226,7 @@ user_preferences.json
 
 # fhds crash log
 crash.log
+runtime.log*
 .claude
 
 # Local isolated feature worktrees

@@ -95,23 +95,31 @@ class FH6UtilitiesTab(VerticalScroll):
             ),
             classes="hint",
         )
-        yield Label(t("Scanning for FH6"), id="fh6-status")
-        yield Label("", id="fh6-detail", classes="hint")
-        yield Label(t("Install folder: not found"), id="fh6-install", classes="hint")
+        yield Label(t("Scanning for FH6"), id="fh6-status", markup=False)
+        yield Label("", id="fh6-detail", classes="hint", markup=False)
+        yield Label(
+            t("Install folder: not found"),
+            id="fh6-install",
+            classes="hint",
+            markup=False,
+        )
         yield Label(
             t("Current FH6 game language: {language}").format(language=t("Unknown")),
             id="fh6-game-language",
             classes="hint",
+            markup=False,
         )
         yield Label(
             t("Actual display language: {language}").format(language=t("Unknown")),
             id="fh6-display-language",
             classes="hint",
+            markup=False,
         )
         yield Label(
             t("Voice language: {language}").format(language=t("Unknown")),
             id="fh6-voice-language",
             classes="hint",
+            markup=False,
         )
         with Horizontal(id="fh6-path-row"):
             yield Input(
@@ -140,9 +148,14 @@ class FH6UtilitiesTab(VerticalScroll):
             t("MOD by {author} - open Nexus Mods").format(author=MOD_AUTHOR),
             id="icon-credit",
         )
-        yield Label(t("Scanning for FH6"), id="icon-status")
-        yield Label("", id="icon-detail", classes="hint")
-        yield Label(t("Install folder: not found"), id="icon-install", classes="hint")
+        yield Label(t("Scanning for FH6"), id="icon-status", markup=False)
+        yield Label("", id="icon-detail", classes="hint", markup=False)
+        yield Label(
+            t("Install folder: not found"),
+            id="icon-install",
+            classes="hint",
+            markup=False,
+        )
         with Horizontal(id="icon-path-row"):
             yield Input(
                 value=self._icon_saved_path(),

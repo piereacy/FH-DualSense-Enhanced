@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+import math
+
 from modules.dualsense.output_state import ControllerVisualState
 
 
-def _clamp01(value) -> float:
+def _number(value, default: float = 0.0) -> float:
     try:
-        return max(0.0, min(1.0, float(value)))
-    except (TypeError, ValueError):
-        return 0.0
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return result if math.isfinite(result) else default
+
+
+def _clamp01(value) -> float:
+    return max(0.0, min(1.0, _number(value)))
 
 
 def _byte(value) -> int:
-    return max(0, min(255, int(round(value))))
+    return max(0, min(255, int(round(_number(value)))))
 
 
 def _lerp_color(a, b, ratio):
@@ -47,7 +54,7 @@ class LightingController:
             self._lightbar_claimed = False
 
         if getattr(settings, "enable_gear_player_leds", False):
-            gear = int(telemetry.get("gear", 0) or 0) if on else 0
+            gear = int(_number(telemetry.get("gear", 0))) if on else 0
             player_leds = _gear_leds(gear)
             self._player_leds_claimed = True
         elif self._player_leds_claimed:
@@ -61,8 +68,8 @@ class LightingController:
 
     @staticmethod
     def _tachometer(telemetry, settings, now):
-        max_rpm = max(0.0, float(telemetry.get("max_rpm", 0.0) or 0.0))
-        rpm = max(0.0, float(telemetry.get("rpm", 0.0) or 0.0))
+        max_rpm = max(0.0, _number(telemetry.get("max_rpm", 0.0)))
+        rpm = max(0.0, _number(telemetry.get("rpm", 0.0)))
         if max_rpm <= 0.0:
             return (0, 0, 0)
         ratio = rpm / max_rpm
@@ -84,8 +91,8 @@ class LightingController:
         if ratio < start:
             color = (0, 0, 0)
         elif ratio >= flash:
-            rate = max(0.0, float(getattr(settings, "tachometer_flash_rate_hz", 10.0)))
-            visible = rate <= 0.0 or int(float(now) * rate * 2.0) % 2 == 0
+            rate = max(0.0, _number(getattr(settings, "tachometer_flash_rate_hz", 10.0)))
+            visible = rate <= 0.0 or int(_number(now) * rate * 2.0) % 2 == 0
             color = redline_color if visible else (0, 0, 0)
         else:
             progress = (ratio - start) / max(0.01, flash - start)

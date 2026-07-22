@@ -11,6 +11,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from . import game_launch
+from .process_watch import ProcessScanError
 
 log = logging.getLogger("fhds.fh6_language")
 
@@ -185,7 +186,10 @@ def discover_fh6_install(
 
 
 def is_fh6_running(install: FH6Install | None = None) -> bool:
-    return game_launch.is_forza_game_running(FH6_GAME, install)
+    try:
+        return game_launch.is_forza_game_running(FH6_GAME, install, strict=True)
+    except ProcessScanError as exc:
+        raise FH6LanguageError(f"Could not verify whether FH6 is running: {exc}") from exc
 
 
 def _archive_paths(install: FH6Install) -> tuple[Path, Path, Path]:

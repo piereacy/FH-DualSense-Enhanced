@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "6"
-CURRENT_RELEASE_VERSION = "R6"
+CURRENT_INTERNAL_VERSION = "7"
+CURRENT_RELEASE_VERSION = "R7"
 
 
 def _source(path: str) -> str:
@@ -89,6 +89,9 @@ def test_standalone_modes_show_builtin_update_controls_without_zuv_gate():
     assert "Automatically check for updates" in tui
     assert "ZUV not found:" not in gui
     assert "ZUV not found:" not in tui
+    assert 'id="update-release"' in tui
+    assert "release.html_url" in gui
+    assert "release.html_url" in tui
 
 
 def test_windows_launcher_downloads_or_reuses_the_enhanced_bundle():
@@ -144,6 +147,7 @@ def test_local_zuv_builder_has_optional_update_repo_and_release_notices():
     assert ZUV_NAME in source
     assert "UPDATE_REPO" in source
     assert "--update-repo" in source
+    assert 'zuv==0.5.6' in source
     assert "LICENSE" in source
     assert "THIRD_PARTY_NOTICES.md" in source
 
@@ -153,6 +157,8 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
 
     assert f"release/{ZUV_NAME}" in workflow
     assert '--update-repo "$GITHUB_REPOSITORY"' in workflow
+    assert 'zuv==0.5.6' in workflow
+    assert 'bash "$GITHUB_WORKSPACE/packaging/linux/build_elf.sh"' in workflow
     assert "packaging\\windows\\build_exe.bat" in workflow
     assert "HamzaYslmn/Forza-Horizon-DualSense-Python" not in workflow
     assert "Windows 独立 EXE（推荐）" in workflow
@@ -174,6 +180,15 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "HorizonHaptics 1.3.0" in workflow
 
 
+def test_r_series_release_refuses_version_or_bilingual_notes_mismatch():
+    workflow = _source(".github/workflows/release.yml")
+
+    assert 'if [[ "$requested" != "$internal" ]]' in workflow
+    assert "bilingual release notes are not prepared for R$internal" in workflow
+    assert "## Enhanced R$internal 中文说明" in workflow
+    assert "## Enhanced R$internal English notes" in workflow
+
+
 def test_windows_packaging_emits_the_enhanced_executable_name():
     spec = _source("packaging/windows/fhds.spec")
     build = _source("packaging/windows/build_exe.bat")
@@ -189,7 +204,11 @@ def test_windows_packaging_emits_the_enhanced_executable_name():
     assert "StringStruct('FileVersion', '{PUBLIC_VERSION}')" in spec
     assert "StringStruct('ProductVersion', '{PUBLIC_VERSION}')" in spec
     assert 'name="FH-DualSense-Enhanced"' in linux_spec
-    assert "FH-DualSense-Enhanced-R$VER" in _source("packaging/linux/build_elf.sh")
+    linux_build = _source("packaging/linux/build_elf.sh")
+    assert "FH-DualSense-Enhanced-R$VER" in linux_build
+    assert 'uv sync --project "$ROOT/src" --frozen' in linux_build
+    assert '--no-install-package pygobject --no-install-package pycairo' in linux_build
+    assert 'uv run --project "$ROOT/src" --frozen --no-sync' in linux_build
 
 
 def test_windows_checksum_writer_emits_and_verifies_updater_sidecar(tmp_path):
@@ -342,7 +361,7 @@ def test_readmes_require_in_game_vibration_off_but_keep_steam_input_on():
     assert "握把フィードバックが正常に動作しません" in japanese
 
 
-def test_release_identity_uses_public_r6_and_internal_pep440_version():
+def test_release_identity_uses_public_r7_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 

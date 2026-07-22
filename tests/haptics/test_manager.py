@@ -106,6 +106,35 @@ def test_usb_starts_audio_once_and_publishes_every_frame():
     assert audio.frames == [first, second]
 
 
+def test_transport_routing_never_requests_an_unverified_hid_audio_mode():
+    class _ProtocolGuardController(_Controller):
+        def __init__(self):
+            super().__init__("bluetooth")
+            self.mode_requests = []
+
+        def set_usb_audio_haptics_enabled(self, enabled):
+            self.mode_requests.append(bool(enabled))
+
+    controller = _ProtocolGuardController()
+    audio = _Audio()
+    audio.running = True
+    manager = HapticManager(
+        controller,
+        _settings(),
+        audio=audio,
+        bt_audio_factory=_BtAudioFactory(),
+    )
+
+    manager.route(HapticFrame(left_low=0.2))
+    controller.transport = "usb"
+    manager.route(HapticFrame(right_low=0.4))
+    controller.transport = None
+    manager.route(SILENT_FRAME)
+    manager.close()
+
+    assert controller.mode_requests == []
+
+
 def test_bluetooth_starts_hd_haptics_and_does_not_claim_compatible_rumble():
     factory = _AudioFactory()
     bt_factory = _BtAudioFactory()

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
-from .process_watch import find_game_process
+from .process_watch import ProcessScanError, find_game_process
 
 log = logging.getLogger("fhds.forza_launch")
 
@@ -418,9 +418,15 @@ def discover_forza_install(
 def is_forza_game_running(
     game: str | ForzaGame,
     install: ForzaInstall | object | None = None,
+    *,
+    strict: bool = False,
 ) -> bool:
     definition = get_forza_game(game)
-    process = find_game_process((), exact_name=definition.executable_name)
+    process = find_game_process(
+        (),
+        exact_name=definition.executable_name,
+        strict=strict,
+    )
     if process is None:
         return False
     root = getattr(install, "root", None)
@@ -439,6 +445,21 @@ def _open_steam_uri(uri: str) -> None:
     opener(uri)
 
 
+def _ensure_not_running(
+    game: str | ForzaGame,
+    install: ForzaInstall | object | None = None,
+) -> None:
+    definition = get_forza_game(game)
+    try:
+        running = is_forza_game_running(definition, install, strict=True)
+    except ProcessScanError as exc:
+        raise ForzaLaunchError(
+            f"Could not verify whether {definition.short_name} is running: {exc}"
+        ) from exc
+    if running:
+        raise ForzaLaunchError(f"{definition.short_name} is already running")
+
+
 def launch_forza_via_steam(
     install: ForzaInstall,
     *,
@@ -455,8 +476,7 @@ def launch_forza_via_steam(
     )
     if validated is None:
         raise ForzaLaunchError(f"{install.game.short_name} installation is no longer valid")
-    if is_forza_game_running(install.game, validated):
-        raise ForzaLaunchError(f"{install.game.short_name} is already running")
+    _ensure_not_running(install.game, validated)
     try:
         (open_uri or _open_steam_uri)(install.game.steam_run_uri)
     except OSError as exc:
@@ -481,8 +501,7 @@ def launch_forza_via_xbox_app(
     definition = get_forza_game(game)
     if not is_windows_steam_supported():
         raise ForzaLaunchError("Forza Horizon launch supports Windows only")
-    if is_forza_game_running(definition):
-        raise ForzaLaunchError(f"{definition.short_name} is already running")
+    _ensure_not_running(definition)
     aumid = discover_xbox_aumid(definition, entries=entries)
     target = f"shell:AppsFolder\\{aumid}" if aumid else definition.xbox_app_uri
     try:

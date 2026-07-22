@@ -52,7 +52,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "左扳机 - 静态防护墙（可选）",
     "Right trigger - Gas force": "右扳机 - 油门力",
     "ABS (anti-lock brake) rumble": "ABS（防抱死刹车）震动",
-    "Idle buzz": "怠速震动",
     "Gear shift thump": "换挡冲击",
 
     # --- settings tab fields ---
@@ -97,6 +96,20 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza 遥测（下次启动生效）",
     "Startup pulse": "启动震动",
     "Reconnect": "重新连接",
+    "Connection and reconnect": "连接与重连",
+    "Reconnect now": "立即重新连接",
+    "Charging {percent}%": "充电中 {percent}%",
+    "Charging": "充电中",
+    "Fully charged": "已充满",
+    "Battery unavailable": "电量不可用",
+    "Reading battery": "正在读取电量",
+    "Switching connection": "正在切换连接",
+    "Reconnecting": "正在重新连接",
+    "Connecting": "正在连接",
+    "Connection error": "连接错误",
+    "Display scaling": "显示缩放",
+    "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override.":
+        "Per-Monitor v2 未生效。请检查 EXE 兼容性中的高 DPI 缩放替代设置。",
     "Application behavior": "软件行为",
     "Game detection": "游戏检测",
     "UDP port": "UDP 端口",
@@ -287,6 +300,23 @@ STRINGS.update({
     "Show gear on player LEDs": "用玩家指示灯显示挡位",
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "1 挡至 5 挡及以上使用五颗白色玩家指示灯显示。",
+})
+
+STRINGS.update({
+    "L2 - Brake": "L2 - 刹车",
+    "R2 - Throttle": "R2 - 油门",
+})
+
+STRINGS.update({
+    "Trigger feedback": "扳机反馈",
+    "L2/R2 switches and tuning. Changes save instantly.": "L2/R2 扳机键开关与调节，改动会即时保存。",
+    "Grip switches and tuning. Changes save instantly.": "握把触觉开关与调节，改动会即时保存。",
+    "Shared trigger feedback": "共享扳机反馈",
+    "Tire grip trigger feedback": "轮胎抓地力扳机反馈",
+    "Tire grip trigger strength": "轮胎抓地力扳机反馈强度",
+    "Body haptics tuning": "握把触觉调节",
+    "Tire grip trigger advanced tuning": "轮胎抓地力扳机高级调节",
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. Disable in-game vibration to prevent competing or doubled grip output.": "USB 与蓝牙使用相同的握把触觉混音，仅传输路径不同。请关闭游戏内振动，避免握把输出相互干扰或叠加。",
 })
 
 STRINGS.update({

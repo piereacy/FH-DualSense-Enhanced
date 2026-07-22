@@ -1,5 +1,5 @@
 from modules.config.settings import Settings
-from modules.dualsense.output_state import NO_VISUAL_CONTROL
+from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from modules.forzahorizon.lighting import LightingController
 
 
@@ -77,3 +77,22 @@ def test_telemetry_off_explicitly_blanks_enabled_lighting():
 
     assert state.lightbar == (0, 0, 0)
     assert state.player_leds == 0
+
+
+def test_non_finite_lighting_inputs_fail_silent_instead_of_crashing():
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+    settings.enable_gear_player_leds = True
+
+    state = LightingController().update(
+        _telemetry(rpm=float("nan"), max_rpm=float("inf"), gear=float("nan")),
+        settings,
+        float("nan"),
+    )
+
+    assert state.lightbar == (0, 0, 0)
+    assert state.player_leds == 0
+    assert ControllerVisualState(
+        lightbar=(float("nan"), float("inf"), "invalid"),
+        player_leds=float("nan"),
+    ).normalized() == ControllerVisualState(lightbar=(0, 0, 0), player_leds=0)

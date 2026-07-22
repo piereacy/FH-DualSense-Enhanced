@@ -1,8 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
 
 from .model import UpdatePhase, UpdateSnapshot
+
+
+UpdateAction = Literal["download", "install"]
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateStatusPresentation:
+    """Stable GUI-facing values derived from an updater snapshot."""
+
+    status: str
+    progress: float
+    action: UpdateAction | None
+    release_visible: bool
 
 
 def has_update_notice(snapshot: UpdateSnapshot) -> bool:
@@ -37,3 +52,21 @@ def localized_status(
     if snapshot.phase is UpdatePhase.ERROR:
         return snapshot.message or translate("Update failed")
     return translate(keys.get(snapshot.phase, snapshot.message or "Update status: idle"))
+
+
+def update_status_presentation(
+    snapshot: UpdateSnapshot,
+    translate: Callable[[str], str],
+) -> UpdateStatusPresentation:
+    """Build the values whose changes are allowed to redraw the update card."""
+    action: UpdateAction | None = None
+    if snapshot.phase is UpdatePhase.AVAILABLE:
+        action = "download"
+    elif snapshot.phase is UpdatePhase.READY:
+        action = "install"
+    return UpdateStatusPresentation(
+        status=localized_status(snapshot, translate),
+        progress=snapshot.progress,
+        action=action,
+        release_visible=snapshot.release is not None,
+    )

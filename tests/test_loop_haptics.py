@@ -80,6 +80,14 @@ class _TriggerController:
         return LEFT, RIGHT
 
 
+class _FailingTriggerController:
+    def __init__(self, settings):
+        pass
+
+    def update(self, telemetry, settings, collision_signal=None):
+        raise RuntimeError("synthetic trigger failure")
+
+
 class _Mixer:
     instances = []
 
@@ -162,6 +170,9 @@ def test_packet_routes_haptics_and_writes_one_atomic_controller_frame(monkeypatc
 
     manager = _Manager.instances[0]
     assert manager.frames == [FRAME, SILENT_FRAME]
+    routed_telemetry = _Mixer.instances[0].calls[0][0]
+    assert routed_telemetry["effective_redline_rpm"] == 0.0
+    assert routed_telemetry["rev_limiter_active"] is False
     assert controller.calls == [
         (LEFT, RIGHT, RUMBLE),
         (off(), off(), SILENT_RUMBLE),
@@ -203,6 +214,34 @@ def test_idle_timeout_sends_silent_haptics_and_trigger_off(monkeypatch):
 
     assert _Manager.instances[0].frames == [FRAME, SILENT_FRAME, SILENT_FRAME]
     assert _Mixer.instances[0].reset_calls == 1
+    assert controller.calls == [
+        (LEFT, RIGHT, RUMBLE),
+        (off(), off(), SILENT_RUMBLE),
+    ]
+
+
+def test_malformed_traffic_cannot_keep_the_last_feedback_latched(monkeypatch):
+    _install(monkeypatch)
+    valid_parser = loop.forzahorizon.parse_packet
+
+    def parse(packet):
+        if packet == b"bad":
+            raise ValueError("synthetic malformed telemetry")
+        return valid_parser(packet)
+
+    monkeypatch.setattr(loop.forzahorizon, "parse_packet", parse)
+    ticks = iter((0.0, 0.0, 1.2))
+    monkeypatch.setattr(loop.time, "monotonic", lambda: next(ticks))
+    controller = _DualSense()
+    listener = _Listener([
+        (b"packet", ("127.0.0.1", 5300)),
+        (b"bad", ("127.0.0.1", 5300)),
+    ])
+
+    loop.run(controller, listener, _settings(), stop_event=_StopEvent(2))
+
+    assert _Mixer.instances[0].reset_calls == 1
+    assert _Manager.instances[0].frames == [FRAME, SILENT_FRAME, SILENT_FRAME]
     assert controller.calls == [
         (LEFT, RIGHT, RUMBLE),
         (off(), off(), SILENT_RUMBLE),
@@ -257,6 +296,21 @@ def test_haptics_failure_does_not_block_trigger_output(monkeypatch):
         (off(), off(), None),
     ]
     assert _Manager.instances[0].closed is True
+
+
+def test_trigger_failure_releases_triggers_without_dropping_body_haptics(monkeypatch):
+    _install(monkeypatch)
+    monkeypatch.setattr(loop.forzahorizon, "Controller", _FailingTriggerController)
+    controller = _DualSense()
+    listener = _Listener([(b"packet", ("127.0.0.1", 5300))])
+
+    loop.run(controller, listener, _settings(), stop_event=_StopEvent(1))
+
+    assert _Manager.instances[0].frames == [FRAME, SILENT_FRAME]
+    assert controller.calls == [
+        (off(), off(), RUMBLE),
+        (off(), off(), SILENT_RUMBLE),
+    ]
 
 
 def test_loop_injects_shared_usb_audio_into_haptic_manager(monkeypatch):

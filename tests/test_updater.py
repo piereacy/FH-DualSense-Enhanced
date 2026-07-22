@@ -17,6 +17,14 @@ from modules.update.presentation import has_update_notice, localized_status
 from modules.update.service import UpdateService
 from modules.config.settings import Settings
 from modules.update import install
+from modules.update.transaction import (
+    TransactionPhase,
+    create_legacy_transaction,
+    create_transaction,
+    load_transaction,
+    set_phase,
+    write_health_ack,
+)
 
 
 def release_payload(version=4, *, checksum=True):
@@ -46,6 +54,29 @@ def release_payload(version=4, *, checksum=True):
     }
 
 
+def test_frozen_helper_copy_is_reused_when_bytes_match(tmp_path, monkeypatch):
+    root = tmp_path / "bundle"
+    bundled = root / "data" / "FH-DualSense-Update-Helper.exe"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(b"helper-r7")
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(install.paths, "ROOT", root)
+
+    first = install._helper_prefix(update_dir)
+    monkeypatch.setattr(
+        install.shutil,
+        "copy2",
+        lambda *_args, **_kwargs: pytest.fail("matching helper must not be overwritten"),
+    )
+    second = install._helper_prefix(update_dir)
+
+    expected = str(update_dir / "FH-DualSense-Update-Helper.exe")
+    assert first == [expected]
+    assert second == [expected]
+
+
 def test_release_parser_selects_canonical_asset_and_requires_checksum():
     parsed = GitHubReleaseClient._parse_release(release_payload())
     assert parsed is not None
@@ -55,6 +86,37 @@ def test_release_parser_selects_canonical_asset_and_requires_checksum():
     legacy = release_payload()
     legacy["assets"][0]["name"] = "FH-DualSense-Enhanced-R4-legacy-ui.exe"
     assert GitHubReleaseClient._parse_release(legacy) is None
+
+    malformed_size = release_payload()
+    malformed_size["assets"][0]["size"] = "not-a-number"
+    assert GitHubReleaseClient._parse_release(malformed_size) is None
+
+
+def test_update_request_rejects_non_https_before_opening_network(monkeypatch):
+    monkeypatch.setattr(
+        github.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: pytest.fail("unsafe URL must be rejected locally"),
+    )
+
+    with pytest.raises(UpdateError, match="HTTPS"):
+        github._request("file:///tmp/update.exe", timeout=1.0, max_bytes=1024)
+
+
+def test_update_request_rejects_an_unsafe_redirect(monkeypatch):
+    class RedirectResponse(FakeResponse):
+        def geturl(self):
+            return "http://example.test/update.exe"
+
+    response = RedirectResponse(b"payload")
+    monkeypatch.setattr(
+        github.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: response,
+    )
+
+    with pytest.raises(UpdateError, match="unsafe URL"):
+        github._request("https://example.test/update.exe", timeout=1.0, max_bytes=1024)
 
 
 def test_frozen_r4_client_can_select_the_canonical_r5_release(monkeypatch):
@@ -171,7 +233,9 @@ def test_update_service_reports_up_to_date(monkeypatch, tmp_path):
 
 
 def test_update_status_presentation_localizes_phase_and_release_tag():
-    translate = lambda value: f"T:{value}"
+    def translate(value):
+        return f"T:{value}"
+
     release = GitHubReleaseClient._parse_release(release_payload())
 
     assert localized_status(
@@ -217,36 +281,649 @@ def test_self_update_support_requires_frozen_windows(monkeypatch):
     assert install.self_update_supported() is False
 
 
-def test_update_helper_atomically_replaces_target_and_keeps_rollback(tmp_path, monkeypatch):
+class FakeRunningProcess:
+    def __init__(self, pid=456):
+        self.pid = pid
+
+    def poll(self):
+        return None
+
+
+def test_update_helper_commits_side_by_side_without_old_file(tmp_path, monkeypatch):
     helper = runpy.run_path(
         str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
     )
-    target = tmp_path / "FH-DualSense-Enhanced-R4.exe"
-    staged = tmp_path / "staged.exe"
-    plan = tmp_path / "install-plan.json"
-    target.write_bytes(b"old")
-    staged.write_bytes(b"new")
-    plan.write_text(json.dumps({
-        "pid": 123,
-        "staged": str(staged),
-        "target": str(target),
-        "sha256": hashlib.sha256(b"new").hexdigest(),
-        "args": [],
-    }), encoding="utf-8")
+    target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    target.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=target,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="a" * 32,
+        token="helper-test-token-with-24-bytes",
+    )
+    helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: None
+    launched = []
+
+    def fake_popen(command, **kwargs):
+        launched.append((command, kwargs))
+        process = FakeRunningProcess()
+        if Path(command[0]).name == "FH-DualSense-Enhanced-R7.exe":
+            health = {
+                "schema": 1,
+                "transaction_id": transaction.transaction_id,
+                "token": transaction.token,
+                # PyInstaller one-file writes health from its inner child PID,
+                # not the outer bootloader PID returned by Popen.
+                "pid": process.pid + 1,
+                "version": 7,
+                "executable": str(transaction.new),
+                "sha256": transaction.new_sha256,
+                "initialized_at": 200.0,
+            }
+            plan.with_name("health.json").write_text(json.dumps(health), encoding="utf-8")
+        return process
+
+    monkeypatch.setattr(
+        helper["subprocess"],
+        "Popen",
+        fake_popen,
+    )
+    monkeypatch.setitem(helper["apply"].__globals__, "migrate_shortcuts", lambda *_args: ([], []))
+
+    helper["apply"](plan, survival_seconds=0)
+
+    assert not target.exists()
+    assert transaction.new.read_bytes() == b"MZ-new"
+    assert not Path(str(target) + ".old").exists()
+    assert load_transaction(plan).phase is TransactionPhase.COMMITTED
+    assert launched[0][0] == [
+        str(transaction.new),
+        "--fhds-update-transaction",
+        transaction.transaction_id,
+        "--fhds-update-token",
+        transaction.token,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("created_at", float("nan"), "timestamp"),
+        ("pid", 0, "pid"),
+        ("new_sha256", "not-a-sha256", "checksum"),
+    ],
+)
+def test_update_helper_rejects_malformed_transaction_fields(tmp_path, field, value, message):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    target.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    _transaction, plan_path = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=target,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="f" * 32,
+        token="malformed-helper-test-token",
+    )
+    payload = json.loads(plan_path.read_text(encoding="utf-8"))
+    payload[field] = value
+    plan_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        helper["_load_plan"](plan_path)
+
+
+def test_healthy_update_removes_all_strictly_named_older_releases_and_sidecars(
+    tmp_path, monkeypatch
+):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    r5 = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+    r5_old = tmp_path / "FH-DualSense-Enhanced-R5.exe.old"
+    r5_sidecar = tmp_path / "FH-DualSense-Enhanced-R5.exe.sha256"
+    r6 = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    r8 = tmp_path / "FH-DualSense-Enhanced-R8.exe"
+    unrelated_old = tmp_path / "notes.old"
+    for path in (r5, r5_old, r5_sidecar, r6, r8, unrelated_old):
+        path.write_bytes(b"MZ-placeholder")
+    new = tmp_path / "FH-DualSense-Enhanced-R7.exe"
+    new.write_bytes(b"MZ-new")
+    staged = tmp_path / "data" / "updates" / new.name
+    staged.parent.mkdir(parents=True)
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=r6,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="e" * 32,
+        token="stale-release-cleanup-token",
+    )
+    calls = []
+    monkeypatch.setitem(
+        helper["_continue_commit"].__globals__,
+        "migrate_shortcuts",
+        lambda old, target: calls.append((old, target)) or ([], []),
+    )
+
+    helper["_continue_commit"](plan, json.loads(plan.read_text(encoding="utf-8")))
+
+    assert [old.name for old, _target in calls] == [r6.name, r5.name]
+    assert all(target == transaction.new for _old, target in calls)
+    assert transaction.new.is_file()
+    assert not r6.exists()
+    assert not r5.exists()
+    assert not r5_old.exists()
+    assert not r5_sidecar.exists()
+    assert r8.is_file()
+    assert unrelated_old.is_file()
+    assert load_transaction(plan).phase is TransactionPhase.COMMITTED
+
+
+def test_stale_release_scan_never_follows_a_canonical_named_symlink(tmp_path):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    install = tmp_path / "install"
+    outside = tmp_path / "outside"
+    install.mkdir()
+    outside.mkdir()
+    new = install / "FH-DualSense-Enhanced-R7.exe"
+    new.write_bytes(b"MZ-new")
+    outside_target = outside / "do-not-delete.exe"
+    outside_target.write_bytes(b"MZ-user")
+    link = install / "FH-DualSense-Enhanced-R5.exe"
+    try:
+        link.symlink_to(outside_target)
+    except OSError as exc:
+        pytest.skip(f"file symlinks unavailable: {exc}")
+
+    canonical, sidecars = helper["_stale_release_candidates"](new, 7)
+
+    assert canonical == []
+    assert sidecars == []
+    assert outside_target.read_bytes() == b"MZ-user"
+
+
+def test_stale_shortcut_failure_keeps_only_its_canonical_old_executable(
+    tmp_path, monkeypatch
+):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    r5 = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+    r5_old = tmp_path / "FH-DualSense-Enhanced-R5.exe.old"
+    r6 = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    for path in (r5, r5_old, r6):
+        path.write_bytes(b"MZ-old")
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=r6,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="d" * 32,
+        token="stale-shortcut-failure-token",
+    )
+    staged.replace(transaction.new)
+
+    def migrate(old, _new):
+        if old == r5.resolve():
+            return [], ["Desktop/old-r5.lnk"]
+        return ["Desktop/current.lnk"], []
+
+    monkeypatch.setitem(helper["_continue_commit"].__globals__, "migrate_shortcuts", migrate)
+
+    helper["_continue_commit"](plan, json.loads(plan.read_text(encoding="utf-8")))
+
+    recovered = load_transaction(plan)
+    assert recovered.phase is TransactionPhase.CLEANUP_PENDING
+    assert recovered.failed_shortcuts == ("Desktop/old-r5.lnk",)
+    assert r5.is_file()
+    assert not r5_old.exists()
+    assert not r6.exists()
+    assert transaction.new.is_file()
+
+
+def test_update_helper_rolls_back_when_new_process_is_not_healthy(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    target.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=target,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="b" * 32,
+        token="rollback-test-token-with-24-bytes",
+    )
     helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: None
     launched = []
     monkeypatch.setattr(
         helper["subprocess"],
         "Popen",
+        lambda command, **kwargs: launched.append(command) or FakeRunningProcess(),
+    )
+    monkeypatch.setitem(
+        helper["apply"].__globals__,
+        "wait_for_health",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("not healthy")),
+    )
+
+    with pytest.raises(TimeoutError, match="not healthy"):
+        helper["apply"](plan, survival_seconds=0)
+
+    assert target.read_bytes() == b"MZ-old"
+    assert not transaction.new.exists()
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+    assert launched[-1] == [str(target)]
+
+
+def test_healthy_new_version_is_not_rolled_back_by_shortcut_subsystem_failure(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="5" * 32,
+        token="healthy-shortcut-failure-token",
+    )
+    helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: None
+
+    def fake_popen(command, **_kwargs):
+        process = FakeRunningProcess()
+        if Path(command[0]) == transaction.new:
+            plan.with_name("health.json").write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "transaction_id": transaction.transaction_id,
+                        "token": transaction.token,
+                        "pid": process.pid,
+                        "version": 7,
+                        "executable": str(transaction.new),
+                        "sha256": transaction.new_sha256,
+                        "initialized_at": 200.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return process
+
+    monkeypatch.setattr(helper["subprocess"], "Popen", fake_popen)
+    monkeypatch.setitem(
+        helper["apply"].__globals__,
+        "migrate_shortcuts",
+        lambda *_args: (_ for _ in ()).throw(OSError("shell unavailable")),
+    )
+
+    with pytest.raises(OSError, match="shell unavailable"):
+        helper["apply"](plan, survival_seconds=0)
+
+    assert old.is_file()
+    assert transaction.new.is_file()
+    assert load_transaction(plan).phase is TransactionPhase.CLEANUP_PENDING
+
+
+def test_recovery_rolls_back_unconfirmed_side_by_side_update(tmp_path):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="f" * 32,
+        token="recovery-rollback-token-24-bytes",
+    )
+    staged.replace(transaction.new)
+    set_phase(plan, TransactionPhase.WAITING_HEALTH)
+
+    helper["recover"](plan)
+
+    assert old.read_bytes() == b"MZ-old"
+    assert not transaction.new.exists()
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+
+
+def test_recovery_finishes_shortcuts_and_cleanup_after_valid_health(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="1" * 32,
+        token="recovery-commit-token-with-24-bytes",
+    )
+    staged.replace(transaction.new)
+    set_phase(plan, TransactionPhase.WAITING_HEALTH)
+    write_health_ack(
+        root=plan.parent.parent,
+        transaction_id=transaction.transaction_id,
+        token=transaction.token,
+        executable=transaction.new,
+        version=7,
+        pid=456,
+    )
+    monkeypatch.setitem(
+        helper["recover"].__globals__,
+        "migrate_shortcuts",
+        lambda *_args: (["Desktop/FHDS.lnk"], []),
+    )
+
+    helper["recover"](plan)
+
+    recovered = load_transaction(plan)
+    assert recovered.phase is TransactionPhase.COMMITTED
+    assert recovered.migrated_shortcuts == ("Desktop/FHDS.lnk",)
+    assert not old.exists()
+    assert transaction.new.is_file()
+
+
+def test_recovery_keeps_old_executable_when_shortcut_retry_still_fails(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="2" * 32,
+        token="recovery-shortcut-token-24-bytes",
+    )
+    staged.replace(transaction.new)
+    set_phase(plan, TransactionPhase.CLEANUP_PENDING)
+    monkeypatch.setitem(
+        helper["recover"].__globals__,
+        "migrate_shortcuts",
+        lambda *_args: ([], ["Desktop/locked.lnk"]),
+    )
+
+    helper["recover"](plan)
+
+    recovered = load_transaction(plan)
+    assert recovered.phase is TransactionPhase.CLEANUP_PENDING
+    assert recovered.failed_shortcuts == ("Desktop/locked.lnk",)
+    assert old.is_file()
+    assert transaction.new.is_file()
+
+    warnings = []
+    monkeypatch.setitem(
+        helper["_warn_shortcut_failures_once"].__globals__,
+        "_show_warning",
+        warnings.append,
+    )
+    helper["_warn_shortcut_failures_once"](plan)
+    helper["_warn_shortcut_failures_once"](plan)
+
+    assert len(warnings) == 1
+    assert "Desktop/locked.lnk" in warnings[0]
+    assert load_transaction(plan).shortcut_warning_shown is True
+
+
+def test_launch_update_helper_writes_transaction_plan(tmp_path, monkeypatch):
+    update_root = tmp_path / "data"
+    target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = update_root / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    target.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    monkeypatch.setattr(install.paths, "DATA", update_root)
+    monkeypatch.delattr(install.sys, "frozen", raising=False)
+    launched = []
+    monkeypatch.setattr(
+        install.subprocess,
+        "Popen",
         lambda command, **kwargs: launched.append((command, kwargs)),
     )
 
-    helper["apply"](plan)
+    plan = install.launch_update_helper(
+        staged,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        target=target,
+        pid=321,
+    )
 
-    assert target.read_bytes() == b"new"
-    assert Path(str(target) + ".old").read_bytes() == b"old"
-    assert not plan.exists()
-    assert launched[0][0] == [str(target)]
+    transaction = load_transaction(plan)
+    assert transaction.phase is TransactionPhase.PREPARED
+    assert transaction.old == target.resolve()
+    assert transaction.new.name == "FH-DualSense-Enhanced-R7.exe"
+    assert launched[0][0][-1] == str(plan)
+
+
+def test_launch_update_helper_refuses_another_instance_in_same_directory(tmp_path, monkeypatch):
+    target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir()
+    target.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    monkeypatch.setattr(
+        install,
+        "_other_install_instances",
+        lambda *_args, **_kwargs: ((999, str(tmp_path / "FH-DualSense-Enhanced-R6.exe")),),
+    )
+
+    with pytest.raises(RuntimeError, match="close other"):
+        install.launch_update_helper(
+            staged,
+            expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+            target=target,
+            pid=321,
+        )
+
+
+def test_update_helper_consumes_r6_old_during_legacy_bootstrap(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    backup = Path(str(running) + ".old")
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    running.write_bytes(b"MZ-r7")
+    staged.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    transaction, plan = create_legacy_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        wrong_named_executable=running,
+        backup=backup,
+        new_version=7,
+        pid=123,
+        transaction_id="c" * 32,
+        token="legacy-helper-token-with-24-bytes",
+    )
+    helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: None
+
+    def fake_popen(command, **_kwargs):
+        process = FakeRunningProcess()
+        if Path(command[0]) == transaction.new:
+            plan.with_name("health.json").write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "transaction_id": transaction.transaction_id,
+                        "token": transaction.token,
+                        "pid": process.pid,
+                        "version": 7,
+                        "executable": str(transaction.new),
+                        "sha256": transaction.new_sha256,
+                        "initialized_at": 200.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return process
+
+    monkeypatch.setattr(helper["subprocess"], "Popen", fake_popen)
+    monkeypatch.setitem(helper["apply"].__globals__, "migrate_shortcuts", lambda *_args: ([], []))
+
+    helper["apply"](plan, survival_seconds=0)
+
+    assert transaction.new.read_bytes() == b"MZ-r7"
+    assert not running.exists()
+    assert not backup.exists()
+    assert load_transaction(plan).phase is TransactionPhase.COMMITTED
+
+
+def test_update_helper_legacy_health_failure_restores_real_r6(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    backup = Path(str(running) + ".old")
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    running.write_bytes(b"MZ-r7")
+    staged.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    transaction, plan = create_legacy_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        wrong_named_executable=running,
+        backup=backup,
+        new_version=7,
+        pid=123,
+        transaction_id="d" * 32,
+        token="legacy-rollback-token-with-24-bytes",
+    )
+    helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: None
+    launched = []
+    monkeypatch.setattr(
+        helper["subprocess"],
+        "Popen",
+        lambda command, **_kwargs: launched.append(command) or FakeRunningProcess(),
+    )
+    monkeypatch.setitem(
+        helper["apply"].__globals__,
+        "wait_for_health",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("legacy unhealthy")),
+    )
+
+    with pytest.raises(TimeoutError, match="legacy unhealthy"):
+        helper["apply"](plan, survival_seconds=0)
+
+    assert running.read_bytes() == b"MZ-r6"
+    assert not transaction.new.exists()
+    assert not backup.exists()
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+    assert launched[-1] == [str(running)]
+
+
+def test_legacy_bootstrap_detection_requires_matching_embedded_versions(tmp_path):
+    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    backup = Path(str(running) + ".old")
+    running.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    versions = {running.resolve(): 7, backup.resolve(): 6}
+
+    candidate = install.detect_legacy_bootstrap(
+        executable=running,
+        current_version=7,
+        version_reader=lambda path: versions.get(Path(path).resolve()),
+    )
+
+    assert candidate is not None
+    assert candidate.executable == running.resolve()
+    assert candidate.backup == backup.resolve()
+    assert candidate.old_version == 6
+    assert candidate.new_version == 7
+
+    versions[running.resolve()] = 6
+    assert install.detect_legacy_bootstrap(
+        executable=running,
+        current_version=7,
+        version_reader=lambda path: versions.get(Path(path).resolve()),
+    ) is None
+
+
+def test_launch_legacy_bootstrap_stages_current_bytes_and_starts_new_helper(tmp_path, monkeypatch):
+    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    backup = Path(str(running) + ".old")
+    running.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    data = tmp_path / "data"
+    monkeypatch.setattr(install.paths, "DATA", data)
+    monkeypatch.delattr(install.sys, "frozen", raising=False)
+    versions = {running.resolve(): 7, backup.resolve(): 6}
+    launched = []
+    monkeypatch.setattr(
+        install.subprocess,
+        "Popen",
+        lambda command, **kwargs: launched.append((command, kwargs)),
+    )
+
+    plan = install.launch_legacy_bootstrap(
+        executable=running,
+        current_version=7,
+        pid=321,
+        argv=["--gui"],
+        version_reader=lambda path: versions.get(Path(path).resolve()),
+    )
+
+    assert plan is not None
+    transaction = load_transaction(plan)
+    assert transaction.legacy_r6_bootstrap is True
+    assert transaction.args == ("--gui",)
+    assert transaction.staged.read_bytes() == b"MZ-r7"
+    assert transaction.old == running.resolve()
+    assert transaction.legacy_backup_path == str(backup.resolve())
+    assert launched[0][0][-1] == str(plan)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Win32 wait-handle contract")

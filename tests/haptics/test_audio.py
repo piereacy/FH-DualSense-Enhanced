@@ -1,5 +1,6 @@
 import numpy as np
 
+from modules.haptics import audio as audio_module
 from modules.haptics.audio import UsbAudioHaptics, find_dualsense_output_device
 from modules.haptics.frame import HapticFrame
 
@@ -111,6 +112,24 @@ def test_start_opens_four_channel_float32_stream():
     assert fake_sd.stream.kwargs["samplerate"] == 48000
     assert fake_sd.stream.kwargs["channels"] == 4
     assert fake_sd.stream.kwargs["dtype"] == "float32"
+
+
+def test_default_sounddevice_is_loaded_only_when_usb_stream_starts(monkeypatch):
+    fake_sd = _FakeSoundDevice()
+    loads = []
+
+    def load_sounddevice():
+        loads.append("sounddevice")
+        return fake_sd
+
+    monkeypatch.setattr(audio_module, "_load_sounddevice", load_sounddevice)
+    audio = UsbAudioHaptics(numpy_module=np, platform="win32")
+
+    assert loads == []
+    assert audio.start() is True
+    assert loads == ["sounddevice"]
+    assert audio.start() is True
+    assert loads == ["sounddevice"]
 
 
 def test_callback_routes_left_haptics_only_to_channel_three():

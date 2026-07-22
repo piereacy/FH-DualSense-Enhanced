@@ -28,7 +28,8 @@ LIGHTING_SECTIONS = [
 
 
 class LightingTab(SettingsTab):
-    SECTIONS = LIGHTING_SECTIONS
+    SWITCH_SECTIONS: tuple = ()
+    SECTIONS: list = LIGHTING_SECTIONS
     SHOW_RESET = False
     SHOW_ABOUT = False
     SHOW_EXPERIMENTAL = False

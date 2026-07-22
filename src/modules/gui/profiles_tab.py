@@ -56,7 +56,7 @@ class ProfilesTab(ctk.CTkFrame):
             list_holder, bg="#1e1f22", fg="#e5e7eb",
             selectbackground=T.ACCENT, selectforeground="white",
             borderwidth=0, highlightthickness=0, activestyle="none",
-            font=("Segoe UI", self.app.font_size(11)),
+            font=(self.app.ui_font_family, self.app.font_size(11)),
         )
         self.listbox.pack(fill="both", expand=True, padx=4, pady=4)
 
@@ -182,8 +182,8 @@ class ProfilesTab(ctk.CTkFrame):
         if not name:
             log.warning("No profile selected.")
             return
-        if name == preferences.DEFAULT_PROFILE_NAME:
-            log.warning("Default profile cannot be deleted.")
+        if profiles.is_builtin_profile(name):
+            log.warning("Built-in profile cannot be deleted: %s", name)
             return
         if profiles.delete_profile(name):
             self._refresh_list()
@@ -194,8 +194,8 @@ class ProfilesTab(ctk.CTkFrame):
         if not old:
             log.warning("No profile selected.")
             return
-        if old == preferences.DEFAULT_PROFILE_NAME:
-            log.warning("Default profile cannot be renamed.")
+        if profiles.is_builtin_profile(old):
+            log.warning("Built-in profile cannot be renamed: %s", old)
             return
         new = self._name_input()
         if not new:

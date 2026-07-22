@@ -1,12 +1,24 @@
 import ast
 import asyncio
+import base64
+import json
 import runpy
+import zlib
 from dataclasses import fields
 from pathlib import Path
 
 from modules.config import preferences, profiles
 from modules.config.preferences import GLOBAL_FIELDS
 from modules.config.settings import Settings
+from modules.feedback_schema import (
+    GRIP_EXPERIMENTAL_SECTIONS,
+    GRIP_SETTING_SECTIONS,
+    GRIP_SWITCH_SECTIONS,
+    TRIGGER_EXPERIMENTAL_SECTIONS,
+    TRIGGER_SETTING_SECTIONS,
+    TRIGGER_SWITCH_SECTIONS,
+    field_names,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,9 +33,10 @@ BODY_FIELDS = (
 )
 BODY_LABELS = {
     "Body haptics",
+    "Body haptics tuning",
     "Enable body haptics",
     "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
-    "Disable in-game vibration only if you feel competing or doubled output.",
+    "Disable in-game vibration to prevent competing or doubled grip output.",
     "Master intensity",
     "Engine intensity",
     "Road texture intensity",
@@ -56,7 +69,7 @@ NORMAL_R4_FIELDS = {
         "grip_gear_shift_strength",
         "grip_gear_shift_duration_ms",
     ),
-    "Traction/grip feedback": ("wheelspin_amp", "wheelspin_sensitivity"),
+    "Tire grip trigger feedback": ("wheelspin_amp", "wheelspin_sensitivity"),
 }
 EXPERIMENTAL_FIELDS = (
     "enable_boost_resistance",
@@ -271,15 +284,11 @@ def _sections(path, variable):
     raise AssertionError(f"{variable} not found in {path}")
 
 
-def _setting_sections(path):
-    return _sections(path, "SETTING_SECTIONS")
-
-
-def _body_fields(path):
-    sections = _setting_sections(path)
-    section = next((items for title, items in sections if title == "Body haptics"), None)
-    assert section is not None, f"Body haptics section missing from {path}"
-    return tuple(item[0] for item in section)
+def _schema_fields_by_section(sections):
+    return {
+        title: tuple(item[0] for item in items)
+        for title, items in sections
+    }
 
 
 def _behavior_fields(path):
@@ -297,11 +306,16 @@ def _fields_by_section(path, variable):
 
 
 def test_gui_and_tui_expose_the_same_body_haptics_fields():
-    gui = _body_fields(ROOT / "src/modules/gui/settings_tab.py")
-    tui = _body_fields(ROOT / "src/modules/tui/settings_tab.py")
+    from modules.gui.settings_tab import SettingsTab as GuiGripTab
+    from modules.tui.settings_tab import SettingsTab as TuiGripTab
 
-    assert gui == BODY_FIELDS
-    assert tui == BODY_FIELDS
+    body_switches = _schema_fields_by_section(GRIP_SWITCH_SECTIONS)["Body haptics"]
+    body_tuning = _schema_fields_by_section(GRIP_SETTING_SECTIONS)["Body haptics tuning"]
+    expected = body_switches + body_tuning
+
+    assert expected == BODY_FIELDS
+    assert GuiGripTab.SWITCH_SECTIONS == TuiGripTab.SWITCH_SECTIONS == GRIP_SWITCH_SECTIONS
+    assert GuiGripTab.SECTIONS == TuiGripTab.SECTIONS == GRIP_SETTING_SECTIONS
 
 
 def test_body_haptics_fields_are_profile_scoped_settings():
@@ -361,23 +375,32 @@ def test_every_non_english_catalog_translates_application_behavior_labels():
 
 
 def test_gui_and_tui_expose_identical_normal_r4_tuning_sections():
-    for relative in ("src/modules/gui/settings_tab.py", "src/modules/tui/settings_tab.py"):
-        sections = _fields_by_section(ROOT / relative, "SETTING_SECTIONS")
-        for title, expected in NORMAL_R4_FIELDS.items():
-            assert sections[title] == expected
+    from modules.gui.controls_tab import ControlsTab as GuiTriggerTab
+    from modules.gui.settings_tab import SettingsTab as GuiGripTab
+    from modules.tui.controls_tab import ControlsTab as TuiTriggerTab
+    from modules.tui.settings_tab import SettingsTab as TuiGripTab
+
+    assert GuiTriggerTab.SECTIONS == TuiTriggerTab.SECTIONS == TRIGGER_SETTING_SECTIONS
+    assert GuiGripTab.SECTIONS == TuiGripTab.SECTIONS == GRIP_SETTING_SECTIONS
+    sections = _schema_fields_by_section(
+        TRIGGER_SETTING_SECTIONS + GRIP_SETTING_SECTIONS
+    )
+    for title, expected in NORMAL_R4_FIELDS.items():
+        assert sections[title] == expected
 
 
 def test_gui_and_tui_expose_identical_advanced_r4_fields():
-    gui = _fields_by_section(
-        ROOT / "src/modules/gui/settings_tab.py", "EXPERIMENTAL_SECTIONS"
-    )
-    tui = _fields_by_section(
-        ROOT / "src/modules/tui/settings_tab.py", "EXPERIMENTAL_SECTIONS"
-    )
+    from modules.gui.controls_tab import ControlsTab as GuiTriggerTab
+    from modules.gui.settings_tab import SettingsTab as GuiGripTab
+    from modules.tui.controls_tab import ControlsTab as TuiTriggerTab
+    from modules.tui.settings_tab import SettingsTab as TuiGripTab
 
-    assert gui == tui
-    assert tuple(field for fields_ in gui.values() for field in fields_) == EXPERIMENTAL_FIELDS
-    assert gui["Experimental dynamic resistance"] == (
+    assert GuiTriggerTab.EXPERIMENTAL_SECTIONS == TuiTriggerTab.EXPERIMENTAL_SECTIONS
+    assert GuiGripTab.EXPERIMENTAL_SECTIONS == TuiGripTab.EXPERIMENTAL_SECTIONS
+    sections = TRIGGER_EXPERIMENTAL_SECTIONS + GRIP_EXPERIMENTAL_SECTIONS
+    groups = _schema_fields_by_section(sections)
+    assert field_names(sections) == EXPERIMENTAL_FIELDS
+    assert groups["Experimental dynamic resistance"] == (
         "enable_boost_resistance",
         "boost_resistance_threshold",
         "boost_resistance_force",
@@ -389,14 +412,14 @@ def test_gui_and_tui_expose_identical_advanced_r4_fields():
         "gforce_attack_ms",
         "gforce_release_ms",
     )
-    assert gui["Experimental collision trigger feedback"] == (
+    assert groups["Experimental collision trigger feedback"] == (
         "enable_collision_trigger_l2",
         "enable_collision_trigger_r2",
         "collision_trigger_freq",
         "collision_trigger_amp",
         "collision_trigger_duration_ms",
     )
-    assert gui["Experimental road texture trigger feedback"] == (
+    assert groups["Experimental road texture trigger feedback"] == (
         "enable_trigger_surface_l2",
         "enable_trigger_surface_r2",
         "trigger_surface_freq",
@@ -472,6 +495,22 @@ def test_r2_tuning_fields_round_trip_through_share_code(tmp_path, monkeypatch):
     assert snapshot["grip_gear_shift_strength"] == 0.65
 
 
+def test_share_code_import_rejects_oversized_decompressed_payload(tmp_path, monkeypatch):
+    monkeypatch.setattr(preferences, "_DATA", tmp_path)
+    monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
+    preferences.load(Settings())
+    payload = json.dumps(
+        ["Oversized", {"padding": "x" * (profiles.MAX_SHARE_PAYLOAD + 1)}]
+    ).encode("utf-8")
+    body = base64.urlsafe_b64encode(zlib.compress(payload, level=9)).decode("ascii")
+
+    assert profiles.import_profile(profiles.SHARE_PREFIX + body) == ""
+    assert profiles.list_profile_names(profiles.load_profiles()) == [
+        "Default",
+        "Original",
+    ]
+
+
 def test_experimental_settings_are_collapsed_by_default_and_excluded_from_system_tabs():
     gui = (ROOT / "src/modules/gui/settings_tab.py").read_text(encoding="utf-8")
     gui_system = (ROOT / "src/modules/gui/system_tab.py").read_text(encoding="utf-8")
@@ -488,11 +527,11 @@ def test_tui_experimental_settings_mount_collapsed():
     from textual.app import App, ComposeResult
     from textual.widgets import Collapsible, Switch
 
-    from modules.tui.settings_tab import SettingsTab
+    from modules.tui.controls_tab import ControlsTab
 
     class SettingsHarness(App):
         def compose(self) -> ComposeResult:
-            yield SettingsTab(Settings())
+            yield ControlsTab(Settings())
 
     async def check():
         app = SettingsHarness()
@@ -516,6 +555,9 @@ def test_every_non_english_catalog_translates_r4_settings_labels():
 
 
 def test_gui_and_tui_expose_identical_profile_scoped_lighting_fields():
+    from modules.gui.lighting_tab import LightingTab as GuiLightingTab
+    from modules.tui.lighting_tab import LightingTab as TuiLightingTab
+
     gui = _fields_by_section(
         ROOT / "src/modules/gui/lighting_tab.py", "LIGHTING_SECTIONS"
     )
@@ -525,6 +567,7 @@ def test_gui_and_tui_expose_identical_profile_scoped_lighting_fields():
     flattened = tuple(field for values in gui.values() for field in values)
 
     assert gui == tui
+    assert GuiLightingTab.SWITCH_SECTIONS == TuiLightingTab.SWITCH_SECTIONS == ()
     assert flattened == LIGHTING_FIELDS
     assert set(flattened).isdisjoint(GLOBAL_FIELDS)
 
@@ -538,32 +581,67 @@ def test_every_non_english_catalog_translates_lighting_labels():
         assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
-def test_gui_and_tui_keep_experimental_trigger_switches_out_of_driving_controls():
-    gui = _sections(ROOT / "src/modules/gui/controls_tab.py", "TRIGGER_CONTROLS")
-    tui = _sections(ROOT / "src/modules/tui/controls_tab.py", "TRIGGER_CONTROLS")
+def test_trigger_and_grip_pages_have_complete_disjoint_field_ownership():
+    trigger_fields = set(field_names(
+        TRIGGER_SWITCH_SECTIONS,
+        TRIGGER_SETTING_SECTIONS,
+        TRIGGER_EXPERIMENTAL_SECTIONS,
+    ))
+    grip_fields = set(field_names(
+        GRIP_SWITCH_SECTIONS,
+        GRIP_SETTING_SECTIONS,
+        GRIP_EXPERIMENTAL_SECTIONS,
+    ))
+    trigger_groups = {
+        title: {field[0]: field[1] for field in items}
+        for title, items in TRIGGER_SWITCH_SECTIONS
+    }
 
-    assert gui == tui
-    assert "yield Label(t(trigger), classes=\"section\")" in (
-        ROOT / "src/modules/tui/controls_tab.py"
-    ).read_text(encoding="utf-8")
-    groups = {title: dict(items) for title, items in gui}
-    assert groups["R2 - Throttle"]["enable_rev_limiter"] == (
+    assert trigger_fields.isdisjoint(grip_fields)
+    assert EXPERIMENTAL_TRIGGER_SWITCHES.isdisjoint(
+        set(field_names(TRIGGER_SWITCH_SECTIONS))
+    )
+    assert trigger_groups["R2 - Throttle"]["enable_rev_limiter"] == (
         "R2 trigger redline vibration"
     )
-    visible_switches = {attr for items in groups.values() for attr in items}
-    assert EXPERIMENTAL_TRIGGER_SWITCHES.isdisjoint(visible_switches)
-    assert "enable_wheelspin_buzz" not in groups["R2 - Throttle"]
-    assert groups["Shared feedback"] == {
-        "enable_wheelspin_buzz": "Traction/grip feedback",
+    assert trigger_groups["Shared trigger feedback"] == {
+        "enable_wheelspin_buzz": "Tire grip trigger feedback",
     }
-    assert groups["Grip feedback"] == {
-        "enable_grip_gear_shift_haptics": "Grip gear-shift thump",
+    assert "enable_grip_gear_shift_haptics" in grip_fields
+    assert "enable_grip_redline_haptics" in grip_fields
+    assert "enable_body_haptics" in grip_fields
+
+
+def test_every_non_english_catalog_translates_split_feedback_pages():
+    labels = {
+        "Trigger feedback",
+        "Grip haptics",
+        "L2/R2 switches and tuning. Changes save instantly.",
+        "Grip switches and tuning. Changes save instantly.",
+        "Experimental features",
+        "Not recommended for manual adjustment.",
     }
-    assert groups["Redline feedback"] == {
-        "enable_grip_redline_haptics": "Grip redline vibration",
-        "grip_redline_left": "Left grip",
-        "grip_redline_right": "Right grip",
-    }
+    for sections in (
+        TRIGGER_SWITCH_SECTIONS,
+        TRIGGER_SETTING_SECTIONS,
+        TRIGGER_EXPERIMENTAL_SECTIONS,
+        GRIP_SWITCH_SECTIONS,
+        GRIP_SETTING_SECTIONS,
+        GRIP_EXPERIMENTAL_SECTIONS,
+    ):
+        for title, entries in sections:
+            labels.add(title)
+            for _attr, label, _lo, _hi, hint in entries:
+                labels.add(label)
+                if hint:
+                    labels.add(hint)
+
+    for path in sorted((ROOT / "src/lang").glob("*.py")):
+        if path.name in {"__init__.py", "en.py"}:
+            continue
+        strings = runpy.run_path(str(path))["STRINGS"]
+        missing = labels - strings.keys()
+        assert not missing, f"{path.name} is missing {sorted(missing)}"
 
 
 def test_experimental_trigger_switches_default_off():

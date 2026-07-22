@@ -1,9 +1,7 @@
-import threading
 import time
 
 from modules.dualsense.input_state import DPad, DualSenseInputState
 from modules.xinput.bridge import BridgeStatus, XInputBridge
-from modules.xinput.report import XUSBButton
 from modules.xinput.vigem_client import ViGEmError, ViGEmErrorCode
 
 
@@ -112,7 +110,7 @@ def test_latest_slot_discards_backlog_before_worker_starts():
     assert bridge.snapshot().forwarded_reports == 1
 
 
-def test_stale_input_is_neutralized_at_100ms_and_removed_at_three_seconds():
+def test_stale_input_is_neutralized_at_100ms_without_removing_player_slot():
     clock = _Clock()
     client = _Client()
     bridge = XInputBridge(client_factory=lambda: client, clock=clock)
@@ -127,13 +125,17 @@ def test_stale_input_is_neutralized_at_100ms_and_removed_at_three_seconds():
 
     clock.advance(2.900)
     bridge._wake.set()
-    _wait(lambda: bridge.snapshot().status is BridgeStatus.WAITING_CONTROLLER)
-    assert client.targets[0].closed is True
+    time.sleep(0.02)
+    assert bridge.snapshot().status is BridgeStatus.STALE
+    assert bridge.snapshot().target_connected is True
+    assert client.targets[0].closed is False
     assert bridge.snapshot().stale_neutralizations == 1
     bridge.stop()
 
+    assert client.targets[0].closed is True
 
-def test_recovery_after_removal_creates_new_target_without_old_state_replay():
+
+def test_recovery_after_prolonged_stale_reuses_existing_target():
     clock = _Clock()
     client = _Client()
     bridge = XInputBridge(client_factory=lambda: client, clock=clock)
@@ -142,14 +144,15 @@ def test_recovery_after_removal_creates_new_target_without_old_state_replay():
     _wait(lambda: bridge.snapshot().status is BridgeStatus.ACTIVE)
     clock.advance(3.1)
     bridge._wake.set()
-    _wait(lambda: bridge.snapshot().status is BridgeStatus.WAITING_CONTROLLER)
+    _wait(lambda: bridge.snapshot().status is BridgeStatus.STALE)
 
     bridge.publish_latest(_state(left_x=0))
-    _wait(lambda: len(client.targets) == 2 and bridge.snapshot().status is BridgeStatus.ACTIVE)
+    _wait(lambda: bridge.snapshot().status is BridgeStatus.ACTIVE)
     bridge.stop()
 
-    assert client.targets[1].reports[0] == bytes(12)
-    assert client.targets[1].reports[1] != client.targets[0].reports[1]
+    assert len(client.targets) == 1
+    assert client.targets[0].reports[0] == bytes(12)
+    assert client.targets[0].reports[1] != client.targets[0].reports[3]
 
 
 def test_bus_connection_failure_has_stable_driver_missing_status():
@@ -166,21 +169,34 @@ def test_bus_connection_failure_has_stable_driver_missing_status():
     assert not client.targets
 
 
-def test_update_error_is_isolated_and_cleans_target_before_client():
+def test_update_error_rebuilds_vigem_session_and_resumes_forwarding():
     clock = _Clock()
-    client = _Client(fail_update_at=3)
-    bridge = XInputBridge(client_factory=lambda: client, clock=clock)
+    clients = [_Client(fail_update_at=3), _Client()]
+
+    def factory():
+        return clients.pop(0)
+
+    first = clients[0]
+    second = clients[1]
+    bridge = XInputBridge(
+        client_factory=factory,
+        clock=clock,
+        recovery_delays_s=(0.001,),
+    )
     bridge.start()
     bridge.publish_latest(_state(left_x=255))
     _wait(lambda: bridge.snapshot().status is BridgeStatus.ACTIVE)
     bridge.publish_latest(_state(left_x=0))
 
-    _wait(lambda: bridge.snapshot().status is BridgeStatus.ERROR)
+    _wait(lambda: bridge.snapshot().recovery_attempts == 1)
+    bridge.publish_latest(_state(left_x=64))
+    _wait(lambda: len(second.targets) == 1 and bridge.snapshot().status is BridgeStatus.ACTIVE)
     bridge.stop()
 
-    names = [name for name, _payload in client.events]
+    names = [name for name, _payload in first.events]
     assert names.index("target_close") < names.index("client_close")
-    assert "INVALID_TARGET" in bridge.snapshot().last_error
+    assert second.targets[0].reports[1] != bytes(12)
+    assert bridge.snapshot().recovery_attempts == 1
 
 
 def test_stop_sends_neutral_before_target_close_and_client_close():
@@ -239,9 +255,36 @@ def test_restart_does_not_replay_state_published_before_stop():
 
 
 def test_bad_timeout_configuration_is_rejected():
-    for stale, remove in ((0, 3), (3, 3), (4, 3)):
+    for kwargs in (
+        {"stale_after_s": 0},
+        {"stale_after_s": -1},
+        {"recovery_delays_s": ()},
+    ):
         try:
-            XInputBridge(stale_after_s=stale, remove_after_s=remove)
+            XInputBridge(**kwargs)
         except ValueError:
             continue
-        raise AssertionError((stale, remove))
+        raise AssertionError(kwargs)
+
+
+def test_stuck_worker_is_not_replaced_or_reported_as_cleanly_disabled():
+    class _StuckThread:
+        def join(self, timeout=None):
+            assert timeout == 2.0
+
+        def is_alive(self):
+            return True
+
+    bridge = XInputBridge()
+    stuck = _StuckThread()
+    bridge._thread = stuck
+    bridge._running = False
+
+    bridge.start()
+    assert bridge._thread is stuck
+
+    bridge.stop()
+    snapshot = bridge.snapshot()
+    assert bridge._thread is stuck
+    assert snapshot.status is BridgeStatus.ERROR
+    assert "did not stop" in snapshot.last_error

@@ -4,6 +4,7 @@ import threading
 import time
 import webbrowser
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Button, Header, Input, Select, Static, Switch, TabbedContent, TabPane
@@ -12,15 +13,19 @@ from lang import set_language, t
 from modules.about import APP_NAME
 from modules import loop, forzahorizon, make_backend
 from modules.config import preferences, profiles
+from modules.config.profile_session import ProfileSession
 from modules.dualsense.adaptive_trigger import off, vibrate
+from modules.dualsense.presentation import controller_pill_status
 from modules.config.preferences import _release_version
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.runtime_logging import install_runtime_file_handler
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
 from modules.xinput.service import XInputBridgeService
 
 from .about_tab import AboutTab
 from .controls_tab import ControlsTab
+from .dialogs import UnsavedProfileScreen
 from .fh6_utilities_tab import FH6UtilitiesTab
 from .lang_tab import LangTab
 from .logs_tab import DEFAULT_LOG_LEVEL, LogsTab
@@ -85,12 +90,14 @@ class TriggerTUI(App):
     ]
     HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (80, "-normal"), (120, "-wide")]
 
-    def __init__(self, settings):
+    def __init__(self, settings, *, on_ready=None):
         super().__init__()
         self.settings = settings
+        self._on_ready = on_ready
         set_language(settings.language)
         self._stop = threading.Event()
         self._thread = None
+        self._backend_restart_lock = threading.Lock()
         self._ds = None
         self._listener_cm = None
         self._listener = None
@@ -98,6 +105,8 @@ class TriggerTUI(App):
         self._udp_error = ""
         self._status_timer = None
         self._tearing_down = False
+        self._close_prompt_open = False
+        self._pending_before_exit = None
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
         self._update_service = UpdateService(
@@ -105,6 +114,7 @@ class TriggerTUI(App):
             supported=self_update_supported(),
         )
         self._xinput_service = XInputBridgeService(settings)
+        self._profile_session = ProfileSession(settings)
         cleanup_previous_update()
 
     def compose(self) -> ComposeResult:
@@ -114,11 +124,11 @@ class TriggerTUI(App):
             yield Static("", id="status")
             yield Static(_release_version() or "?", id="version")
         with TabbedContent(initial="tab-controls"):
-            with TabPane(t("Controls"), id="tab-controls"):
+            with TabPane(t("Trigger feedback"), id="tab-controls"):
                 yield ControlsTab(self.settings)
             with TabPane(t("Profiles"), id="tab-profiles"):
                 yield ProfilesTab(self.settings)
-            with TabPane(t("Settings"), id="tab-settings"):
+            with TabPane(t("Grip haptics"), id="tab-settings"):
                 yield SettingsTab(self.settings)
             with TabPane(t("Controller lighting"), id="tab-lighting"):
                 yield LightingTab(self.settings)
@@ -144,6 +154,7 @@ class TriggerTUI(App):
 
         root = logging.getLogger()
         root.handlers.clear()
+        install_runtime_file_handler()
         handler = _LogHandler(self)
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
         root.addHandler(handler)
@@ -168,16 +179,17 @@ class TriggerTUI(App):
         for h in list(root.handlers):
             if isinstance(h, _LogHandler):
                 root.removeHandler(h)
-        self._stop.set()
         self._update_service.stop()
-        if self._thread:
-            self._thread.join(timeout=2.0)
-        self._xinput_service.stop()
-        self._usb_audio_lifecycle.close()
-        if self._listener_cm:
-            self._listener_cm.__exit__(None, None, None)
-        if self._ds:
-            self._ds.close()
+        with self._backend_restart_lock:
+            self._stop.set()
+            if self._thread:
+                self._thread.join(timeout=2.0)
+            self._xinput_service.stop()
+            self._usb_audio_lifecycle.close()
+            if self._listener_cm:
+                self._listener_cm.__exit__(None, None, None)
+            if self._ds:
+                self._ds.close()
 
     def _start_backend(self):
         s = self.settings
@@ -207,7 +219,22 @@ class TriggerTUI(App):
         except Exception as exc:
             self._backend_error = str(exc) or type(exc).__name__
             log.exception("Backend startup failed")
-            self.query_one("#status", Static).update(t("Backend failed: {error}").format(error=exc))
+            self.query_one("#status", Static).update(
+                t("Backend failed: {error}").format(error=escape(str(exc)))
+            )
+        else:
+            try:
+                self._notify_ready()
+            except Exception:
+                self._backend_error = "Update startup health confirmation failed"
+                log.exception(self._backend_error)
+                self.exit(return_code=1)
+
+    def _notify_ready(self) -> None:
+        """Confirm update health once the TUI backend can receive telemetry."""
+        callback, self._on_ready = self._on_ready, None
+        if callback is not None:
+            callback()
 
     def _run_loop(self):
         try:
@@ -223,36 +250,68 @@ class TriggerTUI(App):
             log.exception("Telemetry loop crashed")
         finally:
             if not self._stop.is_set():
-                self.call_from_thread(self.exit)
+                self.call_from_thread(self.request_close)
 
     def _restart_backend(self):
         """Swap the running backend without touching the UDP listener.
         Called when use_dsx is toggled live so the change takes effect immediately."""
-        # MARK: stop old loop + backend, then reuse the listener
-        self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=2.0)
-        self._xinput_service.stop()
-        if self._ds:
-            self._ds.close()
-        self._stop.clear()
-        s = self.settings
-        try:
-            # MARK: suppress pulse on hot-swap - avoid confusing the user mid-session
-            self._ds = make_backend(s, False)
-            self._ds.open()
-            self._xinput_service.sync(self._ds)
-            self._backend_error = ""
-            if s.use_dsx:
-                log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
-            else:
-                log.info("HID mode: writing direct to DualSense")
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
-            self._thread.start()
-        except Exception as exc:
-            self._backend_error = str(exc) or type(exc).__name__
-            log.exception("Backend restart failed")
-            self.query_one("#status", Static).update(t("Backend failed: {error}").format(error=exc))
+        with self._backend_restart_lock:
+            if self._tearing_down:
+                return
+            # MARK: stop old loop + backend, then reuse the listener
+            self._stop.set()
+            old_thread = self._thread
+            if old_thread:
+                old_thread.join(timeout=2.0)
+            if old_thread is not None and old_thread.is_alive():
+                error = RuntimeError("telemetry loop did not stop within 2 seconds")
+                self._backend_error = str(error)
+                log.error("Backend restart aborted: %s", error)
+                message = t("Backend failed: {error}").format(
+                    error=escape(str(error))
+                )
+                try:
+                    self.call_from_thread(
+                        lambda message=message: self.query_one(
+                            "#status", Static
+                        ).update(message)
+                    )
+                except RuntimeError:
+                    pass
+                return
+            self._thread = None
+            self._xinput_service.stop()
+            if self._ds:
+                self._ds.close()
+            self._stop.clear()
+            s = self.settings
+            try:
+                # MARK: suppress pulse on hot-swap - avoid confusing the user mid-session
+                self._ds = make_backend(s, False)
+                self._ds.open()
+                self._xinput_service.sync(self._ds)
+                self._backend_error = ""
+                if s.use_dsx:
+                    log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
+                else:
+                    log.info("HID mode: writing direct to DualSense")
+                if self._listener is not None:
+                    self._thread = threading.Thread(target=self._run_loop, daemon=True)
+                    self._thread.start()
+            except Exception as exc:
+                self._backend_error = str(exc) or type(exc).__name__
+                log.exception("Backend restart failed")
+                message = t("Backend failed: {error}").format(
+                    error=escape(str(exc))
+                )
+                try:
+                    self.call_from_thread(
+                        lambda message=message: self.query_one(
+                            "#status", Static
+                        ).update(message)
+                    )
+                except RuntimeError:
+                    pass
 
 
     @staticmethod
@@ -270,15 +329,22 @@ class TriggerTUI(App):
                 f"[bold red]{t('Controller backend error')}[/]"
             )
             return
-        if self._udp_error:
-            self.query_one("#status", Static).update(
-                f"[bold red]{t('UDP bind failed')}[/]"
-            )
-            return
         connected = bool(self._ds and self._ds.connected)
         if self.settings.use_dsx:
             state = (f"[bold dodgerblue]{t('DSX: active')}[/]" if connected
                      else f"[bold red]{t('DSX: off')}[/]")
+        elif self._ds and callable(getattr(self._ds, "snapshot", None)):
+            snapshot = self._ds.snapshot()
+            presentation = controller_pill_status(snapshot, t)
+            if snapshot.connected:
+                state = f"[bold green]{presentation.state}[/]"
+                if presentation.detail:
+                    detail_color = "red" if presentation.low_battery else "green"
+                    state += f" · [bold {detail_color}]{presentation.detail}[/]"
+            elif snapshot.phase.value in {"connecting", "switching", "reconnecting"}:
+                state = f"[bold yellow]{presentation.state}[/]"
+            else:
+                state = f"[bold red]{presentation.state}[/]"
         else:
             state = (f"[bold green]{t('connected')}[/]" if connected
                      else f"[bold red]{t('waiting')}[/]")
@@ -291,7 +357,58 @@ class TriggerTUI(App):
             active = profiles.load_profiles().get("active") or t("(none)")
         except Exception:
             active = t("(none)")
-        self.query_one("#profile", Static).update(t("Profile: {name}").format(name=active))
+        self.query_one("#profile", Static).update(
+            t("Profile: {name}").format(name=escape(str(active)))
+        )
+
+    def mark_default_saved(self) -> None:
+        self._profile_session.accept_current_default(self.settings)
+
+    def request_close(self, before_exit=None) -> None:
+        """Route every graceful TUI exit through the named-profile prompt."""
+        if self._tearing_down or self._close_prompt_open:
+            return
+        if self._profile_session.needs_named_save(self.settings):
+            self._close_prompt_open = True
+            self._pending_before_exit = before_exit
+
+            def _save(name: str) -> bool:
+                final = profiles.save_profile(name, self.settings)
+                if not final:
+                    return False
+                self._profile_session.accept_current_default(self.settings)
+                self.refresh_profile()
+                return True
+
+            self.push_screen(
+                UnsavedProfileScreen(
+                    suggested_name=profiles.next_profile_name(),
+                    on_save=_save,
+                ),
+                self._finish_close_prompt,
+            )
+            return
+        self._finish_close(before_exit)
+
+    def _finish_close_prompt(self, result: str | None) -> None:
+        before_exit = self._pending_before_exit
+        self._pending_before_exit = None
+        self._close_prompt_open = False
+        if result == "exit":
+            self._finish_close(before_exit)
+
+    def _finish_close(self, before_exit=None) -> None:
+        if before_exit is not None:
+            try:
+                before_exit()
+            except Exception as exc:
+                log.warning("Pre-exit action failed: %s", exc)
+                self.notify(
+                    t("Could not start update: {error}").format(error=exc),
+                    severity="error",
+                )
+                return
+        self.exit()
 
     def _logs_tab(self) -> LogsTab | None:
         try:
@@ -331,19 +448,28 @@ class TriggerTUI(App):
             self._refreshing = False
 
     def haptic(self, on: bool) -> None:
-        if self._ds and self._ds.connected:
-            threading.Thread(target=self._do_haptic, args=(on,), daemon=True).start()
+        controller = self._ds
+        if controller and controller.connected:
+            threading.Thread(
+                target=self._do_haptic,
+                args=(controller, on),
+                daemon=True,
+            ).start()
 
-    def _do_haptic(self, on: bool) -> None:
+    @staticmethod
+    def _do_haptic(controller, on: bool) -> None:
         amp = HAPTIC_AMP_ON if on else HAPTIC_AMP_OFF
         v = vibrate(HAPTIC_FREQ_HZ, amp)
-        self._ds.set(v, v)
+        controller.set(v, v)
         time.sleep(HAPTIC_DURATION_S)
-        self._ds.set(off(), off())
+        controller.set(off(), off())
 
     # --- bottombar / bindings -----------------------------------------------
+
+    async def action_quit(self) -> None:
+        self.request_close()
 
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id
         if bid == "bb-quit":
-            self.exit()
+            self.request_close()

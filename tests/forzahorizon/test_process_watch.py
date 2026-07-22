@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from modules.forzahorizon import process_watch
 
 
@@ -34,3 +36,31 @@ def test_process_lookup_skips_protected_entries(monkeypatch):
     monkeypatch.setattr(process_watch.psutil, "process_iter", lambda _fields: processes)
 
     assert process_watch.find_game_process((), exact_name="ForzaHorizon6.exe").pid == 2
+
+
+def test_strict_process_scan_distinguishes_os_failure_from_no_match(monkeypatch):
+    def fail(_fields):
+        raise RuntimeError("process table unavailable")
+
+    monkeypatch.setattr(process_watch.psutil, "process_iter", fail)
+
+    assert process_watch.find_game_process((), exact_name="ForzaHorizon6.exe") is None
+    with pytest.raises(process_watch.ProcessScanError, match="process table unavailable"):
+        process_watch.find_game_process(
+            (), exact_name="ForzaHorizon6.exe", strict=True
+        )
+
+
+def test_process_watcher_does_not_exit_when_strict_scan_fails(monkeypatch):
+    watcher = process_watch.ProcessWatcher(poll_interval_s=float("nan"))
+    watcher._matched = "ForzaHorizon6.exe"
+    monkeypatch.setattr(
+        process_watch,
+        "find_game_process",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            process_watch.ProcessScanError("unavailable")
+        ),
+    )
+
+    assert watcher.poll_interval == 1.0
+    assert watcher.should_exit() is False

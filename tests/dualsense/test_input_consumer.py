@@ -1,5 +1,7 @@
+import struct
 import threading
 import time
+import zlib
 
 import pytest
 
@@ -14,6 +16,9 @@ def _report(transport, *, left_x=128):
     base = 2 if bluetooth else 1
     report[base:base + 6] = bytes((left_x, 128, 128, 128, 0, 0))
     report[base + 7] = DPad.NEUTRAL
+    if bluetooth:
+        crc = zlib.crc32(memoryview(report)[:74], zlib.crc32(b"\xA1"))
+        struct.pack_into("<I", report, 74, crc)
     return report
 
 
@@ -41,7 +46,9 @@ def _run_controller(layout, reports, consumer):
     controller = DualSense(enable_startup_pulse=False)
     controller.lay = layout
     controller.dev = _Device(reports)
-    controller._ever_connected = True
+    # Mirror the timestamp established when the HID handle is opened. The
+    # public connected state remains false until the first valid report.
+    controller._last_input_at = time.monotonic()
     controller.set_input_consumer(consumer)
     controller._running = True
     thread = threading.Thread(target=controller._io)
@@ -62,8 +69,10 @@ def test_existing_io_thread_parses_and_publishes_input(layout, transport):
         ready.set()
 
     controller, thread = _run_controller(layout, [_report(transport, left_x=255)], consume)
+    device = None
     try:
         assert ready.wait(1.0)
+        device = controller.dev
     finally:
         controller._running = False
         controller._wake.set()
@@ -73,7 +82,9 @@ def test_existing_io_thread_parses_and_publishes_input(layout, transport):
     assert state.left_x == 255
     assert received_at <= time.monotonic()
     assert callback_thread == thread.ident
-    assert set(controller.dev.read_threads) == {thread.ident}
+    assert device is not None
+    assert set(device.read_threads) == {thread.ident}
+    assert controller.dev is None
 
 
 def test_malformed_input_is_not_published_and_next_valid_report_recovers():
@@ -86,7 +97,7 @@ def test_malformed_input_is_not_published_and_next_valid_report_recovers():
 
     controller, thread = _run_controller(
         USB,
-        [bytes(63), _report(InputTransport.USB, left_x=1)],
+        [bytes(63), [], _report(InputTransport.USB, left_x=1)],
         consume,
     )
     try:
@@ -114,6 +125,7 @@ def test_consumer_exception_does_not_stop_hid_io_thread():
         USB,
         [
             _report(InputTransport.USB, left_x=1),
+            [],
             _report(InputTransport.USB, left_x=2),
         ],
         consume,

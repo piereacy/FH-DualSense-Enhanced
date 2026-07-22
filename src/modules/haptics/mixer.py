@@ -169,6 +169,9 @@ class HapticMixer:
         rpm = _number(telemetry.get("rpm"))
         idle_rpm = _number(telemetry.get("idle_rpm"))
         max_rpm = _number(telemetry.get("max_rpm"))
+        effective_redline_rpm = _number(
+            telemetry.get("effective_redline_rpm"), max_rpm
+        )
         rpm_margin = max(_ENGINE_RPM_ACTIVITY_MIN, idle_rpm * _ENGINE_RPM_ACTIVITY_RATIO)
         engine_active = (
             rolling
@@ -195,7 +198,10 @@ class HapticMixer:
         redline_right = bool(getattr(settings, "grip_redline_right", False))
         engine_scale = _setting(settings, "engine_haptics_intensity", 1.0)
         accel_deadzone = max(1.0, _setting(settings, "accel_deadzone", 0.0))
-        redline_ratio = rpm / max_rpm if max_rpm > 0.0 else 0.0
+        redline_ratio = (
+            rpm / effective_redline_rpm if effective_redline_rpm > 0.0 else 0.0
+        )
+        limiter_active = bool(telemetry.get("rev_limiter_active", False))
         enter_ratio = clamp01(_setting(settings, "grip_redline_ratio", 0.93))
         release_ratio = min(
             enter_ratio,
@@ -222,20 +228,22 @@ class HapticMixer:
             exit_reason = "throttle"
             self._redline_active = False
         elif self._redline_active:
-            if redline_ratio < release_ratio:
+            if not limiter_active and redline_ratio < release_ratio:
                 exit_reason = "ratio"
                 self._redline_active = False
-        elif max_rpm > 0.0 and redline_ratio >= enter_ratio:
+        elif effective_redline_rpm > 0.0 and (
+            limiter_active or redline_ratio >= enter_ratio
+        ):
             self._redline_active = True
             self._redline_started_at = now
             sides = "both" if redline_left and redline_right else (
                 "left" if redline_left else "right"
             )
             log.info(
-                "Grip redline entered rpm=%.0f max_rpm=%.0f ratio=%.3f "
+                "Grip redline entered rpm=%.0f limit_rpm=%.0f ratio=%.3f "
                 "accel=%.0f sides=%s",
                 rpm,
-                max_rpm,
+                effective_redline_rpm,
                 redline_ratio,
                 accel_raw,
                 sides,
@@ -244,10 +252,10 @@ class HapticMixer:
         if not self._redline_active:
             if self._redline_started_at is not None and exit_reason is not None:
                 log.info(
-                    "Grip redline exited reason=%s rpm=%.0f max_rpm=%.0f ratio=%.3f",
+                    "Grip redline exited reason=%s rpm=%.0f limit_rpm=%.0f ratio=%.3f",
                     exit_reason,
                     rpm,
-                    max_rpm,
+                    effective_redline_rpm,
                     redline_ratio,
                 )
             self._redline_started_at = None

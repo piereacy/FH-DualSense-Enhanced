@@ -151,3 +151,31 @@ def test_bt_audio_uses_high_resolution_sleep_for_10667ms_period():
 
     assert clock.delays[:3] == pytest.approx([32 / 3000] * 3)
     backend.stop()
+
+
+def test_bt_audio_does_not_replace_a_worker_that_failed_to_stop():
+    class _StuckThread:
+        def join(self, timeout=None):
+            assert timeout == 1.0
+
+        def is_alive(self):
+            return True
+
+    controller = _Controller()
+    backend = BluetoothAudioHaptics(
+        controller,
+        numpy_module=np,
+        renderer=_Renderer(),
+    )
+    stuck = _StuckThread()
+    backend._thread = stuck
+    backend._running = False
+    backend._failed = True
+
+    backend.reset_failure()
+    assert backend.failed is True
+    assert backend.start() is False
+    backend.stop()
+
+    assert backend._thread is stuck
+    assert controller.payloads == []

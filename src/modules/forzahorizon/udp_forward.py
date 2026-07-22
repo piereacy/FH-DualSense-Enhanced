@@ -19,9 +19,14 @@ def _parse_targets(spec: str) -> list[tuple[str, int]]:
             continue
         host, _, port = raw.rpartition(":")
         try:
-            out.append((host, int(port)))
+            parsed_port = int(port)
         except ValueError:
             log.warning("Ignoring bad forward target %r (expected host:port)", raw)
+            continue
+        if not host or not 1 <= parsed_port <= 65535:
+            log.warning("Ignoring bad forward target %r (expected host:port)", raw)
+            continue
+        out.append((host, parsed_port))
     return out
 
 
@@ -40,16 +45,19 @@ class UDPForwarder:
 
     def open(self):
         if self.targets:
+            self.close()
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             for host, port in self.targets:
                 log.info("Forwarding raw telemetry to %s:%d", host, port)
 
     def send(self, pkt: bytes):
         # MARK: never let a forward error stall telemetry - warn once, keep going
+        if self._sock is None:
+            return
         for addr in self.targets:
             try:
                 self._sock.sendto(pkt, addr)
-            except OSError as e:
+            except (OSError, OverflowError) as e:
                 if not self._warned:
                     self._warned = True
                     log.warning("UDP forward failed (further errors suppressed): %s", e)

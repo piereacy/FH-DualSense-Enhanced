@@ -53,7 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "Sol tetik - Sabit duvar (isteğe bağlı)",
     "Right trigger - Gas force": "Sağ tetik - Gaz gücü",
     "ABS (anti-lock brake) rumble": "ABS (kilitlenme önleyici fren) titreşimi",
-    "Idle buzz": "Rölanti titreşimi",
     "Gear shift thump": "Vites darbesi",
 
     # --- settings tab fields ---
@@ -98,6 +97,20 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza telemetri (sonraki açılışta uygulanır)",
     "Startup pulse": "Başlangıç titreşimi",
     "Reconnect": "Yeniden bağlanma",
+    "Connection and reconnect": "Bağlantı ve yeniden bağlanma",
+    "Reconnect now": "Şimdi yeniden bağlan",
+    "Charging {percent}%": "Şarj oluyor %{percent}",
+    "Charging": "Şarj oluyor",
+    "Fully charged": "Tam dolu",
+    "Battery unavailable": "Pil bilgisi kullanılamıyor",
+    "Reading battery": "Pil okunuyor",
+    "Switching connection": "Bağlantı değiştiriliyor",
+    "Reconnecting": "Yeniden bağlanıyor",
+    "Connecting": "Bağlanıyor",
+    "Connection error": "Bağlantı hatası",
+    "Display scaling": "Ekran ölçeklendirme",
+    "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override.":
+        "Per-Monitor v2 etkin değil. EXE uyumluluk ayarlarındaki yüksek DPI geçersiz kılmasını denetleyin.",
     "Application behavior": "Uygulama davranışı",
     "Game detection": "Oyun algılama",
     "UDP port": "UDP portu",
@@ -287,6 +300,23 @@ STRINGS.update({
     "Show gear on player LEDs": "Vitesi oyuncu LED'lerinde göster",
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "1'den 5+ vitese kadar beş beyaz oyuncu gösterge LED'i kullanılır.",
+})
+
+STRINGS.update({
+    "L2 - Brake": "L2 - Fren",
+    "R2 - Throttle": "R2 - Gaz",
+})
+
+STRINGS.update({
+    "Trigger feedback": "Tetik geri bildirimi",
+    "L2/R2 switches and tuning. Changes save instantly.": "L2/R2 anahtarları ve ayarları. Değişiklikler anında kaydedilir.",
+    "Grip switches and tuning. Changes save instantly.": "Tutma kolu dokunsalı anahtarları ve ayarları. Değişiklikler anında kaydedilir.",
+    "Shared trigger feedback": "Ortak tetik geri bildirimi",
+    "Tire grip trigger feedback": "Lastik tutuşu tetik geri bildirimi",
+    "Tire grip trigger strength": "Lastik tutuşu tetik şiddeti",
+    "Body haptics tuning": "Tutma kolu dokunsalı ayarı",
+    "Tire grip trigger advanced tuning": "Gelişmiş lastik tutuşu tetik ayarı",
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. Disable in-game vibration to prevent competing or doubled grip output.": "USB ve Bluetooth aynı dokunsal karışımı kullanır; yalnızca aktarım yolu farklıdır. Çakışan veya çift tutma kolu çıkışını önlemek için oyun içi titreşimi kapatın.",
 })
 
 STRINGS.update({

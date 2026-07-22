@@ -52,7 +52,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "左扳機 - 固定阻力牆（選用）",
     "Right trigger - Gas force": "右扳機 - 油門力道",
     "ABS (anti-lock brake) rumble": "ABS（防鎖死煞車）震動",
-    "Idle buzz": "怠速震動",
     "Gear shift thump": "換檔衝擊",
 
     # --- settings tab fields ---
@@ -97,6 +96,20 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza 遙測（下次啟動生效）",
     "Startup pulse": "啟動震動",
     "Reconnect": "重新連線",
+    "Connection and reconnect": "連線與重新連線",
+    "Reconnect now": "立即重新連線",
+    "Charging {percent}%": "充電中 {percent}%",
+    "Charging": "充電中",
+    "Fully charged": "已充滿",
+    "Battery unavailable": "電量無法讀取",
+    "Reading battery": "正在讀取電量",
+    "Switching connection": "正在切換連線",
+    "Reconnecting": "正在重新連線",
+    "Connecting": "正在連線",
+    "Connection error": "連線錯誤",
+    "Display scaling": "顯示縮放",
+    "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override.":
+        "Per-Monitor v2 未生效。請檢查 EXE 相容性中的高 DPI 縮放覆寫設定。",
     "Application behavior": "軟體行為",
     "Game detection": "遊戲偵測",
     "UDP port": "UDP 連接埠",
@@ -323,6 +336,23 @@ STRINGS.update({
     "Show gear on player LEDs": "以玩家指示燈顯示檔位",
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "1 檔至 5 檔以上使用五顆白色玩家指示燈顯示。",
+})
+
+STRINGS.update({
+    "L2 - Brake": "L2 - 煞車",
+    "R2 - Throttle": "R2 - 油門",
+})
+
+STRINGS.update({
+    "Trigger feedback": "扳機回饋",
+    "L2/R2 switches and tuning. Changes save instantly.": "L2/R2 扳機鍵開關與調整，變更會立即儲存。",
+    "Grip switches and tuning. Changes save instantly.": "握把觸覺開關與調整，變更會立即儲存。",
+    "Shared trigger feedback": "共用扳機回饋",
+    "Tire grip trigger feedback": "輪胎抓地力扳機回饋",
+    "Tire grip trigger strength": "輪胎抓地力扳機回饋強度",
+    "Body haptics tuning": "握把觸覺調整",
+    "Tire grip trigger advanced tuning": "輪胎抓地力扳機進階調整",
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. Disable in-game vibration to prevent competing or doubled grip output.": "USB 與藍牙使用相同的握把觸覺混音，僅傳輸路徑不同。請關閉遊戲內振動，避免握把輸出互相干擾或疊加。",
 })
 
 STRINGS.update({

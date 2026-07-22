@@ -10,154 +10,18 @@ import customtkinter as ctk
 
 from lang import t
 from modules.config import preferences
+from modules.feedback_schema import (
+    GRIP_EXPERIMENTAL_SECTIONS,
+    GRIP_SETTING_SECTIONS,
+    GRIP_SWITCH_SECTIONS,
+    TRIGGER_EXPERIMENTAL_SECTIONS,
+    TRIGGER_SETTING_SECTIONS,
+)
 
 from . import theme as T
 from . import widgets as W
 
 log = logging.getLogger("fhds")
-
-# Mirrors src/modules/tui/settings_tab.py exactly.
-SETTING_SECTIONS = [
-    ("Pedal dead zones", [
-        ("accel_deadzone", "Gas trigger dead zone", 0, 255, ""),
-        ("brake_deadzone", "Brake trigger dead zone", 0, 255, ""),
-    ]),
-    ("Left trigger - Brake force", [
-        ("brake_baseline_force", "Resting stiffness", 0, 255, ""),
-        ("brake_max_force", "Hard-press stiffness", 0, 255, ""),
-        ("brake_curve", "Stiffness curve shape", 0.1, 20.0, ""),
-        ("handbrake_bonus", "Handbrake extra stiffness", 0, 255, ""),
-    ]),
-    ("Left trigger - Static wall (optional)", [
-        ("brake_static_wall_at", "Wall position on the trigger", 0, 255, ""),
-        ("brake_static_wall_force", "Wall hardness", 0, 255, ""),
-    ]),
-    ("Right trigger - Gas force", [
-        ("throttle_baseline_force", "Resting stiffness", 0, 255, ""),
-        ("throttle_max_force", "Hard-press stiffness", 0, 255, ""),
-        ("throttle_curve", "Stiffness curve shape", 0.1, 20.0, ""),
-    ]),
-    ("ABS (anti-lock brake) rumble", [
-        ("abs_amp", "Rumble strength", 0, 255, ""),
-        ("abs_sensitivity", "Sensitivity", 0.1, 3.0, ""),
-    ]),
-    ("R2 trigger redline vibration", [
-        ("rev_limit_ratio", "Trigger near redline at", 0.0, 1.0, ""),
-        ("rev_limit_freq", "Trigger vibration frequency (Hz)", 1, 255, ""),
-        ("rev_limit_amp", "Trigger vibration strength", 0, 255, ""),
-        ("rev_limit_hold_ms", "Trigger hold time (ms)", 0.0, 1000.0, ""),
-    ]),
-    ("Grip redline vibration", [
-        ("grip_redline_ratio", "Grip trigger near redline at", 0.0, 1.0, ""),
-        ("grip_redline_freq", "Grip pulse rate (Hz)", 1, 20, ""),
-        ("grip_redline_amp", "Grip pulse strength", 0, 255, ""),
-        ("grip_redline_duty_cycle", "Grip pulse width", 0.20, 0.85, ""),
-        ("grip_redline_attack_strength", "Grip entry impact", 0.0, 1.0, ""),
-    ]),
-    ("Traction/grip feedback", [
-        ("wheelspin_amp", "Grip feedback strength", 0, 255, ""),
-        ("wheelspin_sensitivity", "Sensitivity", 0.1, 3.0, ""),
-    ]),
-    ("Idle buzz", [
-        ("idle_amp_high", "Idle strength", 0, 255, ""),
-    ]),
-    ("R2 trigger gear-shift thump", [
-        ("gear_shift_freq", "Thump speed (Hz)", 0, 255, ""),
-        ("gear_shift_amp", "Thump strength", 0, 255, ""),
-        ("gear_shift_duration_ms", "Thump length (ms)", 0.0, 2000.0, ""),
-    ]),
-    ("Grip gear-shift thump", [
-        ("grip_gear_shift_strength", "Grip thump strength", 0.0, 2.0, ""),
-        ("grip_gear_shift_duration_ms", "Grip thump length (ms)", 0.0, 2000.0, ""),
-    ]),
-    ("Body haptics", [
-        ("enable_body_haptics", "Enable body haptics", None, None,
-         "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. "
-         "Disable in-game vibration only if you feel competing or doubled output."),
-        ("body_haptics_intensity", "Master intensity", 0.0, 2.0, ""),
-        ("engine_haptics_intensity", "Engine intensity", 0.0, 2.0, ""),
-        ("road_haptics_intensity", "Road texture intensity", 0.0, 2.0, ""),
-        ("impact_haptics_intensity", "Impact and suspension intensity", 0.0, 2.0, ""),
-        ("slip_haptics_intensity", "Slip and ABS intensity", 0.0, 2.0, ""),
-        ("slip_haptics_threshold", "Slip threshold", 0.0, 5.0, ""),
-    ]),
-]
-
-EXPERIMENTAL_SECTIONS = [
-    ("Experimental dynamic resistance", [
-        ("enable_boost_resistance", "Turbo boost resistance", None, None, ""),
-        ("boost_resistance_threshold", "Boost activation threshold", 0.0, 10.0, ""),
-        ("boost_resistance_force", "Boost extra resistance", 0, 255, ""),
-        ("enable_gforce_resistance", "G-force resistance", None, None, ""),
-        ("gforce_resistance_force", "G-force extra resistance", 0, 255, ""),
-        ("gforce_lateral_weight", "Lateral G weight", 0.0, 2.0, ""),
-        ("gforce_longitudinal_weight", "Longitudinal G weight", 0.0, 2.0, ""),
-        ("gforce_full_scale", "G force at maximum resistance", 0.1, 5.0, ""),
-        ("gforce_attack_ms", "G-force attack smoothing (ms)", 1.0, 500.0, ""),
-        ("gforce_release_ms", "G-force release smoothing (ms)", 1.0, 1000.0, ""),
-    ]),
-    ("Experimental collision trigger feedback", [
-        ("enable_collision_trigger_l2", "L2 collision trigger jolt", None, None, ""),
-        ("enable_collision_trigger_r2", "R2 collision trigger jolt", None, None, ""),
-        ("collision_trigger_freq", "Collision trigger frequency (Hz)", 0, 255, ""),
-        ("collision_trigger_amp", "Collision trigger strength", 0, 255, ""),
-        ("collision_trigger_duration_ms", "Collision trigger duration (ms)", 0.0, 500.0, ""),
-    ]),
-    ("Experimental road texture trigger feedback", [
-        ("enable_trigger_surface_l2", "L2 idle road texture", None, None, ""),
-        ("enable_trigger_surface_r2", "R2 idle road texture", None, None, ""),
-        ("trigger_surface_freq", "Road texture frequency (Hz)", 0, 255, ""),
-        ("trigger_surface_amp", "Road texture strength", 0, 255, ""),
-        ("trigger_rumble_strip_freq", "Rumble strip frequency (Hz)", 0, 255, ""),
-        ("trigger_rumble_strip_amp", "Rumble strip strength", 0, 255, ""),
-    ]),
-    ("ABS advanced tuning", [
-        ("abs_brake_threshold", "Minimum brake input", 0, 255, ""),
-        ("abs_min_speed_kmh", "Minimum speed (km/h)", 0.0, 500.0, ""),
-        ("abs_slip_ratio_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
-        ("abs_combined_slip_threshold", "Combined slip threshold", 0.0, 10.0, ""),
-        ("abs_combined_slip_weight", "Combined slip influence", 0.0, 1.0, ""),
-        ("abs_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),
-        ("abs_freq_min", "Minimum frequency (Hz)", 0, 255, ""),
-        ("abs_freq", "Maximum frequency (Hz)", 0, 255, ""),
-        ("abs_amp_min", "Minimum strength", 0, 255, ""),
-        ("abs_hold_ms", "Feedback hold (ms)", 0.0, 500.0, ""),
-        ("abs_wall_zones", "Top wall zones", 1, 9, ""),
-    ]),
-    ("Traction/grip advanced tuning", [
-        ("wheelspin_slip_threshold", "Longitudinal slip threshold", 0.0, 10.0, ""),
-        ("wheelspin_hysteresis", "Slip hysteresis", 0.0, 0.9, ""),
-        ("wheelspin_slip_full_scale", "Slip at maximum feedback", 0.1, 10.0, ""),
-        ("wheelspin_attack_ms", "Attack smoothing (ms)", 1.0, 500.0, ""),
-        ("wheelspin_release_ms", "Release smoothing (ms)", 1.0, 1000.0, ""),
-        ("wheelspin_g_damping", "G-force damping", 0.0, 1.0, ""),
-        ("wheelspin_burnout_rotation_threshold", "Burnout rotation threshold", 0.0, 300.0, ""),
-        ("wheelspin_burnout_rotation_full_scale", "Burnout rotation at maximum feedback", 1.0, 1000.0, ""),
-        ("wheelspin_tarmac_freq_min", "Tarmac minimum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_tarmac_freq_max", "Tarmac maximum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_water_freq_min", "Water minimum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_water_freq_max", "Water maximum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_dirt_freq_min", "Dirt minimum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_dirt_freq_max", "Dirt maximum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_gravel_freq_min", "Gravel minimum frequency (Hz)", 0, 255, ""),
-        ("wheelspin_gravel_freq_max", "Gravel maximum frequency (Hz)", 0, 255, ""),
-    ]),
-    ("Grip redline advanced tuning", [
-        ("grip_redline_release_ratio", "Grip release below redline at", 0.0, 1.0, ""),
-        ("grip_redline_gain", "Grip signal gain", 0.0, 2.0, ""),
-        ("grip_redline_low_ratio", "Low-frequency pulse ratio", 0.0, 1.0, ""),
-        ("grip_redline_background_duck", "Redline background level", 0.0, 1.0, ""),
-        ("grip_redline_attack_duration_ms", "Grip entry impact duration (ms)", 0.0, 500.0, ""),
-    ]),
-    ("Collision haptics advanced tuning", [
-        ("collision_haptics_jerk_threshold", "Collision jerk threshold", 0.0, 50.0, ""),
-        ("collision_haptics_duration_ms", "Collision duration (ms)", 0.0, 1000.0, ""),
-        ("collision_haptics_cooldown_ms", "Collision cooldown (ms)", 0.0, 2000.0, ""),
-        ("collision_haptics_rebound_ratio", "Collision rebound strength", 0.0, 1.0, ""),
-        ("collision_haptics_weak_side_ratio", "Collision weak-side strength", 0.0, 1.0, ""),
-        ("collision_background_duck", "Collision background level", 0.0, 1.0, ""),
-    ]),
-]
 
 SYSTEM_SECTIONS = [
     ("DSX", [
@@ -179,7 +43,7 @@ SYSTEM_SECTIONS = [
     ("Startup pulse", [
         ("startup_pulse_force", "Startup buzz strength", 0, 255, ""),
     ]),
-    ("Reconnect", [
+    ("Connection and reconnect", [
         ("enable_reconnect", "Auto-reconnect when controller drops", None, None, ""),
         ("reconnect_interval_s", "Reconnect check interval (s)", 0.1, 60.0, ""),
     ]),
@@ -192,8 +56,20 @@ SYSTEM_SECTIONS = [
     ]),
 ]
 
+# Feedback classification is shared with the Console frontend.  The legacy
+# constants above remain aliases during the R7 worktree migration; renderers
+# and range validation must use the shared schema below.
+SETTING_SECTIONS = GRIP_SETTING_SECTIONS
+EXPERIMENTAL_SECTIONS = GRIP_EXPERIMENTAL_SECTIONS
+
 SETTING_RANGES = {a: (lo, hi)
-                  for sections in (SETTING_SECTIONS, EXPERIMENTAL_SECTIONS, SYSTEM_SECTIONS)
+                  for sections in (
+                      TRIGGER_SETTING_SECTIONS,
+                      GRIP_SETTING_SECTIONS,
+                      TRIGGER_EXPERIMENTAL_SECTIONS,
+                      GRIP_EXPERIMENTAL_SECTIONS,
+                      SYSTEM_SECTIONS,
+                  )
                   for _, fields in sections
                   for a, _lbl, lo, hi, *_rest in fields
                   if lo is not None and hi is not None}
@@ -209,13 +85,20 @@ def _format_value(v) -> str:
     return str(v)
 
 
+def responsive_column_count(width: int, threshold: int = 720) -> int:
+    return 2 if width >= threshold else 1
+
+
 class SettingsTab(ctk.CTkFrame):
     """Header + scrollable sectioned list. System tab subclasses this."""
-    SECTIONS = SETTING_SECTIONS
+    RESIZE_DEBOUNCE_MS = 80
+    SWITCH_SECTIONS: tuple = GRIP_SWITCH_SECTIONS
+    SECTIONS: list = SETTING_SECTIONS
+    EXPERIMENTAL_SECTIONS: tuple = GRIP_EXPERIMENTAL_SECTIONS
     SHOW_RESET = True
     SHOW_EXPERIMENTAL = True
-    PAGE_TITLE = "Grip haptics and tuning"
-    PAGE_SUBTITLE = "All changes save instantly."
+    PAGE_TITLE = "Grip haptics"
+    PAGE_SUBTITLE = "Grip switches and tuning. Changes save instantly."
 
     def __init__(self, parent, app):
         super().__init__(parent, fg_color="transparent")
@@ -228,6 +111,10 @@ class SettingsTab(ctk.CTkFrame):
         self._experimental_open = False
         self._experimental_btn: ctk.CTkButton | None = None
         self._experimental_body: ctk.CTkFrame | None = None
+        self._switch_grid: ctk.CTkFrame | None = None
+        self._switch_cards: list[ctk.CTkFrame] = []
+        self._switch_columns = 0
+        self._layout_after = None
 
         W.PageHeader(self, t(self.PAGE_TITLE), t(self.PAGE_SUBTITLE)
                      ).pack(fill="x", pady=(0, T.PAD_MD))
@@ -240,6 +127,8 @@ class SettingsTab(ctk.CTkFrame):
     # MARK: build -----------------------------------------------------------
 
     def _build(self):
+        if self.SWITCH_SECTIONS:
+            self._build_switch_grid()
         for section, fields in self.SECTIONS:
             self._build_section_card(section, fields)
         if self.SHOW_EXPERIMENTAL:
@@ -248,6 +137,97 @@ class SettingsTab(ctk.CTkFrame):
             self._reset_btn = W.DangerButton(self._scroll, t("Reset to defaults"),
                                              command=self._on_reset)
             self._reset_btn.pack(fill="x", pady=(T.PAD_MD, T.PAD_SM))
+
+    def _build_switch_grid(self):
+        self._switch_grid = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        self._switch_grid.pack(fill="x", expand=True)
+        self._switch_grid.bind("<Configure>", self._schedule_layout)
+        for title, fields in self.SWITCH_SECTIONS:
+            card = W.Card(self._switch_grid)
+            self._switch_cards.append(card)
+            W.H2(card, t(title)).pack(
+                anchor="w",
+                padx=T.PAD_MD,
+                pady=(T.PAD_MD, T.PAD_SM),
+            )
+            for attr, label, _lo, _hi, *rest in fields:
+                hint = rest[0] if rest else ""
+                self._add_quick_switch(card, attr, label, hint)
+            ctk.CTkFrame(card, fg_color="transparent", height=T.PAD_SM).pack()
+        self._schedule_layout()
+
+    def _add_quick_switch(self, parent, attr: str, label: str, hint: str):
+        switch = ctk.CTkSwitch(
+            parent,
+            text=t(label),
+            command=lambda a=attr: self._on_quick_switch(a),
+        )
+        if bool(getattr(self.settings, attr)):
+            switch.select()
+        switch.pack(anchor="w", padx=T.PAD_MD, pady=T.PAD_XS)
+        self._switches[attr] = switch
+        if hint:
+            W.Hint(parent, t(hint), wrap=self.app.px(520)).pack(
+                anchor="w",
+                padx=T.PAD_MD,
+                pady=(0, T.PAD_SM),
+            )
+
+    def _schedule_layout(self, _event=None):
+        if self._switch_grid is None:
+            return
+        if not bool(getattr(self._scroll, "_layout_active", True)):
+            return
+        if self._layout_after is not None:
+            try:
+                self.after_cancel(self._layout_after)
+            except Exception:
+                pass
+        self._layout_after = self.after(
+            self.RESIZE_DEBOUNCE_MS,
+            self._apply_responsive_layout,
+        )
+
+    def _apply_responsive_layout(self):
+        self._layout_after = None
+        if self._switch_grid is None:
+            return
+        if not bool(getattr(self._scroll, "_layout_active", True)):
+            return
+        width = max(self._switch_grid.winfo_width(), self.winfo_width())
+        columns = responsive_column_count(width, self.app.px(720))
+        if columns == self._switch_columns:
+            return
+        self._switch_columns = columns
+        self._switch_grid.grid_columnconfigure(0, weight=1, uniform="feedback")
+        self._switch_grid.grid_columnconfigure(
+            1,
+            weight=1 if columns == 2 else 0,
+            uniform="feedback" if columns == 2 else "",
+        )
+        for index, card in enumerate(self._switch_cards):
+            row, column = divmod(index, columns)
+            card.grid(
+                row=row,
+                column=column,
+                sticky="nsew",
+                padx=(0, T.PAD_MD // 2)
+                if columns == 2 and column == 0
+                else ((T.PAD_MD // 2, 0) if columns == 2 else (0, 0)),
+                pady=(0, T.PAD_MD),
+            )
+
+    def on_show(self):
+        self._schedule_layout()
+
+    def on_hide(self):
+        if self._layout_after is None:
+            return
+        try:
+            self.after_cancel(self._layout_after)
+        except Exception:
+            pass
+        self._layout_after = None
 
     def _build_experimental_card(self):
         card = W.Card(self._scroll)
@@ -263,7 +243,7 @@ class SettingsTab(ctk.CTkFrame):
             anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_SM)
         )
         self._experimental_body = ctk.CTkFrame(card, fg_color="transparent")
-        for section, fields in EXPERIMENTAL_SECTIONS:
+        for section, fields in self.EXPERIMENTAL_SECTIONS:
             self._build_section_card(section, fields, parent=self._experimental_body)
 
     def _toggle_experimental(self):
@@ -360,6 +340,10 @@ class SettingsTab(ctk.CTkFrame):
             preferences.save(self.settings)
             log.info("%s = %s", attr, value)
         self._push_live(attr, value)
+
+    def _on_quick_switch(self, attr: str):
+        self._on_switch(attr)
+        self.app.haptic(bool(getattr(self.settings, attr)))
 
     def _on_slider(self, attr: str, raw: float):
         if self.app._refreshing:

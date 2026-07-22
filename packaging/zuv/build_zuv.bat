@@ -11,10 +11,10 @@ if not exist "%DIST%" mkdir "%DIST%"
 
 if defined UPDATE_REPO (
     echo Building update-enabled ZUV for %UPDATE_REPO% ...
-    uvx zuv build src -o "%BUNDLE%" --update-repo "%UPDATE_REPO%"
+    uvx --from "zuv==0.5.6" zuv build src -o "%BUNDLE%" --update-repo "%UPDATE_REPO%"
 ) else (
     echo Building local ZUV without a remote update source ...
-    uvx zuv build src -o "%BUNDLE%"
+    uvx --from "zuv==0.5.6" zuv build src -o "%BUNDLE%"
 )
 if errorlevel 1 (
     echo.

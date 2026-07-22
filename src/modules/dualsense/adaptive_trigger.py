@@ -3,6 +3,7 @@
 Every public function returns a `(mode_byte, params_tuple)` HID frame ready
 to hand to `DualSense.set(left, right)`. No game-specific logic lives here.
 """
+import math
 import time
 
 # --- Raw mode/effect bytes ---
@@ -28,7 +29,13 @@ RAW_MAX = 255
 
 
 def _clamp(v, hi=RAW_MAX):
-    return max(0, min(hi, round(v)))
+    try:
+        value = float(v)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    if not math.isfinite(value):
+        return 0
+    return max(0, min(hi, round(value)))
 
 
 def _pack_zones(strengths):
@@ -169,7 +176,8 @@ def _preview():
     try:
         from .main import DualSense
     except ImportError:
-        import os, sys
+        import os
+        import sys
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         from modules.dualsense.main import DualSense
     ds = DualSense(enable_startup_pulse=False)

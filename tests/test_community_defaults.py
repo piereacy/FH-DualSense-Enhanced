@@ -41,7 +41,9 @@ def test_fresh_default_profile_matches_community_defaults(tmp_path, monkeypatch)
     preferences.load(settings)
 
     raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
-    actual = {name: raw["profiles"]["Default"][name] for name in EXPECTED}
+    persisted = dict(raw["globals"])
+    persisted.update(raw["profiles"]["Default"])
+    actual = {name: persisted[name] for name in EXPECTED}
     assert actual == EXPECTED
 
 

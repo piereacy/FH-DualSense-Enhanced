@@ -16,6 +16,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 SRC = Path(SPECPATH).resolve().parents[1] / "src"
 ROOT = SRC.parent
 ICON = SRC / "data" / "icon.ico"
+MANIFEST = Path(SPECPATH) / "fhds.manifest"
+RUNTIME_HOOK = Path(SPECPATH) / "dpi_runtime_hook.py"
 
 # MARK: read version from pyproject.toml and emit a Windows VERSIONINFO file
 def _read_version() -> str:
@@ -100,7 +102,7 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=[str(RUNTIME_HOOK)],
     excludes=[],
     noarchive=False,
 )
@@ -125,4 +127,5 @@ exe = EXE(
     entitlements_file=None,
     icon=str(ICON),
     version=str(VERSION_FILE),
+    manifest=str(MANIFEST),
 )

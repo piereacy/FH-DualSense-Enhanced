@@ -16,7 +16,6 @@ Threading: backend runs in a worker thread; logs are queued and drained on
 the Tk main thread via root.after. Tk widgets are never touched off-thread.
 """
 import logging
-import os
 import queue
 import sys
 import threading
@@ -33,7 +32,10 @@ from modules.config import preferences, profiles
 from modules.config.profile_session import ProfileSession
 from modules.config.preferences import _release_version
 from modules.dualsense.adaptive_trigger import off, vibrate
+from modules.dualsense.presentation import controller_pill_status
+from modules.dpi import DpiSnapshot, format_dpi_snapshot, query_windows_dpi
 from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.runtime_logging import install_runtime_file_handler
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
 from modules.xinput.service import XInputBridgeService
@@ -66,7 +68,7 @@ NAV_ITEMS = (
 )
 NAV_LABELS = {
     "Overview": "Overview",
-    "Driving": "Driving feedback",
+    "Driving": "Trigger feedback",
     "Haptics": "Grip haptics",
     "Lighting": "Controller lighting",
     "Profiles": "Profiles",
@@ -91,13 +93,15 @@ class _QueueLogHandler(logging.Handler):
 
 
 class TriggerGUI:
-    def __init__(self, settings):
+    def __init__(self, settings, *, on_ready=None):
         self.settings = settings
+        self._on_ready = on_ready
         set_language(settings.language)
 
         # Runtime state
         self._stop = threading.Event()
         self._thread = None
+        self._backend_restart_lock = threading.Lock()
         self._ds = None
         self._listener_cm = None
         self._listener = None
@@ -122,14 +126,13 @@ class TriggerGUI:
         # Theme + DPI
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
-        self._apply_theme()
-        # Make Windows treat us as Per-Monitor v2 BEFORE Tk is created so
-        # CTk's auto-DPI reads the right monitor DPI.
-        self._enable_process_dpi_awareness()
+        self.ui_font_family = T.ui_font_family(settings.language)
+        self._apply_theme(self.ui_font_family)
         self.scale = 1.0
 
         # Window
         self.root = ctk.CTk()
+        self._dpi_snapshot = query_windows_dpi(self.root.winfo_id())
         self._wheel_router = W.install_wheel_router(self.root)
         self.root.title(APP_NAME)
         self._set_window_icon()
@@ -148,15 +151,17 @@ class TriggerGUI:
 
         # Final wiring
         self._install_log_handler()
+        self._log_dpi_snapshot(self._dpi_snapshot)
         self._refresh_status()
         self._refresh_profile()
 
     # MARK: theme / dpi -----------------------------------------------------
 
     @staticmethod
-    def _apply_theme():
+    def _apply_theme(font_family: str):
         from customtkinter import ThemeManager
         th = ThemeManager.theme
+        th["CTkFont"]["family"] = font_family
         th["CTk"]["fg_color"] = list(T.BG_MAIN)
         th["CTkToplevel"]["fg_color"] = list(T.BG_MAIN)
         th["CTkFrame"]["fg_color"] = list(T.BG_PANEL)
@@ -181,27 +186,41 @@ class TriggerGUI:
         th["CTkOptionMenu"]["button_color"] = [T.ACCENT_HOVER, T.ACCENT_HOVER]
         th["CTkOptionMenu"]["button_hover_color"] = [T.ACCENT_HOVER, T.ACCENT_HOVER]
 
-    @staticmethod
-    def _enable_process_dpi_awareness():
-        if not sys.platform.startswith("win"):
-            return
-        try:
-            import ctypes
-            try:
-                ctypes.windll.shcore.SetProcessDpiAwareness(2)
-            except Exception:
-                try:
-                    ctypes.windll.user32.SetProcessDPIAware()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
     def px(self, n: int) -> int:
         return max(1, int(round(n * self.scale)))
 
     def font_size(self, base: int) -> int:
         return max(8, int(round(base * self.scale)))
+
+    @property
+    def dpi_snapshot(self) -> DpiSnapshot:
+        return self._dpi_snapshot
+
+    @staticmethod
+    def dpi_status_text(snapshot: DpiSnapshot) -> str:
+        return format_dpi_snapshot(snapshot)
+
+    @staticmethod
+    def _log_dpi_snapshot(snapshot: DpiSnapshot) -> None:
+        log.info(
+            "DPI awareness=%s scale=%d%% dpi=%d bootstrap=%s%s",
+            snapshot.awareness,
+            snapshot.scale_percent,
+            snapshot.dpi,
+            snapshot.bootstrap,
+            f" error={snapshot.error}" if snapshot.error else "",
+        )
+
+    def _refresh_dpi_snapshot(self) -> None:
+        latest = query_windows_dpi(self.root.winfo_id())
+        if latest == self._dpi_snapshot:
+            return
+        self._dpi_snapshot = latest
+        self._log_dpi_snapshot(latest)
+        system_tab = getattr(self, "system_tab", None)
+        refresh = getattr(system_tab, "set_dpi_snapshot", None)
+        if callable(refresh):
+            refresh(latest)
 
     def toast(self, message: str, ms: int = 2500):
         """Show a transient banner at the top of the window. Cross-platform."""
@@ -363,6 +382,7 @@ class TriggerGUI:
                 padx=T.PAD_LG,
                 pady=T.PAD_LG,
             )
+            W.set_scroll_layout_active(frame, False)
         self._active_nav: str | None = None
         self._select_nav("Overview")
 
@@ -381,13 +401,18 @@ class TriggerGUI:
                 previous_on_hide()
             except Exception:
                 log.exception("GUI page on_hide failed: %s", previous_key)
+        if previous is not None:
+            W.set_scroll_layout_active(previous, False)
         try:
             target.tkraise()
+            W.set_scroll_layout_active(target, True)
         except Exception:
             log.exception("Could not show GUI navigation target %s", key)
+            W.set_scroll_layout_active(target, False)
             if previous is not None:
                 try:
                     previous.tkraise()
+                    W.set_scroll_layout_active(previous, True)
                 except Exception:
                     log.exception("Could not restore GUI page %s", previous_key)
                 previous_on_show = getattr(previous, "on_show", None)
@@ -397,7 +422,7 @@ class TriggerGUI:
                     except Exception:
                         log.exception("GUI page rollback on_show failed: %s", previous_key)
             return
-        if previous is not None:
+        if previous_key is not None and previous is not None:
             prev = self._nav_buttons[previous_key]
             prev.configure(fg_color="transparent", text_color=T.TEXT_MUTED)
         btn = self._nav_buttons[key]
@@ -548,26 +573,28 @@ class TriggerGUI:
         for h in list(root.handlers):
             if isinstance(h, _QueueLogHandler):
                 root.removeHandler(h)
-        self._stop.set()
         self._update_service.stop()
-        if self._thread:
-            self._thread.join(timeout=2.0)
-        self._xinput_service.stop()
-        self._usb_audio_lifecycle.close()
-        if self._listener_cm:
-            try:
-                self._listener_cm.__exit__(None, None, None)
-            except Exception:
-                pass
-        if self._ds:
-            try:
-                self._ds.close()
-            except Exception:
-                pass
+        with self._backend_restart_lock:
+            self._stop.set()
+            if self._thread:
+                self._thread.join(timeout=2.0)
+            self._xinput_service.stop()
+            self._usb_audio_lifecycle.close()
+            if self._listener_cm:
+                try:
+                    self._listener_cm.__exit__(None, None, None)
+                except Exception:
+                    pass
+            if self._ds:
+                try:
+                    self._ds.close()
+                except Exception:
+                    pass
 
     def _install_log_handler(self):
         root = logging.getLogger()
         root.handlers.clear()
+        install_runtime_file_handler()
         h = _QueueLogHandler(self._log_queue)
         h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
                                           datefmt="%H:%M:%S"))
@@ -621,6 +648,19 @@ class TriggerGUI:
             log.exception("Telemetry listener startup failed")
             self._refresh_status()
             self.overview_tab.refresh()
+        else:
+            try:
+                self._notify_ready()
+            except Exception:
+                self._backend_error = "Update startup health confirmation failed"
+                log.exception(self._backend_error)
+                self._perform_quit()
+
+    def _notify_ready(self) -> None:
+        """Confirm update health once the GUI backend can receive telemetry."""
+        callback, self._on_ready = self._on_ready, None
+        if callback is not None:
+            callback()
 
     def _run_loop(self):
         try:
@@ -643,35 +683,51 @@ class TriggerGUI:
     def _restart_backend(self):
         """Swap the running backend without touching the UDP listener.
         Called off the Tk thread (via threading.Thread) so we can join the old loop."""
-        # MARK: stop old loop + backend, reuse listener
-        self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=2.0)
-        self._xinput_service.stop()
-        if self._ds:
-            self._ds.close()
-        self._stop.clear()
-        s = self.settings
-        try:
-            # MARK: suppress pulse on hot-swap
-            self._ds = make_backend(s, False)
-            self._ds.open()
-            self._xinput_service.sync(self._ds)
-            self._backend_error = ""
-            if s.use_dsx:
-                log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
-            else:
-                log.info("HID mode: writing direct to DualSense")
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
-            self._thread.start()
-        except Exception as exc:
-            self._backend_error = str(exc) or type(exc).__name__
-            log.exception("Backend restart failed")
+        with self._backend_restart_lock:
+            if self._tearing_down:
+                return
+            # MARK: stop old loop + backend, reuse listener
+            self._stop.set()
+            old_thread = self._thread
+            if old_thread:
+                old_thread.join(timeout=2.0)
+            if old_thread is not None and old_thread.is_alive():
+                error = RuntimeError("telemetry loop did not stop within 2 seconds")
+                self._backend_error = str(error)
+                log.error("Backend restart aborted: %s", error)
+                try:
+                    self.root.after(0, lambda error=error: self.status_pill.set_label(
+                        t("Backend failed: {error}").format(error=error)))
+                except (RuntimeError, tk.TclError):
+                    pass
+                return
+            self._thread = None
+            self._xinput_service.stop()
+            if self._ds:
+                self._ds.close()
+            self._stop.clear()
+            s = self.settings
             try:
-                self.root.after(0, lambda error=exc: self.status_pill.set_label(
-                    t("Backend failed: {error}").format(error=error)))
-            except (RuntimeError, tk.TclError):
-                pass
+                # MARK: suppress pulse on hot-swap
+                self._ds = make_backend(s, False)
+                self._ds.open()
+                self._xinput_service.sync(self._ds)
+                self._backend_error = ""
+                if s.use_dsx:
+                    log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
+                else:
+                    log.info("HID mode: writing direct to DualSense")
+                if self._listener is not None:
+                    self._thread = threading.Thread(target=self._run_loop, daemon=True)
+                    self._thread.start()
+            except Exception as exc:
+                self._backend_error = str(exc) or type(exc).__name__
+                log.exception("Backend restart failed")
+                try:
+                    self.root.after(0, lambda error=exc: self.status_pill.set_label(
+                        t("Backend failed: {error}").format(error=error)))
+                except (RuntimeError, tk.TclError):
+                    pass
 
     # MARK: status / profile ------------------------------------------------
 
@@ -685,6 +741,7 @@ class TriggerGUI:
     def _tick_status(self):
         if self._tearing_down:
             return
+        self._refresh_dpi_snapshot()
         self._refresh_status()
         self._refresh_update_badge()
         self.overview_tab.refresh()
@@ -702,27 +759,34 @@ class TriggerGUI:
         if self._backend_error:
             self.status_pill.set_dot_color(T.RED)
             self.status_pill.set_label(t("Controller backend error"))
-            return
-        if self._udp_error:
-            self.status_pill.set_dot_color(T.RED)
-            self.status_pill.set_label(t("UDP port {port} in use").format(
-                port=self.settings.udp_port
-            ))
+            self.status_pill.set_detail("")
             return
         ds = self._ds
+        detail_color = None
         if self.settings.use_dsx:
             if ds and ds.connected:
                 color, label = T.BLUE, t("DSX: active")
             else:
                 color, label = T.RED, t("DSX: off")
-        elif ds and getattr(ds, "persistent", False):
-            color, label = T.GREEN, f"{t('connected')} - {t('latched')}"
-        elif ds and ds.connected:
-            color, label = T.GREEN, t("connected")
+            detail = ""
+        elif ds and callable(getattr(ds, "snapshot", None)):
+            snapshot = ds.snapshot()
+            presentation = controller_pill_status(snapshot, t)
+            if snapshot.connected:
+                color = T.GREEN
+            elif snapshot.phase.value in {"connecting", "switching", "reconnecting"}:
+                color = T.YELLOW
+            else:
+                color = T.RED
+            label = presentation.state
+            detail = presentation.detail
+            detail_color = T.RED if presentation.low_battery else None
         else:
             color, label = T.RED, t("waiting")
+            detail = ""
         self.status_pill.set_dot_color(color)
         self.status_pill.set_label(label)
+        self.status_pill.set_detail(detail, detail_color)
 
     def _refresh_profile(self):
         try:
@@ -751,15 +815,21 @@ class TriggerGUI:
             self._refreshing = False
 
     def haptic(self, on_state: bool):
-        if self._ds and self._ds.connected:
-            threading.Thread(target=self._do_haptic, args=(on_state,), daemon=True).start()
+        controller = self._ds
+        if controller and controller.connected:
+            threading.Thread(
+                target=self._do_haptic,
+                args=(controller, on_state),
+                daemon=True,
+            ).start()
 
-    def _do_haptic(self, on_state: bool):
+    @staticmethod
+    def _do_haptic(controller, on_state: bool):
         amp = HAPTIC_AMP_ON if on_state else HAPTIC_AMP_OFF
         v = vibrate(HAPTIC_FREQ_HZ, amp)
-        self._ds.set(v, v)
+        controller.set(v, v)
         time.sleep(HAPTIC_DURATION_S)
-        self._ds.set(off(), off())
+        controller.set(off(), off())
 
     @staticmethod
     def _open_url(url: str):

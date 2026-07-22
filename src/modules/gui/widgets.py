@@ -3,6 +3,7 @@ re-implementing colors/spacing each time.
 """
 import tkinter as tk
 import weakref
+from typing import Any
 
 import customtkinter as ctk
 
@@ -84,39 +85,80 @@ class Section(ctk.CTkFrame):
 # MARK: chips / pills -----------------------------------------------------
 
 class Pill(ctk.CTkFrame):
-    """Rounded chip. Optional colored dot + prefix label + main label."""
+    """Pixel-aligned header status frame with optional segmented detail."""
+
+    HEIGHT = 28
+    CORNER_RADIUS = 8
+    DOT_SIZE = 8
+    GAP = 4
+
     def __init__(self, parent, label: str = "", prefix: str = "",
                  dot_color=None, **kw):
         kw.setdefault("fg_color", T.BG_HOVER)
-        kw.setdefault("corner_radius", 14)
-        kw.setdefault("height", 26)
+        kw.setdefault("corner_radius", self.CORNER_RADIUS)
+        kw.setdefault("height", self.HEIGHT)
         super().__init__(parent, **kw)
         self._dot = None
         self._prefix = None
+        self._label_value = label
+        self._dot_color_value = dot_color
+        self._detail_value = ""
+        self._detail_color_value = T.TEXT_MUTED
         if dot_color is not None:
-            self._dot = ctk.CTkLabel(self, text=T.ICON["dot"], width=8,
+            self._dot = ctk.CTkLabel(self, text=T.ICON["dot"],
+                                     width=self.DOT_SIZE, height=self.HEIGHT,
                                      text_color=dot_color,
-                                     font=ctk.CTkFont(size=10))
-            self._dot.pack(side="left", padx=(12, 6), pady=0)
+                                     font=ctk.CTkFont(size=self.DOT_SIZE))
+            self._dot.pack(side="left", padx=(12, self.GAP), pady=0)
         if prefix:
             self._prefix = ctk.CTkLabel(self, text=f"{prefix.upper()}",
+                                        height=self.HEIGHT,
                                         text_color=T.TEXT_FAINT,
                                         font=ctk.CTkFont(size=T.FS_TINY,
                                                          weight="bold"))
             self._prefix.pack(side="left",
-                              padx=(12 if dot_color is None else 0, 6),
+                              padx=(12 if dot_color is None else 0, self.GAP),
                               pady=0)
-        self._label = ctk.CTkLabel(self, text=label, text_color=T.TEXT,
+        self._label = ctk.CTkLabel(self, text=label, height=self.HEIGHT,
+                                   text_color=T.TEXT,
                                    font=ctk.CTkFont(size=T.FS_SMALL,
                                                     weight="bold"))
-        self._label.pack(side="left", padx=(0, 14), pady=0)
+        self._label.pack(side="left", padx=(0, self.GAP), pady=0)
+        self._detail = ctk.CTkLabel(
+            self,
+            text="",
+            height=self.HEIGHT,
+            text_color=T.TEXT_MUTED,
+            font=ctk.CTkFont(size=T.FS_SMALL, weight="bold"),
+        )
+        self._detail.pack(side="left", padx=(0, 12), pady=0)
 
     def set_label(self, text: str):
+        if text == self._label_value:
+            return
+        self._label_value = text
         self._label.configure(text=text)
 
     def set_dot_color(self, color):
-        if self._dot is not None:
-            self._dot.configure(text_color=color)
+        if self._dot is None or color == self._dot_color_value:
+            return
+        self._dot_color_value = color
+        self._dot.configure(text_color=color)
+
+    def set_detail(self, text: str, color=None):
+        resolved_color = T.TEXT_MUTED if color is None else color
+        changes: dict[str, Any] = {}
+        if text != self._detail_value:
+            self._detail_value = text
+            changes["text"] = text
+        if resolved_color != self._detail_color_value:
+            self._detail_color_value = resolved_color
+            changes["text_color"] = resolved_color
+        if not changes:
+            return
+        self._detail.configure(
+            **changes,
+        )
 
 
 # MARK: buttons -----------------------------------------------------------
@@ -363,8 +405,15 @@ def install_wheel_router(root) -> WheelRouter:
 
 
 class FastScroll(ctk.CTkScrollableFrame):
-    """Scrollable frame registered with the root-level WheelRouter."""
+    """Scrollable frame with wheel routing and coalesced width reflow."""
+
+    RESIZE_DEBOUNCE_MS = 40
+
     def __init__(self, parent, **kw):
+        self._layout_active = True
+        self._fit_after = None
+        self._pending_fit_dimension = None
+        self._applied_fit_dimension = None
         kw.setdefault("fg_color", "transparent")
         kw.setdefault("scrollbar_fg_color", T.BG_PANEL)
         kw.setdefault("scrollbar_button_color", T.BG_ACTIVE)
@@ -373,11 +422,105 @@ class FastScroll(ctk.CTkScrollableFrame):
         self._wheel_router = install_wheel_router(self.winfo_toplevel())
         self._wheel_router.register(self)
 
+    def _fit_frame_dimensions_to_canvas(self, event):
+        dimension = event.height if self._orientation == "horizontal" else event.width
+        self._pending_fit_dimension = max(1, int(dimension))
+        if not self._layout_active:
+            return
+        self._schedule_canvas_fit(self.RESIZE_DEBOUNCE_MS)
+
+    def _schedule_canvas_fit(self, delay_ms: int) -> None:
+        if self._fit_after is not None:
+            try:
+                self.after_cancel(self._fit_after)
+            except tk.TclError:
+                pass
+        try:
+            self._fit_after = self.after(delay_ms, self._apply_canvas_fit)
+        except tk.TclError:
+            self._fit_after = None
+
+    def _apply_canvas_fit(self) -> None:
+        self._fit_after = None
+        if not self._layout_active:
+            return
+        dimension = self._pending_fit_dimension
+        if dimension is None:
+            try:
+                dimension = (
+                    self._parent_canvas.winfo_height()
+                    if self._orientation == "horizontal"
+                    else self._parent_canvas.winfo_width()
+                )
+            except tk.TclError:
+                return
+        if dimension <= 1 or dimension == self._applied_fit_dimension:
+            return
+        try:
+            if self._orientation == "horizontal":
+                self._parent_canvas.itemconfigure(
+                    self._create_window_id,
+                    height=dimension,
+                )
+            else:
+                self._parent_canvas.itemconfigure(
+                    self._create_window_id,
+                    width=dimension,
+                )
+        except tk.TclError:
+            return
+        self._applied_fit_dimension = dimension
+
+    def set_layout_active(self, active: bool) -> None:
+        active = bool(active)
+        if active == self._layout_active:
+            return
+        self._layout_active = active
+        if not active:
+            if self._fit_after is not None:
+                try:
+                    self.after_cancel(self._fit_after)
+                except tk.TclError:
+                    pass
+                self._fit_after = None
+            return
+        try:
+            self._pending_fit_dimension = (
+                self._parent_canvas.winfo_height()
+                if self._orientation == "horizontal"
+                else self._parent_canvas.winfo_width()
+            )
+        except tk.TclError:
+            return
+        self._schedule_canvas_fit(0)
+
     def destroy(self):
+        if self._fit_after is not None:
+            try:
+                self.after_cancel(self._fit_after)
+            except tk.TclError:
+                pass
+            self._fit_after = None
         router = getattr(self, "_wheel_router", None)
         if router is not None:
             router.unregister(self)
         super().destroy()
+
+
+def set_scroll_layout_active(root, active: bool) -> None:
+    """Enable expensive canvas-width reflow only for the visible page."""
+    stack = [root]
+    while stack:
+        widget = stack.pop()
+        if isinstance(widget, FastScroll):
+            widget.set_layout_active(active)
+        children = getattr(widget, "winfo_children", None)
+        if not callable(children):
+            continue
+        try:
+            stack.extend(children())
+        except tk.TclError:
+            continue
 
 
 class ScrollCard(FastScroll):

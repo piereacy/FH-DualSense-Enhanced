@@ -1,11 +1,21 @@
 import struct
 import threading
+import time
 import zlib
 
 import pytest
 
 from modules.dualsense.adaptive_trigger import rigid, vibrate
-from modules.dualsense.main import BT, RUMBLE_FLAGS, TRIG_FLAGS, USB, DualSense, _BT_CRC_SEED
+from modules.dualsense.controller_state import ControllerPhase
+from modules.dualsense.input_state import InputTransport
+from modules.dualsense.main import (
+    BT,
+    RUMBLE_FLAGS,
+    TRIG_FLAGS,
+    USB,
+    DualSense,
+    _BT_CRC_SEED,
+)
 from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from modules.haptics.frame import CompatibleRumble
 
@@ -14,14 +24,39 @@ LEFT = vibrate(20, 30)
 RIGHT = rigid(40)
 
 
+def _input_report(transport):
+    bluetooth = transport is InputTransport.BLUETOOTH
+    report = bytearray(BT["size"] if bluetooth else USB["size"])
+    report[0] = 0x31 if bluetooth else 0x01
+    base = 2 if bluetooth else 1
+    report[base + 7] = 8
+    if bluetooth:
+        crc = zlib.crc32(memoryview(report)[:74], zlib.crc32(b"\xA1"))
+        struct.pack_into("<I", report, 74, crc)
+    return bytes(report)
+
+
+def _mark_connected(controller, transport):
+    controller.lay = BT if transport is InputTransport.BLUETOOTH else USB
+    now = time.monotonic()
+    controller._last_input_at = now
+    controller._ever_connected = True
+    controller._update_snapshot(
+        phase=ControllerPhase.CONNECTED,
+        transport=transport,
+        last_input_at=now,
+    )
+
+
 class _GatedDevice:
-    def __init__(self, read_count):
+    def __init__(self, read_count, transport=InputTransport.BLUETOOTH):
         self.read_entered = [threading.Event() for _ in range(read_count)]
         self.read_released = [threading.Event() for _ in range(read_count)]
         self.writes = []
         self.closed = False
         self._next_read = 0
         self._writes_changed = threading.Condition()
+        self._report = _input_report(transport)
 
     def read(self, _size, timeout_ms=0):
         assert timeout_ms == 0
@@ -29,7 +64,7 @@ class _GatedDevice:
         self._next_read += 1
         self.read_entered[index].set()
         assert self.read_released[index].wait(timeout=2.0)
-        return [1]
+        return self._report
 
     def write(self, report):
         with self._writes_changed:
@@ -82,6 +117,22 @@ def test_usb_trigger_only_layout_is_unchanged():
     assert report[3:5] == b"\x00\x00"
     assert report[11:14] == bytes((RIGHT[0], 0, 40))
     assert report[22:25] == bytes((LEFT[0], 20, 30))
+
+
+@pytest.mark.parametrize("layout", [USB, BT], ids=["usb", "bluetooth"])
+@pytest.mark.parametrize(
+    "rumble",
+    [None, CompatibleRumble(low_frequency=0.5, high_frequency=0.25)],
+    ids=["trigger-only", "compatible-rumble"],
+)
+def test_state_reports_never_claim_unverified_audio_control_fields(layout, rumble):
+    controller = DualSense(enable_startup_pulse=False)
+    controller.lay = layout
+
+    report = controller._build(LEFT, RIGHT, rumble)
+
+    assert report[layout["flags"]] & 0x20 == 0
+    assert report[layout["vf1"]] & 0x20 == 0
 
 
 def test_bluetooth_trigger_only_layout_and_crc_are_unchanged():
@@ -193,9 +244,9 @@ def test_set_queues_trigger_and_rumble_as_one_pending_frame():
 
 def test_io_preserves_rumble_release_before_following_trigger_only_frame():
     controller = DualSense(enable_startup_pulse=False)
-    controller.lay = BT
-    controller.dev = _GatedDevice(read_count=3)
-    controller._ever_connected = True
+    device = _GatedDevice(read_count=3)
+    controller.dev = device
+    _mark_connected(controller, InputTransport.BLUETOOTH)
     active_rumble = CompatibleRumble(low_frequency=0.5, high_frequency=0.25)
     controller.set(LEFT, RIGHT, active_rumble)
     controller._running = True
@@ -203,31 +254,31 @@ def test_io_preserves_rumble_release_before_following_trigger_only_frame():
     thread.start()
 
     try:
-        assert controller.dev.read_entered[0].wait(timeout=2.0)
-        controller.dev.read_released[0].set()
-        assert controller.dev.wait_for_writes(1)
+        assert device.read_entered[0].wait(timeout=2.0)
+        device.read_released[0].set()
+        assert device.wait_for_writes(1)
 
-        assert controller.dev.read_entered[1].wait(timeout=2.0)
+        assert device.read_entered[1].wait(timeout=2.0)
         controller.set(LEFT, RIGHT, CompatibleRumble())
         controller.set(LEFT, RIGHT, None)
-        controller.dev.read_released[1].set()
-        assert controller.dev.wait_for_writes(2)
+        device.read_released[1].set()
+        assert device.wait_for_writes(2)
 
-        assert controller.dev.read_entered[2].wait(timeout=2.0)
+        assert device.read_entered[2].wait(timeout=2.0)
         controller._running = False
         controller._wake.set()
-        controller.dev.read_released[2].set()
+        device.read_released[2].set()
         thread.join(timeout=2.0)
         assert not thread.is_alive()
     finally:
         controller._running = False
         controller._wake.set()
-        for release in controller.dev.read_released:
+        for release in device.read_released:
             release.set()
         thread.join(timeout=2.0)
 
-    assert len(controller.dev.writes) == 3
-    active, released, trigger_only = controller.dev.writes
+    assert len(device.writes) == 4
+    active, released, trigger_only = device.writes[:3]
     assert active[BT["flags"]] == TRIG_FLAGS | RUMBLE_FLAGS
     assert active[BT["motor_l"]] == 128
     assert active[BT["motor_r"]] == 64
@@ -289,17 +340,17 @@ def test_transport_is_only_reported_while_connected():
     assert controller.transport is None
 
     controller.dev = object()
-    controller.lay = USB
+    _mark_connected(controller, InputTransport.USB)
     assert controller.transport == "usb"
 
-    controller.lay = BT
+    _mark_connected(controller, InputTransport.BLUETOOTH)
     assert controller.transport == "bluetooth"
 
 
 def test_bluetooth_haptics_queue_keeps_only_the_freshest_audio_chunk():
     controller = DualSense(enable_startup_pulse=False)
     controller.dev = object()
-    controller.lay = BT
+    _mark_connected(controller, InputTransport.BLUETOOTH)
 
     assert controller.queue_bt_haptics(bytes([1]) * 64) is True
     assert controller.queue_bt_haptics(bytes([2]) * 64) is True
@@ -319,11 +370,11 @@ def test_bluetooth_haptics_queue_rejects_usb_and_bad_payloads():
         controller.queue_bt_haptics(bytes(63))
 
 
-def test_io_serializes_trigger_state_before_bluetooth_haptics_report():
+def test_io_coalesces_trigger_state_into_bluetooth_haptics_report():
     controller = DualSense(enable_startup_pulse=False)
-    controller.lay = BT
-    controller.dev = _GatedDevice(read_count=2)
-    controller._ever_connected = True
+    device = _GatedDevice(read_count=2)
+    controller.dev = device
+    _mark_connected(controller, InputTransport.BLUETOOTH)
     controller.set(LEFT, RIGHT, None)
     assert controller.queue_bt_haptics(bytes(range(64))) is True
     controller._running = True
@@ -331,24 +382,26 @@ def test_io_serializes_trigger_state_before_bluetooth_haptics_report():
     thread.start()
 
     try:
-        assert controller.dev.read_entered[0].wait(timeout=2.0)
-        controller.dev.read_released[0].set()
-        assert controller.dev.wait_for_writes(2)
+        assert device.read_entered[0].wait(timeout=2.0)
+        device.read_released[0].set()
+        assert device.wait_for_writes(1)
 
-        assert controller.dev.read_entered[1].wait(timeout=2.0)
+        assert device.read_entered[1].wait(timeout=2.0)
+        assert len(device.writes) == 1
         controller._running = False
         controller._wake.set()
-        controller.dev.read_released[1].set()
+        device.read_released[1].set()
         thread.join(timeout=2.0)
         assert not thread.is_alive()
     finally:
         controller._running = False
         controller._wake.set()
-        for release in controller.dev.read_released:
+        for release in device.read_released:
             release.set()
         thread.join(timeout=2.0)
 
-    state_report, haptics_report = controller.dev.writes
-    assert state_report[0] == 0x31
+    haptics_report = device.writes[0]
     assert haptics_report[0] == 0x36
     assert haptics_report[78:142] == bytes(range(64))
+    assert haptics_report[13 + 21] == LEFT[0]
+    assert haptics_report[13 + 10] == RIGHT[0]

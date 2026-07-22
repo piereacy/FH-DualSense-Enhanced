@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -22,6 +25,16 @@ class UpdateError(RuntimeError):
 
 
 def _request(url: str, *, timeout: float, max_bytes: int):
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme.casefold() != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise UpdateError("update requests require an HTTPS URL without credentials")
+    if not math.isfinite(timeout) or timeout <= 0.0 or max_bytes <= 0:
+        raise UpdateError("invalid update request limits")
     req = urllib.request.Request(
         url,
         headers={
@@ -34,10 +47,26 @@ def _request(url: str, *, timeout: float, max_bytes: int):
         response = urllib.request.urlopen(req, timeout=timeout)
     except (OSError, urllib.error.URLError) as exc:
         raise UpdateError(f"network request failed: {exc}") from exc
-    length = response.headers.get("Content-Length")
-    if length and int(length) > max_bytes:
+    final_url = response.geturl()
+    final = urllib.parse.urlsplit(final_url)
+    if (
+        final.scheme.casefold() != "https"
+        or not final.hostname
+        or final.username is not None
+        or final.password is not None
+    ):
         response.close()
-        raise UpdateError("response is larger than the allowed limit")
+        raise UpdateError("update request redirected to an unsafe URL")
+    length = response.headers.get("Content-Length")
+    if length:
+        try:
+            declared_size = int(length)
+        except (TypeError, ValueError, OverflowError) as exc:
+            response.close()
+            raise UpdateError("response has an invalid Content-Length") from exc
+        if declared_size < 0 or declared_size > max_bytes:
+            response.close()
+            raise UpdateError("response is larger than the allowed limit")
     return response
 
 
@@ -89,7 +118,10 @@ class GitHubReleaseClient:
             return None
         url = str(asset.get("browser_download_url", ""))
         checksum_url = str(checksum.get("browser_download_url", ""))
-        size = int(asset.get("size", 0) or 0)
+        try:
+            size = int(asset.get("size", 0) or 0)
+        except (TypeError, ValueError, OverflowError):
+            return None
         if not url.startswith("https://") or not checksum_url.startswith("https://"):
             return None
         if size <= 0 or size > MAX_EXE_BYTES:
@@ -114,7 +146,11 @@ class GitHubReleaseClient:
     ) -> str:
         destination = Path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        part = destination.with_suffix(destination.suffix + ".part")
+        # Separate app instances may check/download concurrently. A unique
+        # partial avoids one instance truncating or deleting another's stream.
+        part = destination.with_name(
+            f".{destination.name}.{uuid.uuid4().hex}.part"
+        )
         hasher = hashlib.sha256()
         downloaded = 0
         try:

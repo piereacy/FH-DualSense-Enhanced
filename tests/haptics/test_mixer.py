@@ -132,6 +132,23 @@ def test_redline_grip_warning_starts_immediately_on_left_by_default(settings):
     assert frame.engine_amplitude > 0.0
 
 
+def test_redline_grip_uses_shared_effective_limit_but_engine_keeps_raw_max(settings):
+    settings.grip_redline_attack_strength = 0.0
+    mixer = HapticMixer()
+    telemetry = _telemetry(
+        rpm=8200.0,
+        max_rpm=10000.0,
+        effective_redline_rpm=8500.0,
+        accel=255,
+    )
+
+    frame = mixer.update(telemetry, settings, now=1.0)
+
+    assert frame.left_high > 0.0
+    assert frame.engine_hz == pytest.approx(40.0 + (7200.0 / 9000.0) * 80.0)
+    assert telemetry["max_rpm"] == 10000.0
+
+
 @pytest.mark.parametrize(
     ("left", "right", "expected_left", "expected_right"),
     [

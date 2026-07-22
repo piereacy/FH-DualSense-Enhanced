@@ -53,7 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "Левый курок — фиксированный упор (необязательно)",
     "Right trigger - Gas force": "Правый курок — усилие газа",
     "ABS (anti-lock brake) rumble": "Вибрация ABS (антиблокировочной системы)",
-    "Idle buzz": "Вибрация на холостом ходу",
     "Gear shift thump": "Толчок при переключении передачи",
 
     # --- вкладка «Настройки» — поля ---
@@ -100,6 +99,20 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza-телеметрия (применится при следующем запуске)",
     "Startup pulse": "Импульс при запуске",
     "Reconnect": "Переподключение",
+    "Connection and reconnect": "Подключение и переподключение",
+    "Reconnect now": "Переподключить сейчас",
+    "Charging {percent}%": "Зарядка {percent}%",
+    "Charging": "Зарядка",
+    "Fully charged": "Полностью заряжен",
+    "Battery unavailable": "Данные батареи недоступны",
+    "Reading battery": "Чтение уровня заряда",
+    "Switching connection": "Переключение подключения",
+    "Reconnecting": "Переподключение",
+    "Connecting": "Подключение",
+    "Connection error": "Ошибка подключения",
+    "Display scaling": "Масштабирование экрана",
+    "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override.":
+        "Per-Monitor v2 не активен. Проверьте переопределение высокого DPI в свойствах совместимости EXE.",
     "Application behavior": "Поведение приложения",
     "Game detection": "Определение игры",
     "UDP port": "UDP-порт",
@@ -298,6 +311,23 @@ STRINGS.update({
     "Show gear on player LEDs": "Показывать передачу индикаторами игрока",
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "Передачи от 1 до 5+ отображаются пятью белыми индикаторами игрока.",
+})
+
+STRINGS.update({
+    "L2 - Brake": "L2 - тормоз",
+    "R2 - Throttle": "R2 - газ",
+})
+
+STRINGS.update({
+    "Trigger feedback": "Отдача курков",
+    "L2/R2 switches and tuning. Changes save instantly.": "Переключатели и настройка L2/R2. Изменения сохраняются сразу.",
+    "Grip switches and tuning. Changes save instantly.": "Переключатели и настройка отдачи рукояток. Изменения сохраняются сразу.",
+    "Shared trigger feedback": "Общая отдача курков",
+    "Tire grip trigger feedback": "Отдача курков от сцепления шин",
+    "Tire grip trigger strength": "Сила отдачи курков от сцепления",
+    "Body haptics tuning": "Настройка отдачи рукояток",
+    "Tire grip trigger advanced tuning": "Расширенная настройка отдачи сцепления",
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. Disable in-game vibration to prevent competing or doubled grip output.": "USB и Bluetooth используют одинаковый микс тактильной отдачи; отличается только путь передачи. Отключите вибрацию в игре, чтобы избежать конкурирующей или двойной отдачи рукояток.",
 })
 
 STRINGS.update({

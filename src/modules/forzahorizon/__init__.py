@@ -46,6 +46,7 @@ from .fh6_language import (
 )
 from .collision import CollisionDetector, CollisionSignal
 from .lighting import LightingController
+from .redline import RedlineDetector, RedlineState, predict_redline_rpm
 from .controller_icons import (
     ControllerIconInspection,
     ControllerIconModError,
@@ -71,7 +72,8 @@ __all__ = [
     "is_fh6_running", "is_windows_steam_supported", "launch_fh6_via_steam",
     "repair_native_language", "restore_native_language", "summarize_fh6_languages",
     "validate_game_root",
-    "CollisionSignal", "LightingController",
+    "CollisionSignal", "LightingController", "RedlineDetector", "RedlineState",
+    "predict_redline_rpm",
     "ControllerIconInspection", "ControllerIconModError", "ControllerIconState",
     "inspect_controller_icons", "install_controller_icons", "restore_controller_icons",
     "validate_controller_icon_root",

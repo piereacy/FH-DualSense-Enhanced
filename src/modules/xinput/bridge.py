@@ -16,7 +16,7 @@ from .vigem_client import ViGEmClient, ViGEmError, ViGEmErrorCode
 log = logging.getLogger("fhds.xinput")
 
 STALE_AFTER_S = 0.100
-REMOVE_AFTER_S = 3.0
+RECOVERY_DELAYS_S = (0.25, 1.0, 5.0)
 
 
 class BridgeStatus(str, Enum):
@@ -37,6 +37,7 @@ class BridgeSnapshot:
     received_reports: int = 0
     forwarded_reports: int = 0
     stale_neutralizations: int = 0
+    recovery_attempts: int = 0
     last_error: str = ""
 
 
@@ -65,14 +66,17 @@ class XInputBridge:
         client_factory: Callable[[], ViGEmClient] = ViGEmClient,
         clock: Callable[[], float] = time.monotonic,
         stale_after_s: float = STALE_AFTER_S,
-        remove_after_s: float = REMOVE_AFTER_S,
+        recovery_delays_s: tuple[float, ...] = RECOVERY_DELAYS_S,
     ):
         self._client_factory = client_factory
         self._clock = clock
         self._stale_after = float(stale_after_s)
-        self._remove_after = float(remove_after_s)
-        if not 0 < self._stale_after < self._remove_after:
-            raise ValueError("stale timeout must be positive and shorter than remove timeout")
+        if self._stale_after <= 0:
+            raise ValueError("stale timeout must be positive")
+        delays = tuple(max(0.001, float(delay)) for delay in recovery_delays_s)
+        if not delays:
+            raise ValueError("at least one recovery delay is required")
+        self._recovery_delays = delays
         self._lock = threading.Lock()
         self._latest: _PublishedInput | None = None
         self._sequence = 0
@@ -83,6 +87,11 @@ class XInputBridge:
 
     def start(self) -> None:
         with self._lock:
+            if self._thread is not None:
+                if self._thread.is_alive():
+                    return
+                self._thread = None
+                self._running = False
             if self._running:
                 return
             self._running = True
@@ -92,12 +101,13 @@ class XInputBridge:
                 target_connected=False,
                 last_error="",
             )
-        self._thread = threading.Thread(
-            target=self._run,
-            name="fhds-xinput-bridge",
-            daemon=True,
-        )
-        self._thread.start()
+            thread = threading.Thread(
+                target=self._run,
+                name="fhds-xinput-bridge",
+                daemon=True,
+            )
+            self._thread = thread
+        thread.start()
 
     def publish_latest(
         self,
@@ -120,7 +130,9 @@ class XInputBridge:
 
     def stop(self) -> None:
         with self._lock:
-            if not self._running:
+            thread = self._thread
+            if not self._running and (thread is None or not thread.is_alive()):
+                self._thread = None
                 self._latest = None
                 self._snapshot = replace(
                     self._snapshot,
@@ -131,11 +143,16 @@ class XInputBridge:
             self._running = False
             self._latest = None
         self._wake.set()
-        thread = self._thread
-        if thread is not None:
+        if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=2.0)
-        self._thread = None
+        if thread is not None and thread.is_alive():
+            message = "XInput bridge worker did not stop within 2 seconds"
+            log.error(message)
+            self._replace_snapshot(status=BridgeStatus.ERROR, last_error=message)
+            return
         with self._lock:
+            if self._thread is thread:
+                self._thread = None
             self._snapshot = replace(
                 self._snapshot,
                 status=BridgeStatus.DISABLED,
@@ -155,27 +172,67 @@ class XInputBridge:
             self._snapshot = replace(self._snapshot, **changes)
 
     def _run(self) -> None:
-        client = None
+        failures = 0
+        try:
+            while self._is_running():
+                client = None
+                try:
+                    client = self._client_factory()
+                    client.connect()
+                    self._replace_snapshot(
+                        status=BridgeStatus.WAITING_CONTROLLER,
+                        target_connected=False,
+                        last_error="",
+                    )
+                    self._run_connected(client)
+                    break
+                except Exception as exc:
+                    if not self._is_running():
+                        break
+                    status = self._connection_failure_status(exc)
+                    if status is BridgeStatus.DRIVER_MISSING:
+                        self._replace_snapshot(status=status, last_error=str(exc))
+                        log.warning("XInput bridge could not connect: %s", exc)
+                        while self._is_running():
+                            self._wake.wait(0.5)
+                            self._wake.clear()
+                        break
+                    failures += 1
+                    delay = self._recovery_delays[
+                        min(failures - 1, len(self._recovery_delays) - 1)
+                    ]
+                    with self._lock:
+                        self._snapshot = replace(
+                            self._snapshot,
+                            status=BridgeStatus.ERROR,
+                            target_connected=False,
+                            recovery_attempts=self._snapshot.recovery_attempts + 1,
+                            last_error=str(exc) or type(exc).__name__,
+                        )
+                    log.exception(
+                        "XInput bridge session failed; retrying in %.2fs",
+                        delay,
+                    )
+                    self._wake.clear()
+                    if self._is_running():
+                        self._wake.wait(delay)
+                finally:
+                    if client is not None:
+                        try:
+                            client.close()
+                        except Exception:
+                            pass
+        finally:
+            with self._lock:
+                self._running = False
+                self._snapshot = replace(self._snapshot, target_connected=False)
+
+    def _run_connected(self, client: ViGEmClient) -> None:
+        """Forward one ViGEm session while retaining its player slot on input gaps."""
         target = None
         last_applied_sequence = 0
         stale_sent = False
         try:
-            try:
-                client = self._client_factory()
-                client.connect()
-            except Exception as exc:
-                status = self._connection_failure_status(exc)
-                self._replace_snapshot(status=status, last_error=str(exc))
-                log.warning("XInput bridge could not connect: %s", exc)
-                while self._is_running():
-                    self._wake.wait(0.5)
-                    self._wake.clear()
-                return
-
-            self._replace_snapshot(
-                status=BridgeStatus.WAITING_CONTROLLER,
-                last_error="",
-            )
             while self._is_running():
                 now = self._clock()
                 latest = self._read_latest()
@@ -201,22 +258,14 @@ class XInputBridge:
                             last_error="",
                         )
 
-                if target is not None and age >= self._remove_after:
-                    if not stale_sent:
-                        target.update(XUSBReport())
-                        stale_sent = True
-                        self._increment_stale_count()
-                    target.close()
-                    target = None
-                    self._replace_snapshot(
-                        status=BridgeStatus.WAITING_CONTROLLER,
-                        target_connected=False,
-                    )
-                elif target is not None and age >= self._stale_after and not stale_sent:
+                if target is not None and age >= self._stale_after and not stale_sent:
                     target.update(XUSBReport())
                     stale_sent = True
                     self._increment_stale_count()
-                    self._replace_snapshot(status=BridgeStatus.STALE)
+                    self._replace_snapshot(
+                        status=BridgeStatus.STALE,
+                        target_connected=True,
+                    )
 
                 self._wake.clear()
                 if not self._is_running():
@@ -224,12 +273,6 @@ class XInputBridge:
                 if self._read_latest() is not latest:
                     continue
                 self._wake.wait(self._next_wait(age, target is not None, stale_sent))
-        except Exception as exc:
-            log.exception("XInput bridge stopped after an unrecoverable error")
-            self._replace_snapshot(
-                status=BridgeStatus.ERROR,
-                last_error=str(exc),
-            )
         finally:
             if target is not None:
                 try:
@@ -240,12 +283,6 @@ class XInputBridge:
                     target.close()
                 except Exception:
                     pass
-            if client is not None:
-                try:
-                    client.close()
-                except Exception:
-                    pass
-            self._replace_snapshot(target_connected=False)
 
     def _increment_stale_count(self) -> None:
         with self._lock:
@@ -257,8 +294,9 @@ class XInputBridge:
     def _next_wait(self, age: float, has_target: bool, stale_sent: bool) -> float:
         if not has_target:
             return 0.5
-        threshold = self._remove_after if stale_sent else self._stale_after
-        return max(0.001, min(0.5, threshold - age))
+        if stale_sent:
+            return 0.5
+        return max(0.001, min(0.5, self._stale_after - age))
 
     @staticmethod
     def _connection_failure_status(exc: Exception) -> BridgeStatus:

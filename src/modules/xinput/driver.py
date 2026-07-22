@@ -181,7 +181,13 @@ def validate_installer(
 ) -> None:
     if not verify_installer_hash(path):
         raise DriverInstallError("ViGEmBus installer SHA-256 verification failed")
-    if not signature_verifier(path):
+    try:
+        signature_valid = signature_verifier(path)
+    except Exception as exc:
+        raise DriverInstallError(
+            f"ViGEmBus installer Authenticode verification failed: {exc}"
+        ) from exc
+    if not signature_valid:
         raise DriverInstallError("ViGEmBus installer Authenticode verification failed")
 
 
@@ -208,6 +214,8 @@ class _SHELLEXECUTEINFOW(ctypes.Structure):
 _SEE_MASK_NOCLOSEPROCESS = 0x00000040
 _SW_SHOWNORMAL = 1
 _INFINITE = 0xFFFFFFFF
+_WAIT_OBJECT_0 = 0x00000000
+_WAIT_FAILED = 0xFFFFFFFF
 _ERROR_CANCELLED = 1223
 
 
@@ -220,6 +228,15 @@ def run_installer_elevated(path: Path) -> InstallResult:
     shell_execute = shell32.ShellExecuteExW
     shell_execute.argtypes = (ctypes.POINTER(_SHELLEXECUTEINFOW),)
     shell_execute.restype = wintypes.BOOL
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    wait_for_single_object.restype = wintypes.DWORD
+    get_exit_code = kernel32.GetExitCodeProcess
+    get_exit_code.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    get_exit_code.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
     info = _SHELLEXECUTEINFOW(
         cbSize=ctypes.sizeof(_SHELLEXECUTEINFOW),
         fMask=_SEE_MASK_NOCLOSEPROCESS,
@@ -248,16 +265,22 @@ def run_installer_elevated(path: Path) -> InstallResult:
     if not info.hProcess:
         return InstallResult(InstallStatus.FAILED, error="installer process handle is missing")
     try:
-        kernel32.WaitForSingleObject(info.hProcess, _INFINITE)
+        wait_result = int(wait_for_single_object(info.hProcess, _INFINITE))
+        if wait_result != _WAIT_OBJECT_0:
+            error = ctypes.get_last_error() if wait_result == _WAIT_FAILED else wait_result
+            return InstallResult(
+                InstallStatus.FAILED,
+                error=f"WaitForSingleObject failed with Windows result {error}",
+            )
         exit_code = wintypes.DWORD()
-        if not kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
+        if not get_exit_code(info.hProcess, ctypes.byref(exit_code)):
             error = ctypes.get_last_error()
             return InstallResult(
                 InstallStatus.FAILED,
                 error=f"GetExitCodeProcess failed with Windows error {error}",
             )
     finally:
-        kernel32.CloseHandle(info.hProcess)
+        close_handle(info.hProcess)
     code = int(exit_code.value)
     if code == 0:
         return InstallResult(InstallStatus.SUCCESS, exit_code=code)
@@ -282,10 +305,23 @@ def install_and_probe(
         validate_installer(path, signature_verifier=signature_verifier)
     except DriverInstallError as exc:
         return InstallResult(InstallStatus.FAILED, error=str(exc))
-    result = runner(path)
+    try:
+        result = runner(path)
+    except Exception as exc:
+        return InstallResult(
+            InstallStatus.FAILED,
+            error=f"ViGEmBus installer could not be started: {exc}",
+        )
     if result.status is not InstallStatus.SUCCESS:
         return result
-    post_install = probe()
+    try:
+        post_install = probe()
+    except Exception as exc:
+        return InstallResult(
+            InstallStatus.RESTART_REQUIRED,
+            exit_code=result.exit_code,
+            error=f"ViGEmBus post-install probe failed: {exc}",
+        )
     if post_install.status is DriverProbeStatus.AVAILABLE:
         return result
     return InstallResult(

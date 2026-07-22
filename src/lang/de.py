@@ -53,7 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "Linker Trigger - Statische Wand (optional)",
     "Right trigger - Gas force": "Rechter Trigger - Gaskraft",
     "ABS (anti-lock brake) rumble": "ABS (Antiblockiersystem)-Vibration",
-    "Idle buzz": "Leerlauf-Surren",
     "Gear shift thump": "Schaltruck",
 
     # --- settings tab fields ---
@@ -98,6 +97,20 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza-Telemetrie (wird beim nächsten Start übernommen)",
     "Startup pulse": "Start-Impuls",
     "Reconnect": "Wiederverbinden",
+    "Connection and reconnect": "Verbindung und Wiederverbinden",
+    "Reconnect now": "Jetzt wiederverbinden",
+    "Charging {percent}%": "Wird geladen {percent}%",
+    "Charging": "Wird geladen",
+    "Fully charged": "Vollständig geladen",
+    "Battery unavailable": "Akkustand nicht verfügbar",
+    "Reading battery": "Akkustand wird gelesen",
+    "Switching connection": "Verbindung wird gewechselt",
+    "Reconnecting": "Wird wiederverbunden",
+    "Connecting": "Wird verbunden",
+    "Connection error": "Verbindungsfehler",
+    "Display scaling": "Anzeigeskalierung",
+    "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override.":
+        "Per-Monitor v2 ist nicht aktiv. Prüfen Sie die Kompatibilitätseinstellung zur hohen DPI-Skalierung der EXE.",
     "Application behavior": "Anwendungsverhalten",
     "Game detection": "Spielerkennung",
     "UDP port": "UDP-Port",
@@ -324,6 +337,23 @@ STRINGS.update({
     "Show gear on player LEDs": "Gang über Player-LEDs anzeigen",
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "Die Gänge 1 bis 5+ verwenden die fünf weißen Player-LEDs.",
+})
+
+STRINGS.update({
+    "L2 - Brake": "L2 - Bremse",
+    "R2 - Throttle": "R2 - Gas",
+})
+
+STRINGS.update({
+    "Trigger feedback": "Trigger-Feedback",
+    "L2/R2 switches and tuning. Changes save instantly.": "L2/R2-Schalter und Abstimmung. Änderungen werden sofort gespeichert.",
+    "Grip switches and tuning. Changes save instantly.": "Griff-Haptik und Abstimmung. Änderungen werden sofort gespeichert.",
+    "Shared trigger feedback": "Gemeinsames Trigger-Feedback",
+    "Tire grip trigger feedback": "Trigger-Feedback für Reifenhaftung",
+    "Tire grip trigger strength": "Stärke des Reifenhaftungs-Feedbacks",
+    "Body haptics tuning": "Abstimmung der Griff-Haptik",
+    "Tire grip trigger advanced tuning": "Erweiterte Reifenhaftungs-Abstimmung",
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. Disable in-game vibration to prevent competing or doubled grip output.": "USB und Bluetooth verwenden denselben Haptik-Mix; nur der Übertragungsweg ist verschieden. Deaktiviere die Vibration im Spiel, um konkurrierende oder doppelte Griffausgabe zu vermeiden.",
 })
 
 STRINGS.update({

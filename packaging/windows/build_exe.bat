@@ -47,7 +47,7 @@ if exist "%DIST%" (
 )
 
 REM MARK: the helper is copied out of MEIPASS before use, so it can replace the main EXE.
-uvx --from "pyinstaller>=6.11.1" pyinstaller "%~dp0update_helper.py" --onefile --windowed --name "FH-DualSense-Update-Helper" --icon "%CD%\src\data\icon.ico" --distpath "%HELPER_DIST%" --workpath "%HELPER_WORK%" --specpath "%HELPER_WORK%" --noconfirm --clean
+uv run --project src --frozen pyinstaller "%~dp0update_helper.py" --onefile --windowed --name "FH-DualSense-Update-Helper" --icon "%CD%\src\data\icon.ico" --manifest "%~dp0fhds.manifest" --distpath "%HELPER_DIST%" --workpath "%HELPER_WORK%" --specpath "%HELPER_WORK%" --noconfirm --clean
 if errorlevel 1 (
     echo.
     echo Update helper build FAILED.
@@ -55,7 +55,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-uvx --from "pyinstaller>=6.11.1" --with customtkinter --with textual --with hidapi --with psutil --with dotenv --with pystray --with pillow --with numpy --with sounddevice pyinstaller "%~dp0fhds.spec" --distpath "%DIST%" --workpath "%WORK%" --noconfirm --clean
+uv run --project src --frozen pyinstaller "%~dp0fhds.spec" --distpath "%DIST%" --workpath "%WORK%" --noconfirm --clean
 if errorlevel 1 (
     echo.
     echo Application build FAILED.
@@ -67,7 +67,7 @@ REM MARK: updater refuses assets without a matching published SHA-256 file.
 REM Use Python instead of Get-FileHash because that cmdlet is absent on some
 REM windows-latest runner images even though Windows PowerShell is available.
 set "APP_EXE=%DIST%\FH-DualSense-Enhanced-R%VER%.exe"
-uv run --no-project python "%~dp0write_sha256.py" "%APP_EXE%"
+uv run --project src --frozen python "%~dp0write_sha256.py" "%APP_EXE%"
 if errorlevel 1 (
     echo.
     echo SHA-256 sidecar generation FAILED.

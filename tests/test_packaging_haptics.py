@@ -1,3 +1,4 @@
+import ast
 import tomllib
 from pathlib import Path
 
@@ -5,21 +6,62 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_linux_hidraw_read_keeps_the_shared_hidapi_keyword_contract():
+    source = (ROOT / "src/modules/dualsense/_hidraw.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    device = next(
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "device"
+    )
+    read = next(
+        node for node in device.body
+        if isinstance(node, ast.FunctionDef) and node.name == "read"
+    )
+
+    assert [argument.arg for argument in read.args.args] == [
+        "self",
+        "size",
+        "timeout_ms",
+    ]
+
+
 def test_runtime_and_development_dependencies_are_declared():
     metadata = tomllib.loads((ROOT / "src/pyproject.toml").read_text(encoding="utf-8"))
     dependencies = metadata["project"]["dependencies"]
+    development = metadata["dependency-groups"]["dev"]
 
     assert any(value.startswith("numpy>=") for value in dependencies)
     assert any(value.startswith("sounddevice>=") for value in dependencies)
-    assert any(value.startswith("pytest>=") for value in metadata["dependency-groups"]["dev"])
+    assert any(value.startswith("pytest>=") for value in development)
+    assert "pyinstaller==6.16.0" in development
+    assert "pyrefly==1.1.1" in development
 
 
-def test_windows_and_release_builds_install_audio_dependencies():
+def test_runtime_does_not_load_configuration_from_the_launch_directory():
+    main_source = (ROOT / "src/main.py").read_text(encoding="utf-8")
+    metadata = tomllib.loads((ROOT / "src/pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "load_dotenv" not in main_source
+    assert "dev.env" not in main_source
+    assert not (ROOT / "src/dev.env").exists()
+    assert not any("dotenv" in value for value in metadata["project"]["dependencies"])
+
+
+def test_windows_and_release_builds_use_locked_audio_dependencies():
     batch = (ROOT / "packaging/windows/build_exe.bat").read_text(encoding="utf-8")
+    linux = (ROOT / "packaging/linux/build_elf.sh").read_text(encoding="utf-8")
+    pyproject = (ROOT / "src/pyproject.toml").read_text(encoding="utf-8")
+    lock = (ROOT / "src/uv.lock").read_text(encoding="utf-8")
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
-    assert "--with numpy --with sounddevice" in batch
-    assert workflow.count("--with numpy --with sounddevice") == 1
+    assert "uv run --project src --frozen pyinstaller" in batch
+    assert '"numpy>=2.1.0"' in pyproject
+    assert '"sounddevice>=0.5.1"' in pyproject
+    assert 'name = "numpy"' in lock
+    assert 'name = "sounddevice"' in lock
+    assert 'uv sync --project "$ROOT/src" --frozen' in linux
+    assert 'uv run --project "$ROOT/src" --frozen --no-sync' in linux
+    assert 'bash "$GITHUB_WORKSPACE/packaging/linux/build_elf.sh"' in workflow
     assert "packaging\\windows\\build_exe.bat" in workflow
     assert "THIRD_PARTY_NOTICES.md" in batch
     assert "cp win_start.bat linux_start.sh LICENSE docs/THIRD_PARTY_NOTICES.md release/" in workflow

@@ -6,13 +6,31 @@ import pytest
 
 from modules.dualsense.adaptive_trigger import rigid, vibrate
 from modules.dualsense.bt_haptics import (
+    BT_CONTROL_REPORT_ID,
+    BT_CONTROL_REPORT_SIZE,
     BT_HAPTICS_REPORT_ID,
     BT_HAPTICS_REPORT_SIZE,
     BluetoothPcmQuantizer,
     BluetoothHapticsPacketBuilder,
+    build_bluetooth_power_off_report,
     quantize_haptics,
 )
 from modules.dualsense.output_state import ControllerVisualState
+
+
+def test_bluetooth_power_off_feature_report_matches_reference_fixture():
+    report = build_bluetooth_power_off_report()
+
+    assert isinstance(report, bytes)
+    assert len(report) == BT_CONTROL_REPORT_SIZE == 48
+    assert report[0] == BT_CONTROL_REPORT_ID == 0x08
+    assert report[1] == 0x02
+    assert report[2:44] == bytes(42)
+    assert report.hex() == (
+        "0802000000000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000e0efa223"
+    )
+    assert struct.unpack_from("<I", report, 44)[0] == 0x23A2EFE0
 
 
 def test_quantize_haptics_interleaves_signed_left_and_right_samples():

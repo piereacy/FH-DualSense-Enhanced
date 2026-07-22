@@ -1,22 +1,34 @@
 from __future__ import annotations
 
 import logging
+import importlib
 import sys
 import threading
 import time
 from collections.abc import Sequence
+from typing import Any
 
 from .frame import HapticFrame, SILENT_FRAME
 from .pcm import HapticPcmRenderer
 
 try:
     import numpy as np
-    import sounddevice as sd
 except (ImportError, OSError):
     np = None
-    sd = None
 
 log = logging.getLogger("fhds.haptics.audio")
+
+_DEFAULT_DEPENDENCY = object()
+
+
+def _load_sounddevice():
+    """Import sounddevice only when a USB stream is actually eligible.
+
+    sounddevice initializes PortAudio at import time.  Keeping this import out
+    of module initialization lets a BT -> USB handover wait until Windows has
+    published the controller's USB audio endpoint.
+    """
+    return importlib.import_module("sounddevice")
 
 
 def find_dualsense_output_device(
@@ -50,15 +62,16 @@ def find_dualsense_output_device(
 class UsbAudioHaptics:
     def __init__(
         self,
-        sounddevice_module=sd,
-        numpy_module=np,
+        sounddevice_module: Any = _DEFAULT_DEPENDENCY,
+        numpy_module: Any = _DEFAULT_DEPENDENCY,
         platform: str | None = None,
         sample_rate: int = 48_000,
         blocksize: int = 512,
         renderer: HapticPcmRenderer | None = None,
     ):
-        self._sd = sounddevice_module
-        self._np = numpy_module
+        self._load_default_sounddevice = sounddevice_module is _DEFAULT_DEPENDENCY
+        self._sd = None if self._load_default_sounddevice else sounddevice_module
+        self._np = np if numpy_module is _DEFAULT_DEPENDENCY else numpy_module
         self._platform = platform or sys.platform
         self.sample_rate = sample_rate
         self.blocksize = blocksize
@@ -90,6 +103,12 @@ class UsbAudioHaptics:
     def start(self) -> bool:
         if self._running:
             return True
+        if self._load_default_sounddevice:
+            self._load_default_sounddevice = False
+            try:
+                self._sd = _load_sounddevice()
+            except (ImportError, OSError):
+                self._sd = None
         if self._sd is None or self._np is None:
             self._warn_once("dependencies", "USB body haptics unavailable: NumPy or sounddevice is missing.")
             return False

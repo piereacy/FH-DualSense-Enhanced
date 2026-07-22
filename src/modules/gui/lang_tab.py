@@ -40,7 +40,7 @@ class LangTab(ctk.CTkFrame):
             holder, bg="#1e1f22", fg="#e5e7eb",
             selectbackground=T.ACCENT, selectforeground="white",
             borderwidth=0, highlightthickness=0, activestyle="none",
-            font=("Segoe UI", self.app.font_size(11)),
+            font=(self.app.ui_font_family, self.app.font_size(11)),
         )
         self.listbox.pack(fill="both", expand=True, padx=4, pady=4)
         self.listbox.bind("<<ListboxSelect>>", self._on_select)

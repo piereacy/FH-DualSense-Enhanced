@@ -13,8 +13,14 @@ BT_HAPTICS_REPORT_SIZE = 398
 BT_HAPTICS_SAMPLE_BYTES = 64
 BT_HAPTICS_FRAMES = 32
 BT_HAPTICS_SAMPLE_RATE = 3000
+BT_CONTROL_REPORT_ID = 0x08
+BT_CONTROL_REPORT_SIZE = 48
 
 _BT_OUTPUT_CRC_SEED = zlib.crc32(b"\xA2")
+# Bluetooth SET_FEATURE checksums include the HIDP transaction byte 0x53.
+# hidapi adds that byte on the wire, so its user buffer begins at report id 0x08
+# while CRC continuation starts from the finalized CRC of 0x53.
+_BT_FEATURE_CRC_SEED = zlib.crc32(b"\x53")
 _STATE_SIZE = 63
 _STATE_OFFSET = 13
 _STATE_FLAG0 = 0
@@ -28,6 +34,17 @@ _STATE_PLAYER_LEDS = 43
 _STATE_LIGHTBAR_R = 44
 _STATE_LIGHTBAR_G = 45
 _STATE_LIGHTBAR_B = 46
+
+
+def build_bluetooth_power_off_report() -> bytes:
+    """Build the CRC-protected feature report requesting BT controller power-off."""
+    report = bytearray(BT_CONTROL_REPORT_SIZE)
+    report[0] = BT_CONTROL_REPORT_ID
+    report[1] = 0x02
+    checksum_offset = BT_CONTROL_REPORT_SIZE - 4
+    crc = zlib.crc32(memoryview(report)[:checksum_offset], _BT_FEATURE_CRC_SEED)
+    struct.pack_into("<I", report, checksum_offset, crc)
+    return bytes(report)
 
 
 def quantize_haptics(pcm, *, numpy_module) -> bytes:

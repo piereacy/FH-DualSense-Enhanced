@@ -29,6 +29,10 @@ class DSXClient:
 
     def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT,
                  startup_pulse_force=180, enable_startup_pulse=True):
+        host = str(host).strip()
+        port = int(port)
+        if not host or not 1 <= port <= 65535:
+            raise ValueError("DSX target must use a non-empty host and port 1..65535")
         self._addr = (host, port)
         self._sock = None
         self._connected = False
@@ -42,6 +46,8 @@ class DSXClient:
         return self._connected
 
     def open(self):
+        if self._sock is not None:
+            return
         try:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         except OSError as e:
@@ -89,5 +95,5 @@ class DSXClient:
             try:
                 self._sock.sendto(data, self._addr)
                 self._sent += 1
-            except OSError as e:
+            except (OSError, OverflowError, ValueError) as e:
                 log.debug("DSX send failed: %s", e)

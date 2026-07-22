@@ -15,7 +15,7 @@
   "brake_static_wall_force": 255,
   "enable_handbrake_bonus": false,
   "handbrake_bonus": 0,
-  "enable_abs": true,
+  "enable_abs": false,
   "abs_brake_threshold": 255,
   "abs_min_speed_kmh": 6.0,
   "abs_slip_ratio_threshold": 0.3,

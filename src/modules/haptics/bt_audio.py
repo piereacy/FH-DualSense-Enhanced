@@ -67,9 +67,11 @@ class BluetoothAudioHaptics:
         thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=1.0)
-            if not thread.is_alive():
-                self._thread = None
-                self._running = False
+            if thread.is_alive():
+                log.error("Bluetooth haptics worker did not stop; reset deferred")
+                return
+            self._thread = None
+            self._running = False
         self._failed = False
         self._warned_failure = False
 
@@ -78,8 +80,12 @@ class BluetoothAudioHaptics:
             self._frame = frame
 
     def start(self) -> bool:
-        if self._running:
-            return True
+        thread = self._thread
+        if thread is not None:
+            if thread.is_alive():
+                return self._running
+            self._thread = None
+            self._running = False
         queue = getattr(self._controller, "queue_bt_haptics", None)
         if (
             self._failed
@@ -146,6 +152,9 @@ class BluetoothAudioHaptics:
         self._stop_event.set()
         if thread is not threading.current_thread():
             thread.join(timeout=1.0)
+        if thread.is_alive():
+            log.error("Bluetooth haptics worker did not stop within 1 second")
+            return
         self._thread = None
         self._running = False
 

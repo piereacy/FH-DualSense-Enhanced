@@ -1,6 +1,7 @@
 """Profiles tab: manage named Settings snapshots."""
 import logging
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Input, Label, ListItem, ListView, Static
@@ -79,7 +80,11 @@ class ProfilesTab(Vertical):
                 yield Input(placeholder="FHDS:...", id="share-code")
                 yield Button(t("Export & Copy"), id="share-export")
                 yield Button(t("Import"), id="share-import", variant="success")
-        yield Static(t("File: {path}").format(path=preferences.PATH), id="profile-path")
+        yield Static(
+            t("File: {path}").format(path=preferences.PATH),
+            id="profile-path",
+            markup=False,
+        )
 
     def on_mount(self):
         self.refresh_list()
@@ -87,7 +92,7 @@ class ProfilesTab(Vertical):
     def _active_text(self) -> str:
         store = profiles.load_profiles()
         active = store.get("active") or t("(none)")
-        return t("Active: {name}").format(name=f"[b]{active}[/b]")
+        return t("Active: {name}").format(name=f"[b]{escape(str(active))}[/b]")
 
     def refresh_list(self):
         store = profiles.load_profiles()
@@ -95,7 +100,12 @@ class ProfilesTab(Vertical):
         active = store.get("active", "")
         lv.clear()
         for name in profiles.list_profile_names(store):
-            label = f"{name}  [dim]({t('active')})[/]" if name == active else name
+            visible_name = escape(str(name))
+            label = (
+                f"{visible_name}  [dim]({t('active')})[/]"
+                if name == active
+                else visible_name
+            )
             lv.append(ListItem(Static(label, markup=True), name=name))
         self.query_one("#profile-active", Static).update(self._active_text())
         if hasattr(self.app, "refresh_profile"):
@@ -116,6 +126,8 @@ class ProfilesTab(Vertical):
             log.warning("Profile name is empty.")
             return
         final = profiles.save_profile(name, self.settings)
+        if final and hasattr(self.app, "mark_default_saved"):
+            self.app.mark_default_saved()
         widget.value = ""
         self.refresh_list()
         if final and final != name:
@@ -199,7 +211,9 @@ class ProfilesTab(Vertical):
         self._share_input().value = code
         try:
             self.app.copy_to_clipboard(code)
-            self._notify(t("Copied {name} to clipboard.").format(name=name))
+            self._notify(
+                t("Copied {name} to clipboard.").format(name=escape(str(name)))
+            )
         except Exception:
             self._notify(t("Copy failed. Select the code and copy manually."),
                          "warning")
@@ -216,5 +230,5 @@ class ProfilesTab(Vertical):
             return
         self._share_input().value = ""
         self.refresh_list()
-        self._notify(t("Imported as {name}.").format(name=final))
+        self._notify(t("Imported as {name}.").format(name=escape(str(final))))
         log.info("Imported profile as %s", final)

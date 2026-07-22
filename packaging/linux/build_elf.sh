@@ -20,10 +20,12 @@ echo "Building FH-DualSense-Enhanced R$VER ..."
 
 rm -rf "$WORK" "$DIST"
 
-uvx --from "pyinstaller>=6.11.1" \
-    --with customtkinter --with textual \
-    --with hidapi --with psutil --with dotenv \
-    --with pystray --with pillow \
+# The frozen build uses pystray's locked python-xlib backend. PyGObject and
+# pycairo are source-build dependencies on Linux and are not required inside
+# this one-file artifact.
+uv sync --project "$ROOT/src" --frozen \
+    --no-install-package pygobject --no-install-package pycairo
+uv run --project "$ROOT/src" --frozen --no-sync \
     pyinstaller "$HERE/fhds.spec" \
     --distpath "$DIST" --workpath "$WORK" \
     --noconfirm --clean

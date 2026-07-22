@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
 def _byte(value) -> int:
-    return max(0, min(255, int(round(float(value)))))
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    if not math.isfinite(number):
+        return 0
+    return max(0, min(255, int(round(number))))
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +33,10 @@ class ControllerVisualState:
                 raise ValueError("lightbar requires exactly three channels")
         player_leds = None
         if self.player_leds is not None:
-            player_leds = max(0, min(0x1F, int(self.player_leds)))
+            try:
+                player_leds = max(0, min(0x1F, int(self.player_leds)))
+            except (TypeError, ValueError, OverflowError):
+                player_leds = 0
         return ControllerVisualState(lightbar=lightbar, player_leds=player_leds)
 
 

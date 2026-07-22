@@ -6,6 +6,7 @@ import json
 import re
 import threading
 import time
+import uuid
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -174,9 +175,17 @@ class UpdateService:
             "sha256": digest.lower(),
         }
         self._pending_meta.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._pending_meta.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        tmp.replace(self._pending_meta)
+        tmp = self._pending_meta.with_name(
+            f".{self._pending_meta.name}.{uuid.uuid4().hex}.tmp"
+        )
+        try:
+            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            tmp.replace(self._pending_meta)
+        finally:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _load_pending(self) -> None:
         meta = self._pending_meta

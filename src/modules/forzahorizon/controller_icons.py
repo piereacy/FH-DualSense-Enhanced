@@ -6,7 +6,9 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -26,6 +28,8 @@ TARGETS = (
     Path("media/UI/Textures/Data_Bound/ControllerIcons.zip"),
     Path("media/UI/Textures/HiRes/Data_Bound/ControllerIcons.zip"),
 )
+_BACKUP_GENERATION = re.compile(r"^[0-9a-f]{32}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ControllerIconState(str, Enum):
@@ -80,7 +84,11 @@ def _backup_dir(root: Path, data_dir: Path) -> Path:
     return data_dir / "controller_icon_backups" / identity
 
 
-def _backup_path(backup_dir: Path, index: int) -> Path:
+def _backup_path(backup_dir: Path, index: int, generation: str = "") -> Path:
+    if generation:
+        if not _BACKUP_GENERATION.fullmatch(generation):
+            raise ControllerIconModError("Controller-icon backup generation is invalid")
+        return backup_dir / "generations" / generation / f"original_{index}.zip"
     return backup_dir / f"original_{index}.zip"
 
 
@@ -88,18 +96,41 @@ def _manifest_path(backup_dir: Path) -> Path:
     return backup_dir / "manifest.json"
 
 
+def _path_identity(path: str | os.PathLike) -> str:
+    return os.path.normcase(os.path.abspath(os.fspath(path)))
+
+
+def _manifest_generation(manifest: dict) -> str:
+    version = manifest.get("version", 1)
+    if version == 1:
+        return ""
+    generation = manifest.get("backup_generation")
+    if version != 2 or not isinstance(generation, str) or not _BACKUP_GENERATION.fullmatch(generation):
+        raise ControllerIconModError("Controller-icon backup manifest version is invalid")
+    return generation
+
+
 def _read_manifest(root: Path, backup_dir: Path) -> dict | None:
     try:
         manifest = json.loads(_manifest_path(backup_dir).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError):
         return None
-    if not isinstance(manifest, dict) or manifest.get("root") != str(root):
+    stored_root = manifest.get("root") if isinstance(manifest, dict) else None
+    if not isinstance(stored_root, str) or _path_identity(stored_root) != _path_identity(root):
         return None
     originals = manifest.get("original_sha256")
-    if not isinstance(originals, list) or len(originals) != len(TARGETS):
+    if (
+        not isinstance(originals, list)
+        or len(originals) != len(TARGETS)
+        or any(not isinstance(value, str) or not _SHA256.fullmatch(value) for value in originals)
+    ):
+        return None
+    try:
+        generation = _manifest_generation(manifest)
+    except ControllerIconModError:
         return None
     for index, expected in enumerate(originals):
-        backup = _backup_path(backup_dir, index)
+        backup = _backup_path(backup_dir, index, generation)
         try:
             if not backup.is_file() or _sha256(backup) != expected:
                 return None
@@ -151,46 +182,67 @@ def inspect_controller_icons(
 
 
 def _atomic_copy(source: Path, target: Path) -> None:
-    temporary = target.with_name(f".{target.name}.fhds-tmp")
+    temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.fhds-tmp")
     try:
         shutil.copy2(source, temporary)
         os.replace(temporary, target)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _atomic_bytes(payload: bytes, target: Path) -> None:
-    temporary = target.with_name(f".{target.name}.fhds-tmp")
+    temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.fhds-tmp")
     try:
         temporary.write_bytes(payload)
         os.replace(temporary, target)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _write_backup(root: Path, backup_dir: Path) -> dict:
     backup_dir.mkdir(parents=True, exist_ok=True)
+    generation = uuid.uuid4().hex
+    generation_dir = backup_dir / "generations" / generation
+    generation_dir.mkdir(parents=True, exist_ok=False)
     hashes: list[str] = []
-    for index, relative in enumerate(TARGETS):
-        source = root / relative
-        backup = _backup_path(backup_dir, index)
-        _atomic_copy(source, backup)
-        hashes.append(_sha256(backup))
-    manifest = {
-        "version": 1,
-        "root": str(root),
-        "mod_version": MOD_VERSION,
-        "mod_sha256": MOD_SHA256,
-        "original_sha256": hashes,
-    }
-    manifest_path = _manifest_path(backup_dir)
-    temporary = manifest_path.with_suffix(".json.tmp")
     try:
-        temporary.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        os.replace(temporary, manifest_path)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return manifest
+        for index, relative in enumerate(TARGETS):
+            source = root / relative
+            backup = _backup_path(backup_dir, index, generation)
+            source_hash = _sha256(source)
+            _atomic_copy(source, backup)
+            if _sha256(backup) != source_hash or _sha256(source) != source_hash:
+                raise ControllerIconModError(
+                    f"Original controller-icon backup {index + 1} failed verification"
+                )
+            hashes.append(source_hash)
+        manifest = {
+            "version": 2,
+            "root": str(root),
+            "mod_version": MOD_VERSION,
+            "mod_sha256": MOD_SHA256,
+            "backup_generation": generation,
+            "original_sha256": hashes,
+        }
+        # Commit the manifest last. Until this atomic write succeeds, an older
+        # manifest still points at its untouched generation and remains usable.
+        _atomic_bytes(
+            json.dumps(manifest, indent=2).encode("utf-8"),
+            _manifest_path(backup_dir),
+        )
+        return manifest
+    except Exception:
+        try:
+            shutil.rmtree(generation_dir)
+        except OSError:
+            log.warning("Could not remove incomplete controller-icon backup %s", generation)
+        raise
 
 
 def _ensure_game_closed(game_running: Callable[[], bool]) -> None:
@@ -204,20 +256,28 @@ def _ensure_game_closed(game_running: Callable[[], bool]) -> None:
 
 def _restore_from_manifest(root: Path, backup_dir: Path, manifest: dict) -> None:
     targets = [root / relative for relative in TARGETS]
-    previous = [target.read_bytes() for target in targets]
+    generation = _manifest_generation(manifest)
+    previous: list[bytes] | None = None
     try:
+        previous = [target.read_bytes() for target in targets]
         for index, target in enumerate(targets):
-            _atomic_copy(_backup_path(backup_dir, index), target)
-    except OSError as exc:
+            _atomic_copy(_backup_path(backup_dir, index, generation), target)
+        restored = [_sha256(target) for target in targets]
+        if restored != manifest["original_sha256"]:
+            raise ControllerIconModError("Restored controller icons failed verification")
+    except (OSError, ControllerIconModError) as exc:
+        if previous is None:
+            raise ControllerIconModError(
+                f"Could not preserve current controller icons before restore: {exc}"
+            ) from exc
         for payload, target in zip(previous, targets, strict=True):
             try:
                 _atomic_bytes(payload, target)
             except OSError:
                 log.exception("Controller-icon rollback failed for %s", target)
+        if isinstance(exc, ControllerIconModError):
+            raise
         raise ControllerIconModError(f"Could not restore original controller icons: {exc}") from exc
-    restored = [_sha256(target) for target in targets]
-    if restored != manifest["original_sha256"]:
-        raise ControllerIconModError("Restored controller icons failed verification")
 
 
 def install_controller_icons(
@@ -225,7 +285,7 @@ def install_controller_icons(
     *,
     data_dir: Path = paths.DATA,
     asset_path: Path = paths.CONTROLLER_ICON_MOD,
-    game_running: Callable[[], bool] = lambda: is_forza_game_running("fh6"),
+    game_running: Callable[[], bool] = lambda: is_forza_game_running("fh6", strict=True),
 ) -> ControllerIconInspection:
     validated = validate_controller_icon_root(root)
     if validated is None:
@@ -256,15 +316,16 @@ def install_controller_icons(
     try:
         for target in targets:
             _atomic_copy(asset_path, target)
-    except OSError as exc:
+        if any(_sha256(target) != mod_hash for target in targets):
+            raise ControllerIconModError("Installed controller icons failed verification")
+    except (OSError, ControllerIconModError) as exc:
         try:
             _restore_from_manifest(validated, backup_dir, manifest)
         except ControllerIconModError:
             log.exception("Controller-icon install rollback failed")
+        if isinstance(exc, ControllerIconModError):
+            raise
         raise ControllerIconModError(f"Could not install controller icons: {exc}") from exc
-    if any(_sha256(target) != mod_hash for target in targets):
-        _restore_from_manifest(validated, backup_dir, manifest)
-        raise ControllerIconModError("Installed controller icons failed verification")
     return inspect_controller_icons(validated, data_dir=data_dir, asset_path=asset_path)
 
 
@@ -273,7 +334,7 @@ def restore_controller_icons(
     *,
     data_dir: Path = paths.DATA,
     asset_path: Path = paths.CONTROLLER_ICON_MOD,
-    game_running: Callable[[], bool] = lambda: is_forza_game_running("fh6"),
+    game_running: Callable[[], bool] = lambda: is_forza_game_running("fh6", strict=True),
 ) -> ControllerIconInspection:
     validated = validate_controller_icon_root(root)
     if validated is None:

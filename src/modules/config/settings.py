@@ -37,7 +37,7 @@ class Settings:
 
     # MARK: L2 ABS pulse
     # GT7-style wall: lower zones pulse while the top zones stay maxed.
-    enable_abs: bool = True
+    enable_abs: bool = False
     abs_brake_threshold: int = 255            # min brake byte to arm
     abs_min_speed_kmh: float = 6.0            # low-speed gate only; does not scale intensity
     abs_slip_ratio_threshold: float = 0.3     # per-wheel slip trigger
@@ -195,14 +195,16 @@ class Settings:
     startup_pulse_force: int = 150            # one-shot force test on connect
 
     # MARK: System - reconnect
-    # Off by default for HidHide compatibility. On = USB unplug/replug recovers without restart.
-    enable_reconnect: bool = False
+    # Full disconnects retry by default. Same-controller USB/BT handover is
+    # automatic regardless of this toggle.
+    enable_reconnect: bool = True
     reconnect_interval_s: float = 5.0         # retry cadence when disconnected
 
     # MARK: System - controller selection
     # Lock to a specific DualSense by serial. Empty = auto (first found).
     # Soft lock: falls back to first-found if the locked one is missing.
-    # USB and BT report different serials for the same controller.
+    # USB and BT may expose different raw identifiers; native topology normalizes
+    # USB feature-report and BT identities before transport handover decisions.
     controller_lock_serial: str = ""
 
     # MARK: System - updates

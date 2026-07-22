@@ -53,7 +53,6 @@ STRINGS = {
     "Left trigger - Static wall (optional)": "左トリガー - 固定ウォール（任意）",
     "Right trigger - Gas force": "右トリガー - アクセルの強さ",
     "ABS (anti-lock brake) rumble": "ABS（アンチロックブレーキ）振動",
-    "Idle buzz": "アイドリング振動",
     "Gear shift thump": "シフトショック",
 
     # --- settings tab fields ---
@@ -98,6 +97,20 @@ STRINGS = {
     "Forza telemetry (applies on next launch)": "Forza テレメトリ（次回起動時に適用）",
     "Startup pulse": "起動時の振動",
     "Reconnect": "再接続",
+    "Connection and reconnect": "接続と再接続",
+    "Reconnect now": "今すぐ再接続",
+    "Charging {percent}%": "充電中 {percent}%",
+    "Charging": "充電中",
+    "Fully charged": "充電完了",
+    "Battery unavailable": "バッテリー情報なし",
+    "Reading battery": "バッテリーを読み取り中",
+    "Switching connection": "接続を切り替え中",
+    "Reconnecting": "再接続中",
+    "Connecting": "接続中",
+    "Connection error": "接続エラー",
+    "Display scaling": "表示スケーリング",
+    "Per-Monitor v2 is not active. Check the EXE compatibility high-DPI override.":
+        "Per-Monitor v2 が有効ではありません。EXE の互換性にある高 DPI 上書き設定を確認してください。",
     "Application behavior": "アプリの動作",
     "Game detection": "ゲーム検出",
     "UDP port": "UDP ポート",
@@ -287,6 +300,23 @@ STRINGS.update({
     "Show gear on player LEDs": "プレイヤーLEDでギアを表示",
     "Gears 1 to 5+ use the five white player indicator LEDs.":
         "1速から5速以上を5個の白いプレイヤーLEDで表示します。",
+})
+
+STRINGS.update({
+    "L2 - Brake": "L2 - ブレーキ",
+    "R2 - Throttle": "R2 - アクセル",
+})
+
+STRINGS.update({
+    "Trigger feedback": "トリガーフィードバック",
+    "L2/R2 switches and tuning. Changes save instantly.": "L2/R2 トリガーのスイッチと調整です。変更は即時保存されます。",
+    "Grip switches and tuning. Changes save instantly.": "グリップ触覚のスイッチと調整です。変更は即時保存されます。",
+    "Shared trigger feedback": "共有トリガーフィードバック",
+    "Tire grip trigger feedback": "タイヤグリップのトリガーフィードバック",
+    "Tire grip trigger strength": "タイヤグリップのトリガー強度",
+    "Body haptics tuning": "グリップ触覚の調整",
+    "Tire grip trigger advanced tuning": "タイヤグリップ・トリガー詳細調整",
+    "Uses the same haptic mix over USB and Bluetooth; only the transport path differs. Disable in-game vibration to prevent competing or doubled grip output.": "USB と Bluetooth で同じ触覚ミックスを使用し、転送経路のみが異なります。競合や重複を防ぐため、ゲーム内振動を無効にしてください。",
 })
 
 STRINGS.update({

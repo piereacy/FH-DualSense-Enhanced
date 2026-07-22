@@ -30,7 +30,9 @@ from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 log = logging.getLogger("fhds")
 
 class SystemTab(SettingsTab):
-    SECTIONS = SYSTEM_SECTIONS
+    SWITCH_SECTIONS: tuple = ()
+    SECTIONS: list = SYSTEM_SECTIONS
+    EXPERIMENTAL_SECTIONS: tuple = ()
     SHOW_RESET = False
     SHOW_EXPERIMENTAL = False
 
@@ -56,8 +58,8 @@ class SystemTab(SettingsTab):
             allow_blank=False,
             id="preferred_forza_platform",
         )
-        yield Label("", id="xinput-status")
-        yield Label("", id="xinput-detail", classes="hint")
+        yield Label("", id="xinput-status", markup=False)
+        yield Label("", id="xinput-detail", classes="hint", markup=False)
         with Horizontal(id="xinput-buttons"):
             yield Button(t("Install ViGEmBus"), id="xinput-action", disabled=True)
 
@@ -70,6 +72,7 @@ class SystemTab(SettingsTab):
             yield RadioSet(*self._build_controller_buttons(), id="controller-radio")
             with Horizontal(id="controller-buttons"):
                 yield Button(t("Rescan"), id="controller-rescan")
+                yield Button(t("Reconnect now"), id="controller-reconnect")
         yield Label(
             t("DSX is active - controller managed by DSX. "
               "Disable DSX to select a controller here."),
@@ -92,7 +95,12 @@ class SystemTab(SettingsTab):
                 disabled=not updater_supported,
             )
             yield Label(t("Download updates in the background"))
-        yield Label(t("Update status: idle"), id="update-status", classes="hint")
+        yield Label(
+            t("Update status: idle"),
+            id="update-status",
+            classes="hint",
+            markup=False,
+        )
         yield ProgressBar(total=100, show_eta=False, id="update-progress")
         with Horizontal(id="update-buttons"):
             yield Button(
@@ -101,6 +109,7 @@ class SystemTab(SettingsTab):
                 disabled=not updater_supported,
             )
             yield Button(t("Download update"), id="update-action", disabled=True)
+            yield Button(t("View release"), id="update-release", disabled=True)
 
         yield from super().compose()
 
@@ -122,6 +131,7 @@ class SystemTab(SettingsTab):
             action.disabled = False
         else:
             action.disabled = True
+        self.query_one("#update-release", Button).disabled = snapshot.release is None
         self._refresh_xinput_status()
 
     def _refresh_xinput_status(self) -> None:
@@ -327,6 +337,12 @@ class SystemTab(SettingsTab):
                 self.app.notify(result.error, severity="error")
         elif event.button.id == "controller-rescan":
             await self._rerender_controller()
+        elif event.button.id == "controller-reconnect":
+            controller = getattr(self.app, "_ds", None)
+            reconnect = getattr(controller, "force_reconnect", None)
+            if callable(reconnect):
+                reconnect()
+                log.info("Immediate DualSense reconnect requested")
         elif event.button.id == "update-check":
             self.app._update_service.check_now()
         elif event.button.id == "update-action":
@@ -334,12 +350,13 @@ class SystemTab(SettingsTab):
             if snapshot.phase is UpdatePhase.AVAILABLE:
                 self.app._update_service.download()
             elif snapshot.phase is UpdatePhase.READY:
-                try:
-                    self.app._update_service.install_on_exit()
-                except Exception as exc:
-                    log.warning("Could not start update install: %s", exc)
-                    return
-                self.app.exit()
+                self.app.request_close(
+                    before_exit=self.app._update_service.install_on_exit,
+                )
+        elif event.button.id == "update-release":
+            release = self.app._update_service.snapshot().release
+            if release is not None and release.html_url:
+                self.app._open_url(release.html_url)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         super().on_switch_changed(event)

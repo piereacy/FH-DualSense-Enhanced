@@ -143,7 +143,7 @@ class OverviewTab(ctk.CTkFrame):
         row.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
         row.grid_columnconfigure((0, 1), weight=1, uniform="quick")
         W.PrimaryButton(
-            row, text=t("Driving feedback"), command=lambda: self.app._select_nav("Driving")
+            row, text=t("Trigger feedback"), command=lambda: self.app._select_nav("Driving")
         ).grid(row=0, column=0, sticky="ew", padx=(0, T.PAD_XS), pady=(0, T.PAD_XS))
         W.SecondaryButton(
             row, text=t("Grip haptics"), command=lambda: self.app._select_nav("Haptics")

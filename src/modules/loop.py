@@ -19,6 +19,7 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
     controller = forzahorizon.Controller(s)
     haptic_mixer = HapticMixer()
     collision_detector = forzahorizon.CollisionDetector()
+    redline_detector = forzahorizon.RedlineDetector()
     lighting = forzahorizon.LightingController()
     if usb_audio is None:
         haptic_manager = HapticManager(ds, s)
@@ -38,7 +39,6 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
         while True:
             if stop_event is not None and stop_event.is_set():
                 break
-            now = time.monotonic()
             if s.exit_on_game_close:
                 # Never let watcher errors kill the loop silently.
                 try:
@@ -49,8 +49,25 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                     log.warning("game-close watcher error: %s", e)
 
             pkt, addr = listener.recv_latest()
+            now = time.monotonic()
 
-            if pkt is None:
+            telemetry = None
+            if pkt is not None:
+                try:
+                    telemetry = forzahorizon.parse_packet(pkt)
+                except ValueError as e:
+                    log.warning(
+                        "Bad packet from %s:%d (%d bytes): %s",
+                        addr[0],
+                        addr[1],
+                        len(pkt),
+                        e,
+                    )
+
+            # A datagram is not proof of live telemetry until it parses. This
+            # keeps malformed traffic from holding the previous trigger and
+            # haptic frame indefinitely.
+            if telemetry is None:
                 idle = now - last_pkt
                 if idle > 5.0 and not getattr(listener, "lost", False):
                     log.warning("No UDP packets yet - check Forza Horizon Data Out IP/port and Windows Firewall")
@@ -60,6 +77,7 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                         haptic_mixer.reset()
                     except Exception as e:
                         log.debug("haptic mixer reset failed: %s", e)
+                    redline_detector.reset_transients()
                     try:
                         rumble = haptic_manager.route(SILENT_FRAME)
                     except Exception as e:
@@ -96,19 +114,28 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                     " [DSX]" if dsx_mode else "",
                 )
 
+            t = telemetry
+
             try:
-                t = forzahorizon.parse_packet(pkt)
-            except ValueError as e:
-                log.warning("Bad packet from %s:%d (%d bytes): %s", addr[0], addr[1], len(pkt), e)
-                continue
+                redline = redline_detector.update(t, now)
+                t["effective_redline_rpm"] = redline.effective_rpm
+                t["rev_limiter_active"] = redline.limiter_active
+                t["redline_confidence"] = redline.confidence
+            except Exception as e:
+                # The raw max_rpm path remains a safe fallback if inference
+                # sees malformed or incomplete telemetry.
+                log.debug("dynamic redline detector failed: %s", e)
 
             # Never let controller logic block later telemetry frames.
+            collision_signal = None
             try:
                 collision_signal = collision_detector.update(t, s, now)
                 left, right = controller.update(t, s, collision_signal)
             except Exception as e:
                 log.warning("controller.update failed: %s", e)
-                continue
+                # Fail closed instead of leaving the last adaptive-trigger
+                # effect latched while independent body haptics keep running.
+                left, right = OFF, OFF
 
             try:
                 haptic_frame = haptic_mixer.update(t, s, now, collision_signal)

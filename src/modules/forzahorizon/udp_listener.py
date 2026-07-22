@@ -5,6 +5,7 @@ Always returns the *latest* packet (drains queued ones) so I never react
 to stale telemetry.
 """
 import logging
+import math
 import socket
 import struct
 import threading
@@ -40,7 +41,14 @@ class TelemetrySnapshot:
 def parse_packet(p: bytes) -> dict:
     if len(p) < 323:
         raise ValueError(f"Packet too short: {len(p)}")
-    f = lambda o: struct.unpack_from("<f", p, o)[0]  # noqa: E731
+
+    def f(offset: int) -> float:
+        value = struct.unpack_from("<f", p, offset)[0]
+        # UDP is not a trusted numeric boundary. A malformed NaN used to turn
+        # some min/max clamps into full-strength feedback and could crash the
+        # optional lighting path. Invalid floats carry no useful telemetry.
+        return value if math.isfinite(value) else 0.0
+
     i = lambda o: struct.unpack_from("<i", p, o)[0]  # noqa: E731
     b = lambda o: struct.unpack_from("<b", p, o)[0]  # noqa: E731
     u32 = lambda o: struct.unpack_from("<I", p, o)[0]  # noqa: E731
@@ -106,7 +114,9 @@ def parse_packet(p: bytes) -> dict:
         "car_performance_index": i(220),
         "drive_train": i(224),
         "num_cylinders": i(228),
-        # FH6 inserted 3 fields here (garbage values on older titles)
+        # Horizon's 324-byte Dash layout keeps a 12-byte extension here.
+        # The first word is community-mapped as a car category/group; the
+        # remaining values are useful collision signals where populated.
         "car_group": u32(232),
         "smashable_vel_diff": f(236),
         "smashable_mass": f(240),
@@ -143,17 +153,20 @@ def parse_packet(p: bytes) -> dict:
 class UDPListener:
     """UDP listener that always returns the most recent packet.
 
-    Uses a single dual-stack IPv6 socket (V6ONLY=0) so packets sent to
-    either IPv4 or IPv6 localhost are received with no user config.
-    Falls back to IPv4 if IPv6 is unavailable.
+    Binds the configured address exactly. An explicit IPv4 or IPv6 address
+    stays in that family; only the IPv6 wildcard uses a dual-stack socket.
     """
 
     def __init__(self, host: str, port: int, timeout: float = 0.5,
                  forward_to: str = "", forward_enabled: bool = True,
                  *, clock=None):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
+        self.host = str(host)
+        self.port = int(port)
+        self.timeout = float(timeout)
+        if not 1 <= self.port <= 65535:
+            raise ValueError("UDP port must be between 1 and 65535")
+        if not math.isfinite(self.timeout) or self.timeout <= 0.0:
+            raise ValueError("UDP timeout must be a positive finite number")
         self.sock: socket.socket | None = None
         self.lost = False
         self._warned_sizes: set[int] = set()
@@ -209,6 +222,7 @@ class UDPListener:
         return False
 
     def _open_dual_stack(self) -> socket.socket | None:
+        s = None
         try:
             s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
             s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
@@ -217,11 +231,29 @@ class UDPListener:
             log.info("UDP listening on [::]:%d (IPv4+IPv6)", self.port)
             return s
         except OSError as e:
+            if s is not None:
+                s.close()
             log.warning("Dual-stack bind failed, falling back to IPv4: %s", e)
+            return None
+
+    def _open_ipv6(self) -> socket.socket | None:
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            s.bind((self.host, self.port))
+            log.info("UDP listening on [%s]:%d (IPv6)", self.host, self.port)
+            return s
+        except OSError as e:
+            if s is not None:
+                s.close()
+            log.warning("IPv6 bind on [%s]:%d failed: %s", self.host, self.port, e)
             return None
 
     def _open_ipv4(self) -> socket.socket | None:
         # MARK: return None on bind failure so __enter__ can raise with context
+        s = None
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             try:
@@ -232,11 +264,25 @@ class UDPListener:
             log.info("UDP listening on %s:%d (IPv4)", self.host, self.port)
             return s
         except OSError as e:
+            if s is not None:
+                s.close()
             log.warning("IPv4 bind on %s:%d failed: %s", self.host, self.port, e)
             return None
 
     def __enter__(self):
-        self.sock = self._open_dual_stack() or self._open_ipv4()
+        if self.host in ("", "::"):
+            self.sock = self._open_dual_stack()
+            if self.sock is None:
+                original_host = self.host
+                self.host = "0.0.0.0"
+                try:
+                    self.sock = self._open_ipv4()
+                finally:
+                    self.host = original_host
+        elif ":" in self.host:
+            self.sock = self._open_ipv6()
+        else:
+            self.sock = self._open_ipv4()
         if self.sock is None:
             raise OSError(
                 f"UDP port {self.port} could not be bound (in use, blocked, or invalid host {self.host!r})"
