@@ -166,15 +166,16 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R6 中文说明" in workflow
-    assert "Enhanced R6 English notes" in workflow
-    assert "游戏平台扩展为 Steam 与 Xbox App" in workflow
-    assert "内置 DualSense 到 XInput 连接桥" in workflow
-    assert "独立的“FH6 实用功能”页面" in workflow
-    assert "中文文字 + 英文语音" in workflow
-    assert "DualSense-to-XInput bridge" in workflow
-    assert "A dedicated FH6 Utilities page" in workflow
-    assert "steam://run/<app-id>" in workflow
+    assert "Enhanced R7 中文说明" in workflow
+    assert "Enhanced R7 English notes" in workflow
+    assert "控制器连接真值" in workflow
+    assert "动态红线估计器" in workflow
+    assert "事务式并排安装" in workflow
+    assert "temporary Bluetooth signal gap" in workflow
+    assert "transactional side-by-side installation" in workflow
+    assert "runtime.log" in workflow
+    assert "[@hotline1337](https://github.com/hotline1337)" in workflow
+    assert "https://www.nexusmods.com/forzahorizon6/mods/2" in workflow
     assert "disable in-game vibration" in workflow
     assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
     assert "HorizonHaptics 1.3.0" in workflow

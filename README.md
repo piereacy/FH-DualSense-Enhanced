@@ -18,12 +18,12 @@ This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6
 
 ## What Enhanced adds over upstream 1.6.2
 
-- Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, redline, and directional impact feedback.
+- Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, dynamic redline learning, and directional impact feedback.
 - Expanded adaptive-trigger behavior adds dynamic traction and wheelspin, surface-aware frequency bands, zoned ABS, and optional telemetry layers.
-- USB and Bluetooth use the same stereo haptic mix; Bluetooth adds an HD transport with automatic compatible fallback.
-- Community-informed defaults, persistent Default autosave, named per-car profiles, and safe factory restore provide a more reliable configuration workflow.
-- A responsive multilingual desktop interface adds a remembered FH4/FH5/FH6 Steam/Xbox App launcher, an integrated DualSense-to-XInput bridge, and reversible FH6 DualSense button icons.
-- The canonical standalone EXE includes verified update downloads, restart replacement, and rollback if replacement fails.
+- USB and Bluetooth use the same stereo haptic mix; Bluetooth adds HD transport and falls back only when that transport actually fails.
+- Community-informed Default values, a built-in Original preset, persistent autosave, named profiles, and safe factory restore provide a reliable configuration workflow.
+- The multilingual high-DPI interface shows live transport, battery, and charging state and includes FH4/FH5/FH6 Steam/Xbox App launching, an integrated DualSense-to-XInput bridge, and reversible FH6 DualSense button icons.
+- The standalone EXE uses verified transactional updates, preserves settings, migrates matching shortcuts, and can recover or roll back an interrupted replacement.
 
 ## Download
 

@@ -6,9 +6,9 @@
 
 - 当前开发版本：`Enhanced R7`，`src/pyproject.toml` 版本为 `7`。
 - 当前公开稳定版：GitHub Release `R6`，本地 tag `R6` 指向 `68ef199`。
-- 当前阶段：R7 运行时基础与全项目审计整改已进入生产代码。错误 `valid_flag0=0x20` / `valid_flag1=0x20` HID 音频控制链已删除，USB stream 的 start/stop 仍保持 Enhanced R6 语义。旧 `0x08 / 0x02` teardown 候选已实机失败：report 被接受且 HID 完成 BT → USB，但旧进程随后找不到四声道 USB endpoint，握把仍无输出；新进程却能枚举该 endpoint。源码现已改为 Bluetooth 阶段不导入 sounddevice、稳定 USB 候选非阻塞等待 3 秒、Windows endpoint readiness 通过后才进入既有 teardown 和 USB 提交。
-- 当前开发重心：以已知可用的 `dist-usb-audio-gate-1` 生命周期为基线，修复 Xbox App Bluetooth 长时间运行后物理 HID worker、ViGEm session 或 `0x36` 输出挤压输入导致的“延迟升高/不再识别手柄”。恢复候选已构建，下一边界是短时功能冒烟和真实 DualSense Edge 长时间验收；不得借此改动 USB/BT 握把 handover 生命周期。
-- 当前代码不是已发布 R7。README、Release workflow 正文和线上资产仍以 R6 为准，这是有意保留的发布边界，不代表 R7 已完成发行准备。
+- 当前阶段：R7 生产代码与本地发布准备已经完成。错误 `valid_flag0=0x20` / `valid_flag1=0x20` HID 音频控制链已删除，USB stream 的 start/stop 保持 Enhanced R6 语义；Bluetooth 阶段不提前导入 sounddevice，稳定 USB 候选等待 3 秒并通过 Windows endpoint readiness 后才进入已验收的 handover。三语 README、R7 中英双语 Release body、发布契约和标准 Windows/ZUV 产物均已准备。
+- 当前开发重心：发布前复核用户可见说明、标准 R7 产物和明确保留的实机验证缺口。不得为了赶发布改动已知可用的 `dist-usb-audio-gate-1` USB/BT 握把生命周期，也不得把真实 Xbox App、DualSense Edge、动态红线车辆或 Linux 验收写成已经完成。
+- 当前代码尚未发布为 R7。公开稳定版仍是 R6；未创建或移动 R7 tag，也未创建 GitHub Release。发布动作必须等用户最终确认。
 
 ## 代码中已经实现
 
@@ -105,7 +105,7 @@
 2. 新的 `dist-xinput-dse-recovery-1` 需要先在 Bluetooth、Xbox App bridge 开启、Steam Input 关闭时做短时操控/握把/L2/R2 扳机键冒烟，再在可用的 DualSense Edge 上运行 30 至 60 分钟并检查 `data/runtime.log`。用户当前无法执行长时间实机段，因此明确保留为未执行；`dist-usb-audio-gate-1` 仍是已知可用回退基线。
 3. Windows DPI：在 100%、125%、150% 分别目测顶部两个状态框边缘，并检查窗口最大化/还原和页面切换；混合 DPI 还需验证显示器间往返、运行中 scale 变化和弹窗/原生 Tk 控件清晰度。
 4. 用户此前明确把 Xbox App FH6 内容目录自动发现留给 R7，但当前 R7 runtime foundation 规格与生产代码尚未实现它。发布 R7 前必须重新确定并完成该范围，或取得用户明确同意延期；现有行为仍是手动选择并缓存 `fh6_xbox_install_path`。
-5. R7 README、三语用户指南增量、双语 Release body、workflow 版本正文、tag、push、Release 与线上重新下载验证均未执行。
+5. R7 三语 README 增量、双语 Release body 和 workflow 版本正文已经准备并通过本地契约测试；R7 tag、GitHub Release、线上构建和线上重新下载验证仍未执行。
 6. R7 到 R8 的正常并排更新尚无真实已发布 R8 资产可做端到端验收；当前由自动测试覆盖。
 7. 真实只读/被占用快捷方式、任务栏 pin 缓存和快捷方式部分失败后的跨启动修复尚未在用户 shell 环境执行。
 8. 真实 Linux ELF 构建、`/dev/hidraw` 权限与桌面托盘未执行；Windows 上的脚本语法和适配层测试不能替代它们。
@@ -113,13 +113,12 @@
 
 ## 下一步建议顺序
 
-1. 退出其他候选后启动 `dist-xinput-dse-recovery-1`；在 Bluetooth 下选择 Xbox App 模式并关闭 Steam Input，短时检查摇杆、按键、握把与 L2/R2 扳机键，同时记录 Forza 游戏内振动状态。
-2. 有条件时保持同一场景运行 30 至 60 分钟，检查是否进入 compatible fallback、HID/ViGEm 是否自动恢复，并保留 `data/runtime.log`；没有 DualSense Edge 或无法长测时明确写未执行，不阻塞其他离线验证。
-3. 短时输入通过后做一次 USB 冷启动和 BT → USB；若握把生命周期与 `dist-usb-audio-gate-1` 不同立即停止发布并回退。之后再用 `dist-dynamic-redline-1` 完成大红区车辆断油手感验收。
-4. 在 100%、125%、150% 验证顶部状态框和最大化/还原流畅度；再在混合 DPI 环境目测主窗口、导航、原生 Tk 控件和弹窗。没有第二块不同缩放显示器时明确写未执行。
-5. 在真实 Linux 主机生成 ELF，并验证 hidraw 权限、USB audio 与托盘。
-6. 回到尚未实现的 Xbox App FH6 自动目录发现要求，先基于当前 Xbox package/游戏卷 API 重新确认安全边界，再实施或由用户明确延期。
-7. 用户确认 R7 功能范围和候选后，先 fetch/review `origin/main`，语义合并远端 README 改动，再准备三语 README、双语 Release body、workflow、提交、tag 和发布。
+1. 向用户交付标准 R7 EXE 的路径、哈希、体积、双语发布说明摘要和未验证边界，取得最终发布确认。
+2. 用户确认接受当前范围后创建 `R7` tag 并触发 GitHub Release；等待 Windows、ZUV 与 Linux jobs 完成，从线上重新下载 EXE 和 sidecar 独立复核大小、MZ 与 SHA-256。
+3. 若发布前还要补实机验收，优先在 Bluetooth、Xbox App bridge、Steam Input 关闭且 Forza 游戏内振动关闭时检查短时操控、握把和 L2/R2 扳机键，再执行 30 至 60 分钟稳定性并保留 `data/runtime.log`。
+4. 用大红区车辆验收动态红线，并在 100%、125%、150% 和可用的混合 DPI 环境验收界面；没有条件时保持未验证，不得改写为通过。
+5. Xbox App FH6 自动目录发现尚未实现。实际发布前由用户明确接受延期，或另行实现并重新走完整发布验证。
+6. 在真实 Linux 主机生成 ELF，并验证 hidraw 权限、USB audio 与托盘。
 
 ## 当前已知 Bug 和限制
 
@@ -175,7 +174,7 @@
 ## 当前 Git 工作区状态
 
 - 分支：`main`。R7 runtime foundation、随后覆盖上游/R1-R7 的审计整改、生产源码、测试、老三样和构建配置已纳入当前 `main` 提交历史；精确 HEAD 与远端同步状态以 `git status -sb` 和 `git log -1` 为准。
-- 本批实现建立在 13 个 R7 设计/计划提交之上；提交前的远端基线为 `b969826 docs: link icon author GitHub profile`，fetch 时远端没有新增提交或 README 冲突。
+- R7 发布准备批次建立在 `1c104bc fix: preserve Bluetooth HD haptics after input gaps` 之上；提交前 fetch 已确认 `HEAD` 与 `origin/main` 同步，远端没有新增 README 改动或冲突。
 - `packaging/windows/build-*`、`dist-*`、`diagnostics-*` 和 `helper_work-*` 是本地隔离构建或诊断产物，不随源码提交；已知可用的 `dist-usb-audio-gate-1` 基线没有被覆盖。
 - 没有创建或移动 R7 tag，也没有发布 R7 Release。当前公开稳定版仍是 R6。
 
@@ -194,6 +193,7 @@
 - 动态红线完成后，红线、扳机、握把和 loop 定向回归为 `136 passed`；`tests/forzahorizon/test_redline.py` 为 `9 passed`。完整 `uv run --project src --frozen pytest -q` 为 `695 passed in 9.77s`；Ruff 全仓库通过，Pyrefly 为 `0 errors`、`2 suppressed`、`91 warnings not shown`，限定路径 `compileall` 和 `uv lock --check --project src` 通过。
 - 撤销前的 HID/ViGEm 自恢复、target 保留、Bluetooth stall 降级和持久日志定向回归为 `92 passed in 1.84s`；当时完整测试为 `700 passed in 8.17s`。该结果仅保留为历史，不再代表当前 Bluetooth stall 行为。
 - 撤销 350 ms 永久降级后，DualSense/XInput/haptics 定向回归为 `90 passed in 0.81s`；最新完整 `uv run --project src --frozen pytest -q -W error` 为 `699 passed in 10.34s`。测试总数减少一项来自将两个旧降级测试替换为一个“短暂输入空档保持 HD”回归测试。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`91 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 通过。
+- 发布准备复核：发布与构建定向测试 `74 passed in 6.54s`；随后完整 `uv run --project src --frozen pytest -q -W error` 为 `699 passed in 12.33s`。Ruff 全仓库、限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 通过；Pyrefly 为 `0 errors`、`2 suppressed`、`91 warnings not shown`。
 - 当前 Windows 源码进程手工检查：导入 `modules`、构造 native backend 和调用 endpoint readiness 均未导入 sounddevice；当前已连接 USB 的 registry probe 返回 `True`。这只证明依赖边界和系统可见性，不证明游戏内握把。
 - Ruff 全仓库检查通过；Pyrefly 为 `0 errors`，仍有 warning；Vulture 对显式生产源码列表未发现确定的 dead code。`pip-audit` 对当前锁定环境未发现已知漏洞。Bandit 无 high severity，两个 medium 为允许配置的 UDP wildcard bind 和已经自行验证 HTTPS/redirect 的 `urlopen` 路径，属于人工复核后接受的告警。
 - Windows Shell Link 临时集成测试通过：target、icon、参数与工作目录均可读写并保持。
@@ -206,6 +206,8 @@
 - 当前 R7 发布候选：`packaging/windows/dist-r7-release-candidate-1/FH-DualSense-Enhanced-R7.exe`，`51,963,061` 字节（`49.556 MiB`），SHA-256 `2e913541d6a01cfd1fc9598d8eaeb0a88b89ba91fcd9795c7cd16936e939c507`。它在上一延迟候选上加入灯效页隔离、Original body haptics 和 Default ABS 关闭；版本资源与 sidecar 校验通过，尚待用户界面和 Bluetooth/XInput 实机确认。
 - 当前动态红线候选：`packaging/windows/dist-dynamic-redline-1/FH-DualSense-Enhanced-R7.exe`，`51,972,532` 字节（`49.565 MiB`），SHA-256 `798a5ad98c856d7f8f93f14e1018d4e52805b70587755f4a0c30d15380581c31`。MZ 头、R7 File/ProductVersion、OriginalFilename 和 `.sha256 --check` 均通过；相对已知可用 `dist-usb-audio-gate-1` 增加 `13,168` 字节（`0.0253%`），未启动真实 EXE 或运行游戏。
 - 当前 Xbox/DualSense Edge 恢复候选：`packaging/windows/dist-xinput-dse-recovery-1/FH-DualSense-Enhanced-R7.exe`，`52,023,359` 字节（`49.613 MiB`），SHA-256 `dd7a4ea10327526fd8fd5e8b03d9b5f5da466dd46dccbca95eaf1592a745f6f9`。MZ 头为 `4D 5A`，`FileVersion/ProductVersion=R7`、`OriginalFilename=FH-DualSense-Enhanced-R7.exe` 和 sidecar `--check` 均通过；相对已知可用 `dist-usb-audio-gate-1` 增加 `63,995` 字节（`0.1232%`），相对公开 R6 增加 `574,417` 字节（约 `0.548 MiB`，`1.116%`），低于体积确认门槛。未启动真实 EXE 或执行硬件长测。
+- 标准 R7 发布产物：`packaging/windows/dist/FH-DualSense-Enhanced-R7.exe`，`52,021,374` 字节（`49.611 MiB`），SHA-256 `1286047e8a13aa4eb8e8f5f4330461dc45cc4aa1dba8ad3d7e101dfd4a65403a`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R7`、`OriginalFilename=FH-DualSense-Enhanced-R7.exe`、sidecar `--check`、32×32 PE 图标逐像素比对均通过；主 EXE 与 Update Helper 的 manifest 均包含 `PerMonitorV2, PerMonitor`、`true/pm` 和 `asInvoker`。相对公开 R6 增加 `572,432` 字节（约 `0.546 MiB`，`1.113%`），低于体积确认门槛。
+- 本地 ZUV 发布产物：`packaging/zuv/dist/FH-DualSense-Enhanced.zuv.py`，`7,437,544` 字节，SHA-256 `117b3cb3085c7f223f4294525ee4f98e200980d0b0842e3881320911215a1222`，更新源为 `piereacy/FH-DualSense-Enhanced`。构建结束时旧 `.zuv` 运行目录中的 CustomTkinter Roboto 文件导致清理提示，但目标 bundle 正常生成；GitHub workflow 在干净 runner 的独立 `release/` 目录构建，不复用该残留目录。
 - 相对实际发布 R6 资产 `51,448,942` 字节，延迟候选增加 `512,988` 字节（约 `0.489 MiB`，`0.997%`），低于 `5 MiB` 和 `10%` 门槛。
 - 已用 Windows SDK `mt.exe` 从审计后 R7 主 EXE 与 Update Helper 分别提取 manifest，均确认包含 `PerMonitorV2, PerMonitor`、`true/pm` 和 `asInvoker`。构建后的 updater/packaging 定向套件为 `109 passed in 4.41s`。
 
@@ -216,7 +218,7 @@
 - 当前 125% 环境曾对上一份 EXE 完成基础目测：两个顶部状态框没有原黑底白点问题，边缘未见先前的明显锯齿；最大化成功且没有等待所有页面重载。最新候选又加入反馈卡片/更新卡片缓存，尚未重新目测。100%、150%、最大化后的连续跨页操作、混合 DPI、多屏移动、动态缩放、睡眠/唤醒、扩展坞和远程桌面仍未执行。
 - 真实 Linux ELF 构建、hidraw 权限和托盘验证未执行；仅完成 Windows 测试与 Bash 语法检查。
 - clean-machine Update Helper、杀毒软件锁文件、真实只读 shortcut 和部分迁移提示未执行；自动测试与隔离目录不能完全替代这些环境。
-- R7 README/Release workflow 更新、线上构建、tag、Release、线上重新下载和 R7 到下一版本更新均未执行。
+- R7 三语 README 与 Release workflow 正文已在本地准备并通过契约测试；线上构建、tag、Release、线上重新下载和 R7 到下一版本更新仍未执行。
 - Xbox App FH6 内容目录自动发现尚未实现，也未验证真实 Xbox App 游戏。
 
 ## 下一次 Codex 会话交接
@@ -241,4 +243,4 @@
 16. `src/modules/__init__.py`
 17. `src/modules/feedback_schema.py`
 
-建议首先处理的具体任务：退出其他候选后，用 SHA-256 为 `dd7a4ea10327526fd8fd5e8b03d9b5f5da466dd46dccbca95eaf1592a745f6f9` 的 `dist-xinput-dse-recovery-1`，在 Bluetooth、Xbox App bridge、Steam Input 关闭条件下做短时操控延迟与反馈冒烟；同时记录 Forza 游戏内振动状态。若后续能取得 DualSense Edge 长时间现场，再运行 30 至 60 分钟并保留 `data/runtime.log`；当前不能执行则明确保持未验证。
+建议首先处理的具体任务：复核 R7 中英双语发布说明、标准 EXE 信息和上述未验证边界。用户最终确认当前范围后创建 `R7` tag、等待 GitHub Release jobs 完成，并从线上重新下载 Windows EXE 与 `.sha256` 独立复核；不得在确认前发布。
