@@ -269,7 +269,7 @@ Bluetooth 不依赖 Windows 音频 endpoint。`src/modules/haptics/bt_audio.py` 
 
 Bluetooth renderer 线程不直接写 hidapi。它把最新采样放入 `DualSense` 单槽队列并唤醒已有 I/O 线程，普通 `0x31` 状态和 `0x36` 音频触觉由同一线程串行写入；同轮 `0x36` 已覆盖扳机/灯效且无 compatible rumble 时合并重复 `0x31`。周期等待必须使用 Python 3.13 的高精度 `time.sleep()`；Windows 下 `threading.Event.wait(10.667 ms)` 会受约 15.6 ms 系统计时粒度影响，实测只能达到约 65 Hz。I/O event 在清除后必须再次检查 pending state，避免丢失 producer wake。
 
-如果构建、队列或 `0x36` HID write 失败，`HapticManager` 在当前连接回退到 `to_compatible_rumble()`。`DualSense` 还把“已经发送 `0x36` 后连续 350 ms 没有任何有效 Bluetooth 输入”视为输出挤压输入的连接级故障：先尽力写一个零采样 `0x36`，再拒绝当前连接的 HD 队列，让 renderer worker 停止并由 manager 转入 compatible fallback，而不是继续高带宽发送直到 3 秒 HID watchdog 断开整只手柄。这时普通反馈仍按 low/high 频率下混，红线和碰撞可使用 `compatible_low_frequency`、`compatible_high_frequency` 尽量保存侧别。重新连接 Bluetooth 后清除失败状态并重新尝试 HD haptics。
+如果构建、队列或 `0x36` HID write 真实失败，`HapticManager` 才在当前连接回退到 `to_compatible_rumble()`，重新连接 Bluetooth 后清除失败状态并重试 HD haptics。短暂收不到输入只表示无线链路暂时不稳定，不能可靠证明 `0x36` 正在挤压输入，因此不会改变触觉模式；一旦输入恢复，当前 HD 流继续工作。若有效输入持续消失约 3 秒，既有 HID watchdog 断开物理会话并交给重连流程，而不是提前把本次连接永久锁成 compatible fallback。
 
 禁用 body haptics、切换 transport 或断开时，HD 路径发送全零采样块；compatible fallback 发送一次全零 rumble 释放 motor ownership。`DualSense` 仍保留 pending compatible release，确保后续 trigger-only frame 不会吞掉释放帧。此路径只传输本项目从遥测合成的握把触觉，不包含 vDS 的虚拟 USB、filter driver、speaker、microphone 或游戏原生触觉接管。
 

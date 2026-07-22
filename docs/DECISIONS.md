@@ -6,7 +6,8 @@
 
 - 状态：生产代码与自动测试已完成；真实 DualSense Edge、Xbox App 和 30 至 60 分钟 Bluetooth 压力测试未执行。
 - 背景：旧物理 HID worker 遇到未预期异常会永久退出，“立即重新连接”只能给已经死亡的线程排队；旧 ViGEm worker 的一次 `target.update()` 异常同样永久停止。XInput 在 100 ms 后中立、3 秒后移除 target，还会让 Forza 运行中面对 player slot 消失和重新出现。Bluetooth `0x36` 约每 10.667 ms 写入 398 字节，弱适配器或 Windows HID 栈长期运行时仍可能先失去输入，再被 3 秒 watchdog 判断整只手柄掉线。
-- 决定：物理 HID 保持唯一 reader，但 `_io()` 改为同一 worker 内的 session supervisor，异常后关闭当前 handle 并按 0.25、1、5 秒上限恢复；手动 reconnect 在 worker 已死亡时先重启它。XInput 在 100 ms 输入空档只发送一次中立并保留 target/player slot，ViGEm 瞬时异常按同样有界退避重建 session。Bluetooth HD 已发送且连续 350 ms 无有效输入时，先尽力发送零采样 `0x36`，再把当前连接降级到 compatible rumble，不等待整只手柄掉线。
+- 决定：物理 HID 保持唯一 reader，但 `_io()` 改为同一 worker 内的 session supervisor，异常后关闭当前 handle 并按 0.25、1、5 秒上限恢复；手动 reconnect 在 worker 已死亡时先重启它。XInput 在 100 ms 输入空档只发送一次中立并保留 target/player slot，ViGEm 瞬时异常按同样有界退避重建 session。
+- 后续修正：撤销“Bluetooth HD 已发送且连续 350 ms 无有效输入就永久降级当前连接”的保护。短暂弱信号在手柄靠近主机后可以恢复，不能以一次输入空档把 `0x36` 锁成 compatible rumble 直到重连。真实构建、队列或 HID write 失败仍可触发当前连接 fallback；持续约 3 秒无有效输入仍由物理 HID watchdog 断开并重连。
 - 诊断：完整输入校验和 CRC 不放宽；连续拒绝限频记录，恢复后记录边沿，HID open 日志包含 PID。GUI、TUI 和 headless 共用 2 MiB、两个备份的 `data/runtime.log`，用于收集用户所说“玩到后面不认手柄”的跨会话证据。
 - 边界：没有把 DualSense Edge 与普通 DualSense 写成完全实机等价，也没有改变 `dist-usb-audio-gate-1` 已接受的 BT → USB 握把生命周期、HID offsets、`0x36` 布局、CRC、扳机或握把算法。真实长时间测试无法执行时必须明确写未执行，不能用自动测试替代。
 

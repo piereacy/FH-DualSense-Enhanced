@@ -133,7 +133,7 @@ bash packaging/linux/build_elf.sh
 - UDP 热路径必须继续使用 `UDPListener.recv_latest()` 丢弃积压包，不能改为逐包处理旧遥测。
 - 动态红线只允许生成派生的 `effective_redline_rpm` 和已确认的 `rev_limiter_active`，不得覆盖 Forza 原始 `max_rpm`。R2 扳机键与握把必须消费同一估计器；灯效和发动机基础频率继续使用原始仪表范围，除非以后有单独产品决定。断油学习必须保持同挡位延迟确认，并排除离合、换挡和严重打滑，不能退回仅凭一次 `power == 0` 立即锁定。
 - `src/modules/loop.py` 只在 `(left, right, rumble, visual)` 状态改变时调用普通手柄状态输出；USB 和 Bluetooth HD haptics 目标仍需要逐遥测帧更新，并由各自的音频周期持续渲染。
-- Body haptics 关闭时不得占用 compatible rumble flags 或 motor bytes。Bluetooth fallback 的 rumble 释放帧不能被后续 trigger-only 帧吞掉；HD haptics 停止或断开前必须排队或写入全零 `0x36` 采样块。`0x36` 已开始发送但连续 350 ms 没有有效 Bluetooth 输入时，必须先尽力写零采样，再把当前连接降级为 compatible rumble；不得继续用高带宽输出拖到整个 HID watchdog 掉线。
+- Body haptics 关闭时不得占用 compatible rumble flags 或 motor bytes。Bluetooth fallback 的 rumble 释放帧不能被后续 trigger-only 帧吞掉；HD haptics 停止或断开前必须排队或写入全零 `0x36` 采样块。短暂 Bluetooth 输入空档不得把当前连接永久降级为 compatible rumble；`0x36` 在真实构建、队列或 HID write 失败时才允许回退，完全失去有效输入仍由约 3 秒 HID watchdog 断开并重连。
 - USB 握把触觉流仍保持 Enhanced R6 的 `_running`、GUI/TUI eligibility sync 和 headless transport-epoch 失败闩锁语义，但 `sounddevice`/PortAudio 只能在真正启动 USB stream 时延迟导入；Bluetooth 阶段不得提前导入并冻结没有 USB endpoint 的设备快照。不得重新加入 sounddevice 私有 `_terminate()`/`_initialize()`、callback 心跳判活、额外 lifecycle lock 或定时 backoff，除非先完成 R6/R7 USB 冷启动与 BT → USB 实机 A/B，并证明不会造成全零 PCM、跨进程污染或旧版回归。
 - 普通 USB/BT HID 状态报告必须保持 Enhanced R6 的字段所有权契约：L2/R2 扳机键字段按既有路径声明，只有显式 compatible rumble 才声明并写入 motor 字段，visual 只声明自身字段。`HapticManager`、PortAudio lifecycle 和 transport handover 不得请求或猜测额外的 HID 音频模式；尤其不得把 `valid_flag0 0x20` 当成 haptics select，也不得加入未经协议和实机共同验证的单次 `0x01` 重置。修改该边界必须同时做 R6 字节对照、退出新版后重启旧版的无污染验证和 USB/Bluetooth 实机测试。
 - 不要随意修改 324 字节遥测偏移、USB/BT HID offset、BT CRC、trigger mode byte 和左右扳机映射。`0x36` 固定为 398 字节、3 kHz、每包 32 帧交错左右 int8；修改时必须增加字节级和调度测试。

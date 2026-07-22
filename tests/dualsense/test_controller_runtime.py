@@ -478,50 +478,27 @@ def test_force_reconnect_closes_handle_on_io_thread_not_caller(monkeypatch):
     assert device.close_thread != caller
 
 
-def test_bluetooth_haptics_input_stall_sends_silence_and_disables_hd_queue():
+def test_io_loop_keeps_bluetooth_hd_during_temporary_input_gap():
     controller = dualsense_main.DualSense(enable_startup_pulse=False)
     device = _OpeningDevice()
     controller.dev = device
     _connected(controller, InputTransport.BLUETOOTH)
+    controller._last_input_at = time.monotonic() - 0.5
     controller._bt_haptics_streamed = True
-    controller._bt_haptics_pending = bytes([1]) * 64
-
-    controller._disable_bt_haptics_for_input_stall(0.4)
-
-    assert controller._bt_haptics_streamed is False
-    assert controller.bt_haptics_failed is True
-    assert controller._bt_haptics_pending is None
-    assert len(device.writes) == 1
-    assert device.writes[0][0] == 0x36
-    assert controller.queue_bt_haptics(bytes(64)) is False
-
-
-def test_io_loop_detects_bluetooth_haptics_input_stall():
-    controller = dualsense_main.DualSense(enable_startup_pulse=False)
-    device = _OpeningDevice()
-    controller.dev = device
-    _connected(controller, InputTransport.BLUETOOTH)
-    controller._last_input_at = (
-        time.monotonic() - dualsense_main.BT_INPUT_STALL_FALLBACK_S - 0.05
-    )
-    controller._bt_haptics_streamed = True
-    controller._input_idle_timeout = 1.0
+    controller._input_idle_timeout = 60.0
     controller._topology_interval = 999.0
     controller._last_topology_scan = time.monotonic()
     controller._running = True
     thread = threading.Thread(target=controller._io)
     thread.start()
     try:
-        deadline = time.monotonic() + 1.0
-        while not controller.bt_haptics_failed and time.monotonic() < deadline:
-            time.sleep(0.005)
-        assert controller.bt_haptics_failed is True
+        time.sleep(0.05)
+        assert controller.bt_haptics_failed is False
+        assert controller.queue_bt_haptics(bytes(64)) is True
     finally:
         controller._running = False
         controller._wake.set()
         thread.join(timeout=1.0)
-
-    assert any(report[0] == 0x36 for report in device.writes)
 
 
 def test_bluetooth_to_usb_candidate_requires_stability_and_same_identity(monkeypatch):

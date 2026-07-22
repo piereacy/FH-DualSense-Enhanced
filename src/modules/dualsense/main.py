@@ -46,7 +46,6 @@ HANDOVER_INPUT_TIMEOUT_S = 0.25
 HANDOVER_INPUT_POLL_S = 0.005
 USB_AUDIO_HANDOVER_SETTLE_S = 3.0
 IO_RECOVERY_DELAYS_S = (0.25, 1.0, 5.0)
-BT_INPUT_STALL_FALLBACK_S = 0.35
 
 # valid_flag0: 0x01 (R motor), 0x02 (L motor), 0x04 (R trigger), 0x08 (L trigger).
 RUMBLE_FLAGS = 0x01 | 0x02
@@ -1294,14 +1293,6 @@ class DualSense:
                 self._disconnect(f"read failed: {e}")
                 continue
             watchdog_now = time.monotonic()
-            input_age = watchdog_now - self._last_input_at
-            if (
-                self.lay["bt"]
-                and self._bt_haptics_streamed
-                and not self._bt_haptics_failed
-                and input_age >= BT_INPUT_STALL_FALLBACK_S
-            ):
-                self._disable_bt_haptics_for_input_stall(input_age)
             if watchdog_now - self._last_input_at >= self._input_idle_timeout:
                 self._disconnect(f"no input for {self._input_idle_timeout:.0f}s")
                 continue
@@ -1435,19 +1426,6 @@ class DualSense:
                 "adaptive triggers remain active.",
                 reason,
             )
-
-    def _disable_bt_haptics_for_input_stall(self, input_age: float) -> None:
-        """Stop report 0x36 if Bluetooth output appears to starve HID input."""
-        if self.dev is None or not self.lay["bt"] or self._bt_haptics_failed:
-            return
-        try:
-            self._safe_write(self._build_bt_haptics(bytes(64)))
-        except Exception as exc:
-            log.debug("Bluetooth haptics stall silence frame failed: %s", exc)
-        self._bt_haptics_streamed = False
-        self._mark_bt_haptics_failed(
-            f"no valid Bluetooth input for {input_age:.3f}s while report 0x36 was active"
-        )
 
     def _build_power_saver(self):
         """Build a minimal HID report that enables the power-save flag only."""

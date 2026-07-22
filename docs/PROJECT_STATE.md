@@ -35,7 +35,7 @@
 - 普通 USB/BT state report 已恢复 R6 的字段所有权：扳机、compatible rumble 与灯效只声明各自已有的 valid bits。`HapticManager` 只选择 USB 四声道 PCM、Bluetooth `0x36` 或 compatible fallback，不再通过普通 HID report 猜测或切换“音频触觉模式”；也没有加入曾经失败的单次 `0x01` 重置写入。
 - 唯一 HID worker 现由 `_io()` 监督 session。未预期异常会关闭当前 handle 并按 0.25/1/5 秒上限恢复；关闭自动重连时保留可由“立即重新连接”唤醒的 worker，按钮检测到旧 worker 已死亡时会重启它，不会并行创建第二个 reader。
 - 输入拒绝不再只记录应用启动后的第一次：连续第 1/8/32/128 次及之后每 512 次限频记录，长错误串恢复时记录恢复边沿；HID open 日志包含产品 PID，便于区分 DualSense 与 DualSense Edge。
-- Bluetooth HD 已发送且连续 350 ms 没有有效输入时，当前连接先尽力发送零采样 `0x36`，再拒绝 HD 队列并转入 compatible rumble，避免继续用高带宽输出拖到整个 3 秒连接 watchdog 失效。重新建立 Bluetooth 连接后才重新尝试 HD。
+- 短暂 Bluetooth 输入空档不再永久禁用当前连接的 HD `0x36`；输入恢复后继续保持 HD 握把。只有真实构建、队列或 HID write 失败才进入当前连接的 compatible fallback，持续约 3 秒无有效输入仍由物理 HID watchdog 断开并重连。
 
 ### 3. 配置迁移与状态界面
 
@@ -84,7 +84,7 @@
 
 ## 文档、代码和推测的边界
 
-- 已由生产代码和自动测试证明：transaction 恢复决策、R6 legacy 识别、快捷方式精确匹配、健康 token 与 ACK 时机、ControllerSnapshot、输入超时、电量映射、拓扑去抖、handover 候选预验证与 1/2/5 秒候选退避、switching 无启动脉冲、重连迁移、物理 HID worker 自恢复、ViGEm session 自恢复、100 ms 中立后 target 保留、Bluetooth 输入 stall 降级、UDP 有效包边界、配置/分享码校验、TUI 正常退出、Enhanced R6 USB stream 状态语义、扳机/握把字段互斥、可见页 resize 合并、更新卡片 presentation cache、状态展示和 DPI 几何契约。新增测试固定 sounddevice 构造时不加载、首次 `start()` 只加载一次，Windows endpoint active/inactive/权限错误边界，3 秒非阻塞 settle、等待期间 Bluetooth haptics 保持、readiness 失败/异常保留 BT、候选消失清理状态及 body haptics 关闭时绕过。字节级测试继续固定普通 USB/BT report 不声明两个未经验证的 `0x20` 控制位，以及 Bluetooth power-off feature report 的 48 字节布局和 `0x53` seed CRC `0x23A2EFE0`。真实长时间连接、DualSense Edge 和握把恢复仍不属于自动测试已经证明的事实。
+- 已由生产代码和自动测试证明：transaction 恢复决策、R6 legacy 识别、快捷方式精确匹配、健康 token 与 ACK 时机、ControllerSnapshot、输入超时、电量映射、拓扑去抖、handover 候选预验证与 1/2/5 秒候选退避、switching 无启动脉冲、重连迁移、物理 HID worker 自恢复、ViGEm session 自恢复、100 ms 中立后 target 保留、短暂 Bluetooth 输入空档保持 HD 队列、UDP 有效包边界、配置/分享码校验、TUI 正常退出、Enhanced R6 USB stream 状态语义、扳机/握把字段互斥、可见页 resize 合并、更新卡片 presentation cache、状态展示和 DPI 几何契约。新增测试固定 sounddevice 构造时不加载、首次 `start()` 只加载一次，Windows endpoint active/inactive/权限错误边界，3 秒非阻塞 settle、等待期间 Bluetooth haptics 保持、readiness 失败/异常保留 BT、候选消失清理状态及 body haptics 关闭时绕过。字节级测试继续固定普通 USB/BT report 不声明两个未经验证的 `0x20` 控制位，以及 Bluetooth power-off feature report 的 48 字节布局和 `0x53` seed CRC `0x23A2EFE0`。真实长时间连接、DualSense Edge 和握把恢复仍不属于自动测试已经证明的事实。
 - 已由真实 Windows 隔离环境证明：已发布 R6 旧 Helper 形态可以迁移到规范 R7，测试快捷方式 target/icon 已改为 R7，参数和工作目录保留，事务提交后 R6/`.old` 被清理。
 - 已由当前 Windows 进程证明：源码 DPI probe 报告 Per-Monitor v2、120 DPI、125%；最终 PE manifest 可提取并包含 PMv2。
 - 已由当前真实 Windows USB 设备证明：系统和新启动的 sounddevice 进程能枚举 index 27 的四声道 DualSense WASAPI endpoint；旧 teardown 候选却在同一现场报告找不到端点。当前锁定的 sounddevice 在 import 尾部调用 `_initialize()`，因此旧进程的 PortAudio snapshot 早于 USB hotplug。源码手工检查还证明导入 `modules` 和构造 native backend 都不会再把 sounddevice 放入 `sys.modules`，readiness probe 返回 `True` 时也不会加载它。
@@ -96,7 +96,7 @@
 
 1. 非破坏性 BT/USB HID handover、switching 脉冲抑制、Bluetooth `0x36`、扳机与握把分页、状态框像素对齐、更新 UI 缓存和最大化布局合并保留在当前候选。PortAudio 私有 refresh、并发 lifecycle lock、callback 心跳和额外 USB audio backoff 均未恢复。
 2. `dist-usb-audio-gate-1` 已由用户实机确认：USB 与 Bluetooth 冷启动握把正常，Bluetooth 插入 USB 后 USB 握把恢复；拔掉 USB 时手柄会关机，需要用户重新开机。用户已接受该行为作为当前 R7 handover 基线，后续修复不得改动这条生命周期。
-3. Xbox App Bluetooth 高延迟与长期掉线修复已进入 `src/modules/dualsense/main.py`、`src/modules/xinput/bridge.py` 和 `src/modules/runtime_logging.py`：除了 input-first/latest-only drain，还加入 HID/ViGEm 自恢复、target 保留、350 ms `0x36` stall 降级和持久日志；自动测试和独立 `dist-xinput-dse-recovery-1` EXE 已完成，真实 Bluetooth/XInput/DualSense Edge 手感与长时间稳定性尚待验证。
+3. Xbox App Bluetooth 高延迟与长期掉线修复已进入 `src/modules/dualsense/main.py`、`src/modules/xinput/bridge.py` 和 `src/modules/runtime_logging.py`：包括 input-first/latest-only drain、重复 Bluetooth 写入合并、HID/ViGEm 自恢复、target 保留和持久日志。早期 350 ms `0x36` stall 永久降级已因无法从短暂弱信号自动恢复而撤销；真实 Bluetooth/XInput/DualSense Edge 手感与长时间稳定性尚待验证。
 4. 动态红线估计已经进入生产路径并构建 `dist-dynamic-redline-1`。其预测、同挡位确认、换挡/打滑排除、三样本聚类、车辆切换复位及扳机/握把共享消费均有自动测试；真实车辆尚未验收。
 
 ## 尚未完成
@@ -128,7 +128,7 @@
 - Forza 游戏内振动必须关闭，否则 native rumble/Steam Input 可能掩盖本项目握把方向与细节；项目不接管游戏原生 rumble。
 - 动态红线没有 Forza 官方 limiter flag，只能从功率、扭矩、RPM、挡位、油门、离合和滑移推断。合成测试已覆盖主要误判边界，但真实车辆与改装组合尚未验证，不能写成已经解决全部红线差异。
 - XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板或陀螺仪映射。
-- Bluetooth 输入 stall 会为保住操控链路而把当前连接的 HD `0x36` 降级为 compatible rumble；该连接的握把细节和左右分离可能降低，必须重新连接 Bluetooth 才会再试 HD。350 ms 门槛只有自动测试，没有不同蓝牙适配器和 DualSense Edge 的长期实机标定。
+- Bluetooth 弱信号下仍可能出现短时输入延迟或最终触发约 3 秒物理连接 watchdog；撤销 350 ms 永久降级避免了靠近主机后仍停留在 compatible rumble，但真实 Xbox App、不同蓝牙适配器和 DualSense Edge 的长期稳定性仍待实机验证。
 - ViGEm 上游 EOL；固定哈希不能替代未来安全维护。
 - 更新检查仍在每次启动约 10 秒后执行，没有跨启动 24 小时节流，也没有代码签名信任链。
 - Linux build script 已改为锁定依赖并显式跳过 PyGObject/pycairo，但尚未在真实 Linux 主机生成 ELF；R7 的 Windows updater、Shell Link 和 DPI 改动明确只支持 Windows。
@@ -192,7 +192,8 @@
 - Xbox App Bluetooth 输入调度修复的定向回归：`src\\.venv\\Scripts\\python.exe -m pytest tests\\dualsense tests\\xinput tests\\haptics tests\\test_loop_haptics.py -q`，结果 `336 passed in 0.92s`。覆盖 latest-only drain、损坏尾包回退、持续 haptics pending、普通/`0x36` 合并、rumble release、XInput stale neutral 与握把循环；真实无线输入延迟仍待实机判断。
 - 灯效页、Original、Default ABS 与相关反馈回归共 `181 passed in 2.13s`；算法测试已显式开启 ABS，避免默认关闭后出现无效的 `None == None` 假通过。
 - 动态红线完成后，红线、扳机、握把和 loop 定向回归为 `136 passed`；`tests/forzahorizon/test_redline.py` 为 `9 passed`。完整 `uv run --project src --frozen pytest -q` 为 `695 passed in 9.77s`；Ruff 全仓库通过，Pyrefly 为 `0 errors`、`2 suppressed`、`91 warnings not shown`，限定路径 `compileall` 和 `uv lock --check --project src` 通过。
-- HID/ViGEm 自恢复、target 保留、Bluetooth stall 降级和持久日志的定向回归为 `92 passed in 1.84s`；最终完整 `uv run --project src --frozen pytest -q -W error` 为 `700 passed in 8.17s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`91 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 通过。
+- 撤销前的 HID/ViGEm 自恢复、target 保留、Bluetooth stall 降级和持久日志定向回归为 `92 passed in 1.84s`；当时完整测试为 `700 passed in 8.17s`。该结果仅保留为历史，不再代表当前 Bluetooth stall 行为。
+- 撤销 350 ms 永久降级后，DualSense/XInput/haptics 定向回归为 `90 passed in 0.81s`；最新完整 `uv run --project src --frozen pytest -q -W error` 为 `699 passed in 10.34s`。测试总数减少一项来自将两个旧降级测试替换为一个“短暂输入空档保持 HD”回归测试。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`91 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 通过。
 - 当前 Windows 源码进程手工检查：导入 `modules`、构造 native backend 和调用 endpoint readiness 均未导入 sounddevice；当前已连接 USB 的 registry probe 返回 `True`。这只证明依赖边界和系统可见性，不证明游戏内握把。
 - Ruff 全仓库检查通过；Pyrefly 为 `0 errors`，仍有 warning；Vulture 对显式生产源码列表未发现确定的 dead code。`pip-audit` 对当前锁定环境未发现已知漏洞。Bandit 无 high severity，两个 medium 为允许配置的 UDP wildcard bind 和已经自行验证 HTTPS/redirect 的 `urlopen` 路径，属于人工复核后接受的告警。
 - Windows Shell Link 临时集成测试通过：target、icon、参数与工作目录均可读写并保持。
