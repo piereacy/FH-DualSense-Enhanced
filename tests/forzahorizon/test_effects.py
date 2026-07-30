@@ -348,6 +348,91 @@ def test_r2_trigger_traction_still_uses_low_speed_raw_rotation():
     assert frame[0] == M_VIBRATE
 
 
+def test_disabling_pedal_stiffness_clears_both_latched_firmware_end_walls():
+    settings = Settings()
+    controller = Controller(settings)
+    telemetry = _telemetry(brake=255, accel=255)
+
+    l2, r2 = controller.update(telemetry, settings)
+
+    assert l2 == controller.wall
+    assert r2 == controller.wall
+    assert controller._l2_in_wall is True
+    assert controller._r2_in_wall is True
+
+    settings.enable_brake_resistance = False
+    settings.enable_throttle_resistance = False
+    l2, r2 = controller.update(telemetry, settings)
+
+    assert l2[0] == M_OFF
+    assert r2[0] == M_OFF
+    assert controller._l2_in_wall is False
+    assert controller._r2_in_wall is False
+
+
+def test_trigger_master_immediately_clears_all_adaptive_trigger_output():
+    settings = Settings()
+    settings.enable_abs = True
+    settings.enable_rev_limiter = True
+    settings.enable_gear_shift = True
+    settings.enable_gear_shift_brake = True
+    settings.enable_collision_trigger_l2 = True
+    settings.enable_collision_trigger_r2 = True
+    controller = Controller(settings)
+    telemetry = _telemetry(
+        brake=255,
+        accel=255,
+        rpm=9000.0,
+        max_rpm=9000.0,
+        tire_slip_ratio_fl=2.0,
+        tire_slip_ratio_rr=2.0,
+    )
+    controller.anim._shift_until = 10.0
+    controller.anim._rev_until = 10.0
+    controller.anim._collision_until = 10.0
+    controller.anim._collision_intensity = 1.0
+    controller._l2_in_wall = True
+    controller._r2_in_wall = True
+
+    settings.enable_trigger_feedback = False
+    l2, r2 = controller.update(telemetry, settings)
+
+    assert l2[0] == M_OFF
+    assert r2[0] == M_OFF
+    assert controller._l2_in_wall is False
+    assert controller._r2_in_wall is False
+    assert controller.anim._shift_until == 0.0
+    assert controller.anim._rev_until == 0.0
+    assert controller.anim._collision_until == 0.0
+    assert controller.anim._wheelspin_active is False
+
+
+def test_trigger_master_also_gates_direct_l2_and_r2_calls():
+    settings = Settings()
+    settings.enable_trigger_feedback = False
+    settings.enable_collision_trigger_l2 = True
+    settings.enable_collision_trigger_r2 = True
+    controller = Controller(settings)
+    controller.anim._collision_until = 10.0
+    controller.anim._collision_intensity = 1.0
+    telemetry = _telemetry(brake=255, accel=255)
+
+    assert controller.L2(telemetry, settings, 1.0)[0] == M_OFF
+    assert controller.R2(telemetry, settings, 1.0)[0] == M_OFF
+
+
+def test_static_brake_wall_remains_independent_from_brake_stiffness():
+    settings = Settings()
+    settings.enable_brake_resistance = False
+    settings.enable_brake_static_wall = True
+    controller = Controller(settings)
+
+    frame = controller.L2(_telemetry(brake=255, accel=0), settings, 1.0)
+
+    assert _unpack_zones(frame) == [0] * 5 + [8] * 5
+    assert controller._l2_in_wall is False
+
+
 def test_rev_buzz_uses_trigger_frequency_strength_and_hold():
     settings = Settings()
     settings.enable_rev_limiter = True
@@ -361,6 +446,53 @@ def test_rev_buzz_uses_trigger_frequency_strength_and_hold():
     assert frame[1][:2] == (settings.rev_limit_freq, settings.rev_limit_amp)
     assert animation.rev_buzz(below, settings, 1.119) == frame
     assert animation.rev_buzz(below, settings, 1.121) is None
+
+
+def test_rev_buzz_suppresses_all_ev_redline_alerts():
+    settings = Settings()
+    settings.enable_rev_limiter = True
+    animation = TriggerAnimations()
+    electric = _telemetry(
+        rpm=9000.0,
+        max_rpm=9000.0,
+        redline_alert_allowed=False,
+    )
+
+    assert animation.rev_buzz(electric, settings, 1.0) is None
+
+    confirmed = animation.rev_buzz(
+        {**electric, "rev_limiter_active": True},
+        settings,
+        1.01,
+    )
+    repeated = animation.rev_buzz(
+        {**electric, "rpm": 8950.0, "rev_limiter_active": True},
+        settings,
+        1.25,
+    )
+
+    assert confirmed is None
+    assert repeated is None
+    assert animation._rev_until == 0.0
+
+
+def test_rev_buzz_clears_an_existing_predictive_hold_for_ev():
+    settings = Settings()
+    settings.enable_rev_limiter = True
+    animation = TriggerAnimations()
+    high = _telemetry(rpm=9000.0, max_rpm=9000.0)
+
+    assert animation.rev_buzz(high, settings, 1.0) is not None
+    assert animation._rev_until > 1.0
+
+    suppressed = animation.rev_buzz(
+        {**high, "rpm": 1000.0, "redline_alert_allowed": False},
+        settings,
+        1.01,
+    )
+
+    assert suppressed is None
+    assert animation._rev_until == 0.0
 
 
 def test_rev_buzz_requires_continuous_throttle_and_clears_hold_on_release():

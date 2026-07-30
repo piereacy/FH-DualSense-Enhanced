@@ -74,14 +74,17 @@ class LightingController:
             _number(telemetry.get("effective_redline_rpm", 0.0)),
         )
         rpm = max(0.0, _number(telemetry.get("rpm", 0.0)))
+        # Consume the detector's predicted/learned limit directly. Lighting
+        # must not rebuild a separate fixed-ratio redline from dashboard RPM.
         redline_rpm = effective_redline_rpm or max_rpm
         if redline_rpm <= 0.0:
             return (0, 0, 0)
         ratio = rpm / redline_rpm
         limiter_active = bool(telemetry.get("rev_limiter_active", False))
+        alert_allowed = bool(telemetry.get("redline_alert_allowed", True))
         start = _clamp01(getattr(settings, "tachometer_start_ratio", 0.70))
         flash = max(start + 0.01, _clamp01(
-            getattr(settings, "tachometer_flash_ratio", 0.93)
+            getattr(settings, "tachometer_flash_ratio", 0.95)
         ))
         brightness = _clamp01(getattr(settings, "tachometer_brightness", 0.70))
         start_color = (
@@ -94,9 +97,13 @@ class LightingController:
             getattr(settings, "tachometer_redline_green", 38),
             getattr(settings, "tachometer_redline_blue", 80),
         )
-        if ratio < start:
+        if not alert_allowed and (limiter_active or ratio >= flash):
+            # Electric powertrains retain useful near-limit RPM lighting, but
+            # do not turn that visual state into a shift-style flashing alert.
+            color = redline_color
+        elif ratio < start:
             color = (0, 0, 0)
-        elif limiter_active or ratio >= flash:
+        elif alert_allowed and (limiter_active or ratio >= flash):
             rate = max(0.0, _number(getattr(settings, "tachometer_flash_rate_hz", 10.0)))
             visible = rate <= 0.0 or int(_number(now) * rate * 2.0) % 2 == 0
             color = redline_color if visible else (0, 0, 0)

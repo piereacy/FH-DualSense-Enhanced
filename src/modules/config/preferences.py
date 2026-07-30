@@ -31,6 +31,7 @@ DEFAULT_PROFILE_NAME = "Default"
 ORIGINAL_PROFILE_NAME = "Original"
 BUILTIN_PROFILE_NAMES = frozenset({DEFAULT_PROFILE_NAME, ORIGINAL_PROFILE_NAME})
 R7_RECONNECT_MIGRATION = "r7_enable_reconnect_default"
+R8_REDLINE_TIMING_MIGRATION = "r8_redline_timing_defaults"
 
 # System fields - shared across profiles and preserved across launches.
 # Everything else lives in the active profile.
@@ -296,6 +297,50 @@ def _migrate_r7_reconnect_default(raw: dict) -> bool:
     return True
 
 
+def _migrate_r8_redline_timing_defaults(raw: dict) -> bool:
+    """Move an untouched Default profile to the later R8 warning timing."""
+    migrations = raw.setdefault("migrations", {})
+    if not isinstance(migrations, dict):
+        migrations = {}
+        raw["migrations"] = migrations
+    if migrations.get(R8_REDLINE_TIMING_MIGRATION) is True:
+        return False
+
+    migrations[R8_REDLINE_TIMING_MIGRATION] = True
+    profiles = raw.get("profiles")
+    if not isinstance(profiles, dict):
+        return True
+    snapshot = profiles.get(DEFAULT_PROFILE_NAME)
+    if not isinstance(snapshot, dict):
+        return True
+
+    old_defaults = {
+        "rev_limit_ratio": 0.93,
+        "grip_redline_ratio": 0.93,
+        "grip_redline_release_ratio": 0.90,
+        "tachometer_flash_ratio": 0.93,
+    }
+    untouched = all(
+        not isinstance(snapshot.get(key, old), bool)
+        and isinstance(snapshot.get(key, old), (int, float))
+        and math.isclose(
+            float(snapshot.get(key, old)),
+            old,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
+        for key, old in old_defaults.items()
+    )
+    if untouched:
+        snapshot.update({
+            "rev_limit_ratio": 0.95,
+            "grip_redline_ratio": 0.95,
+            "grip_redline_release_ratio": 0.92,
+            "tachometer_flash_ratio": 0.95,
+        })
+    return True
+
+
 _GRIP_REDLINE_FIELDS = (
     "enable_grip_redline_haptics",
     "grip_redline_left",
@@ -386,6 +431,7 @@ def load(s) -> None:
         s.language = detect_system_language()
     raw = _ensure_active(raw, s)
     _migrate_r7_reconnect_default(raw)
+    _migrate_r8_redline_timing_defaults(raw)
     _migrate_r3_redline_split(raw, s)
     _migrate_r3_grip_gear_shift(raw, s)
     _write(raw)

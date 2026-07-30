@@ -219,62 +219,64 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: ${{ needs.prepare.outputs.title }}
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
-          generate_release_notes: true
+          generate_release_notes: false
           body: |
-            ## Enhanced R7 中文说明
+            ## Enhanced R8 中文说明
 
-            Enhanced R7 相比上一稳定版 Enhanced R6，重点改进控制器连接真值、Bluetooth/Xbox App 输入可靠性、动态红线、高 DPI 显示和内置更新器。项目仍基于 `Forza-Horizon-DualSense-Python 1.6.2`，握把触觉参考 `HorizonHaptics 1.3.0`，Bluetooth HD haptics 协议参考 vDS `0.3.0-rc7` 与 DS5Dongle。
+            Enhanced R8 重点修复扳机无法完全释放、红线提示偏早、界面文字裁切和旧版更新残留。
 
-            控制器在线、USB/Bluetooth 传输方式、电量和充电状态现在只由完整有效的输入报告确认，不再把残留 HID handle 当成“已连接”。同一手柄的 USB/Bluetooth 拓扑会持续轻量检测并优先 USB；自动重连默认开启，“立即重新连接”也能恢复意外停止的 HID worker。Bluetooth 转 USB 会先等待 Windows 的 DualSense USB 音频端点就绪，再使用已验证的 R6 USB 音频生命周期接管握把。短暂 Bluetooth 信号波动不会再把当前连接永久降级为 compatible rumble；只有真实 `0x36` 构建、队列或 HID write 失败才会回退。当前交接设计下，拔掉 USB 可能使手柄关机，按 PS 键重新开机即可。
+            ### 更新内容
 
-            Xbox App 连接桥现在优先清空 Bluetooth HID 输入积压并只转发最新有效状态；同轮 `0x36` 已携带扳机键和灯效时会合并重复写入。100 ms 输入空档只发送一次中立状态并保留同一个虚拟 Xbox 360 Controller 与玩家槽位，不再因短时空档移除设备。物理 HID 与 ViGEm 会话遇到瞬时异常会按有界退避自动恢复，跨会话 `runtime.log` 可用于诊断长时间运行后不认手柄。
+            - **扳机可以真正关闭**：关闭 `Brake stiffness` 或 `Throttle stiffness` 后，对应扳机不再在约 89% 行程留下硬阻力。新增 `启用自适应扳机输出` 总开关，可以立即释放 L2/R2，并保留已有子设置。
+            - **红线反馈更自然**：燃油车会学习实际断油转速，默认提醒由 `93%` 后移到 `95%`；已自定义的时机和命名 Profile 不会被覆盖。R2 扳机键、握把和转速灯条保持同步。全部电动车不再输出红线震动，灯条仍会在接近极限时稳定变红。
+            - **界面排版修正**：扳机与握把页面重新排布，说明文字在双列、窗口缩放和高 DPI 环境下不再被截断。
+            - **自动更新修正**：连续从旧版升级时会恢复正确的 `FH-DualSense-Enhanced-R8.exe` 文件名，并清理确认属于旧版本的 EXE、`.old` 和校验文件；无关文件不会被删除。
 
-            动态红线估计器会先预测车辆红线，再从同挡位多次确认的真实断油事件学习和修正阈值，同时排除换挡、离合和严重打滑。R2 扳机键红线、握把红线与转速灯条共用该结果，确认断油可立即强制灯条闪烁，改善仪表红区很宽、固定比例无法触发的车辆。配置页新增内置 `Original`，保留上游 1.6.2 扳机默认并启用 Enhanced 握把触觉；社区 `Default` 仍是默认选择，ABS 振动默认关闭。扳机反馈与握把触觉分成独立页面，灯效页不再显示握把设置。
+            ### Windows 独立 EXE（推荐）
 
-            Windows 界面现在在创建窗口前启用 Per-Monitor v2 DPI awareness，并按界面语言明确使用 Windows 系统 UI 字体与像素对齐的顶部状态框，改善 100%、125% 和 150% 缩放下的文字与边缘清晰度。长页面、响应式卡片和周期状态采用合并更新，减少最大化和跨页切换时的重复布局。FH6 实用功能现在会为 Xbox App 版自动读取本地磁盘的 `.GamingRoot` 并兼容默认 `XboxGames`，只检查游戏库根和直属目录，不扫描 `WindowsApps` 或全盘递归；精确验证失败时仍可手动选择游戏外层目录或直接 `Content` payload。内置更新器改为事务式并排安装：R7 以后使用规范版本文件名，不再创建 `.exe.old`；新版本健康启动后迁移现有快捷方式，清理同目录更旧的规范 EXE、对应 `.old` 和 `.sha256`，失败时保留仍被快捷方式引用的旧版本并支持启动恢复或回滚。
+            下载 `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`。EXE 已包含 Python 和全部运行依赖。配套 `.sha256` 由内置更新器使用，手动启动 EXE 时不需要另外下载。
 
-            ## Windows 独立 EXE（推荐）
+            ### ZUV / Linux 备用方式
 
-            下载：`${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`
+            Windows 可使用 `win_start.bat`，Linux 可使用 `linux_start.sh`，也可以手动下载 `FH-DualSense-Enhanced.zuv.py`。Linux 独立文件为 `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`；内置 EXE 更新只支持 Windows 独立版。
 
-            EXE 已包含 Python 和全部依赖，不需要 BAT、ZUV、uv 或本机 Python。请把对应 `.sha256` 文件留在 Release 中供内置更新器校验；用户手动启动 EXE 时不需要同时下载 `.sha256`。
+            ### 必要设置
 
-            ## ZUV / Linux 备用方式
-
-            Windows 可下载 `win_start.bat`，Linux 可下载 `linux_start.sh`。启动器下载 `FH-DualSense-Enhanced.zuv.py`，Windows 启动器在需要时安装 `uv`。网络不稳定时，也可以手动下载 ZUV 本体并放到启动器旁边。Linux 独立文件为 `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`；内置 EXE 更新只支持 Windows 冻结版本。
-
-            ## 必要设置
-
-            Steam 版保持 Steam Input 与 DualSense vibration 开启；Xbox App 版在软件中选择 Xbox App，不要同时运行 Steam Input 或 DS4Windows 接管同一手柄。所有平台都要在 Forza Horizon 中开启 Data Out，IP 设为 `127.0.0.1`、端口设为 `5300`，并关闭游戏内振动，否则原生 rumble 会争用并掩盖本项目的握把反馈。收不到 UDP 时，请在防火墙中允许应用和 UDP 5300。
+            - Steam 版保持 Steam Input 与 DualSense vibration 开启；Xbox App 版在软件内选择 Xbox App，不要同时让 Steam Input 或 DS4Windows 接管手柄。
+            - 在 Forza Horizon 中开启 Data Out，设置为 `127.0.0.1:5300`，并关闭游戏内振动。
+            - 若要完全释放 L2/R2，请关闭 `启用自适应扳机输出`；握把触觉需要在 `Grip haptics` 页面单独关闭。
+            - 收不到遥测时，请在防火墙中允许本程序和 UDP 5300。
 
             ---
             > - 设置保存在程序旁边的 `data/user_preferences.json`，更新后继续保留。
             > - Linux 启动器不会安装 udev 规则。HID 权限不足时，请下载 [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules)，复制到 `/etc/udev/rules.d/`，重新载入规则后连接手柄。
             > - 预发布频道仍可通过 `uv run FH-DualSense-Enhanced.zuv.py --prerelease` 跟踪。
 
-            ## Enhanced R7 English notes
+            ## Enhanced R8 English notes
 
-            Compared with the previous stable Enhanced R6, Enhanced R7 focuses on truthful controller state, Bluetooth/Xbox App input reliability, dynamic redline detection, high-DPI rendering, and transactional updates. It remains based on `Forza-Horizon-DualSense-Python 1.6.2`, with grip haptics informed by `HorizonHaptics 1.3.0` and Bluetooth HD haptics informed by vDS `0.3.0-rc7` plus DS5Dongle.
+            Enhanced R8 focuses on triggers that would not fully release, early redline warnings, clipped interface text, and leftovers from legacy updates.
 
-            Connected state, USB/Bluetooth transport, battery level, and charging state are now established only by complete valid input reports instead of a leftover HID handle. Lightweight topology monitoring follows the same controller across USB and Bluetooth and prefers USB. Automatic reconnect is enabled by default, and Reconnect Now can revive an unexpectedly stopped HID worker. Bluetooth-to-USB waits for the Windows DualSense USB audio endpoint before handing grip haptics to the verified R6 USB audio lifecycle. A temporary Bluetooth signal gap no longer permanently downgrades the connection to compatible rumble; fallback now requires an actual `0x36` build, queue, or HID write failure. With the current handover design, unplugging USB can power the controller off; press the PS button to reconnect.
+            ### What's new
 
-            Xbox App bridge mode now drains Bluetooth HID input backlog first and forwards only the newest valid state. Redundant writes are coalesced when the same `0x36` report already carries trigger and lighting state. A 100 ms input gap sends one neutral state but retains the same virtual Xbox 360 Controller and player slot instead of removing the device. Physical HID and ViGEm sessions recover from transient failures with bounded backoff, while a persistent `runtime.log` helps diagnose controllers that stop responding during long sessions.
+            - **Trigger feedback can be fully disabled**: after turning off `Brake stiffness` or `Throttle stiffness`, the corresponding trigger no longer keeps hard resistance around 89% travel. The new `Enable adaptive trigger output` master switch releases L2/R2 immediately while preserving existing child settings.
+            - **More natural redline feedback**: combustion cars learn their actual fuel-cut RPM, and the default warning moves later from `93%` to `95%`. Custom timing and named profiles are preserved. R2, grip haptics, and the tachometer lightbar stay synchronized. Electric vehicles no longer produce redline vibration, while the lightbar still turns steadily red near the limit.
+            - **Layout fixes**: the Trigger feedback and Grip haptics pages have been rearranged, and helper text no longer clips in two-column, resized, or high-DPI layouts.
+            - **Updater fixes**: repeated upgrades from older versions restore the correct `FH-DualSense-Enhanced-R8.exe` filename and remove confirmed old-version EXEs, `.old` files, and checksum files. Unrelated files are not deleted.
 
-            The dynamic redline estimator starts with a prediction and then learns from repeated, same-gear limiter events while excluding shifts, clutch use, and severe wheel slip. R2 trigger redline feedback, grip redline feedback, and the tachometer lightbar share the learned result; a confirmed limiter event can immediately force the lightbar to flash. This improves cars whose wide dashboard red zone never worked with one fixed ratio. Profiles now include a built-in `Original` preset with upstream 1.6.2 trigger defaults plus Enhanced grip haptics. Community `Default` remains selected by default, with ABS vibration disabled. Trigger feedback and grip haptics have separate pages, and the lighting page no longer exposes grip settings.
+            ### Windows standalone EXE (recommended)
 
-            Windows now enables Per-Monitor v2 DPI awareness before creating any UI and explicitly selects a Windows system UI font for each interface language, with pixel-aligned header status frames improving text and edge clarity at 100%, 125%, and 150% scaling. Long pages, responsive cards, and periodic status rendering coalesce repeated layout work to reduce maximize and navigation stalls. FH6 utilities now discover Xbox App flat-file installs from local-drive `.GamingRoot` markers and the default `XboxGames` folder. Discovery checks only the library root and direct children, never `WindowsApps` or a recursive full-drive scan; manual selection of either the outer game folder or direct `Content` payload remains the fallback. The updater now performs transactional side-by-side installation. R7 and later use canonical versioned filenames without creating `.exe.old`; after a healthy launch it migrates matching shortcuts and removes older canonical EXEs plus their matching `.old` and `.sha256` files. Interrupted or partially failed updates retain needed old versions and can recover or roll back on the next start.
+            Download `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`. It includes Python and all runtime dependencies. The matching `.sha256` is used by the built-in updater and is not required for manual launches.
 
-            ## Windows standalone EXE (recommended)
+            ### ZUV / Linux fallback
 
-            Download `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`. It includes Python and all runtime dependencies, so BAT, ZUV, uv, and a local Python installation are not required. The matching `.sha256` remains attached to the Release for the built-in updater; users launching the EXE manually do not need to download it separately.
+            Windows users may use `win_start.bat`, Linux users may use `linux_start.sh`, or either platform may download `FH-DualSense-Enhanced.zuv.py` manually. The standalone Linux asset is `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`. Built-in EXE replacement is available only in the Windows standalone build.
 
-            ## ZUV / Linux fallback
+            ### Required settings
 
-            Windows users may download `win_start.bat`, and Linux users may download `linux_start.sh`. The launchers fetch `FH-DualSense-Enhanced.zuv.py`; the Windows launcher installs `uv` when required. On an unreliable connection, place a manually downloaded ZUV file next to the launcher. The standalone Linux asset is `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`. Built-in executable replacement is available only in the frozen Windows build.
-
-            ## Required settings
-
-            For Steam, keep Steam Input and DualSense vibration enabled. For Xbox App, select Xbox App inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the same controller. On every platform, enable Forza Data Out at `127.0.0.1:5300` and disable in-game vibration, otherwise native rumble can compete with or mask this project's grip feedback. Allow the app and UDP 5300 through Windows Firewall if packets do not arrive.
+            - On Steam, keep Steam Input and DualSense vibration enabled. For Xbox App, select Xbox App inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the controller at the same time.
+            - Enable Forza Data Out at `127.0.0.1:5300` and disable in-game vibration.
+            - To release L2/R2 completely, disable `Enable adaptive trigger output`; Grip haptics must be disabled separately.
+            - If telemetry does not arrive, allow the app and UDP 5300 through Windows Firewall.
 
             ---
             > - Settings are stored in `data/user_preferences.json` beside the executable and remain across updates.

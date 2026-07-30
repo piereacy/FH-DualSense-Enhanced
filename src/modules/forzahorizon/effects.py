@@ -164,6 +164,10 @@ class TriggerAnimations:
             self._rev_until = 0.0
             return None
 
+        if not bool(t.get("redline_alert_allowed", True)):
+            self._rev_until = 0.0
+            return None
+
         handbrake_full_throttle = (
             t["accel"] >= RAW_MAX * 0.8
             and t["handbrake"] > 16
@@ -174,7 +178,8 @@ class TriggerAnimations:
 
         limit_rpm = t.get("effective_redline_rpm", t["max_rpm"])
         rpm_ratio = t["rpm"] / limit_rpm if limit_rpm > 0 else 0.0
-        if t.get("rev_limiter_active", False) or rpm_ratio > s.rev_limit_ratio:
+        limiter_active = bool(t.get("rev_limiter_active", False))
+        if limiter_active or rpm_ratio > s.rev_limit_ratio:
             self._rev_until = now + max(0.0, s.rev_limit_hold_ms) / 1000.0
         if now < self._rev_until:
             return vibrate(s.rev_limit_freq, s.rev_limit_amp)
@@ -420,7 +425,7 @@ class Controller:
         1. Gear shift thump    - one-shot burst on every shift, brief
         2. ABS pulse           - tire lockup buzz under hard braking
         3. Traction feedback   - braking tire longitudinal grip
-        4. Firmware end wall   - hard wall near 100% travel (hysteresis)
+        4. Brake end wall      - part of Brake stiffness (hysteresis)
         5. Static brake wall   - optional fixed wall at brake_static_wall_at
         6. Brake resistance    - default rigid ramp 0..max_force
 
@@ -429,7 +434,7 @@ class Controller:
         2. Idle buzz           - stationary with light throttle
         3. Traction feedback   - accelerator/both-pedal longitudinal grip
         4. Rev limiter buzz    - high RPM while throttle remains active
-        5. Firmware end wall   - hard wall near 100% travel (hysteresis)
+        5. Throttle end wall   - part of Throttle stiffness (hysteresis)
         6. Throttle resistance - default rigid ramp 0..max_force
     """
 
@@ -441,7 +446,7 @@ class Controller:
         self._r2_in_wall = False
 
     def update(self, t, s, collision_signal=None):
-        if not t["on"]:
+        if not t["on"] or not s.enable_trigger_feedback:
             self.anim.reset_transients()
             self._l2_in_wall = False
             self._r2_in_wall = False
@@ -459,7 +464,13 @@ class Controller:
         )
 
     def L2(self, t, s, now, traction=_TRACTION_UNSET):
+        if not s.enable_trigger_feedback:
+            self.anim.reset_transients()
+            self._l2_in_wall = False
+            return off()
         brake = t["brake"]
+        if not s.enable_brake_resistance:
+            self._l2_in_wall = False
 
         if s.enable_collision_trigger_l2:
             collision = self.anim.collision_burst(s, now)
@@ -485,11 +496,16 @@ class Controller:
         if traction is not None:
             return traction
 
-        # 4. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
-        self._l2_in_wall = _wall_state(brake, self._l2_in_wall,
-                                       s.brake_wall_engage_at, s.brake_wall_release_at)
-        if self._l2_in_wall:
-            return self.wall
+        # 4. Brake-stiffness end wall - latch only while that switch owns it.
+        if s.enable_brake_resistance:
+            self._l2_in_wall = _wall_state(
+                brake,
+                self._l2_in_wall,
+                s.brake_wall_engage_at,
+                s.brake_wall_release_at,
+            )
+            if self._l2_in_wall:
+                return self.wall
 
         # 5. Static brake wall - optional fixed wall mid-travel; replaces ramp
         if s.enable_brake_static_wall:
@@ -506,7 +522,13 @@ class Controller:
         return off()
 
     def R2(self, t, s, now, traction=_TRACTION_UNSET):
+        if not s.enable_trigger_feedback:
+            self.anim.reset_transients()
+            self._r2_in_wall = False
+            return off()
         accel = t["accel"]
+        if not s.enable_throttle_resistance:
+            self._r2_in_wall = False
 
         if s.enable_collision_trigger_r2:
             collision = self.anim.collision_burst(s, now)
@@ -537,11 +559,16 @@ class Controller:
         if rev is not None:
             return rev
 
-        # 5. Firmware end wall - hard wall near 100% travel (latched via hysteresis)
-        self._r2_in_wall = _wall_state(accel, self._r2_in_wall,
-                                       s.throttle_wall_engage_at, s.throttle_wall_release_at)
-        if self._r2_in_wall:
-            return self.wall
+        # 5. Throttle-stiffness end wall - latch only while that switch owns it.
+        if s.enable_throttle_resistance:
+            self._r2_in_wall = _wall_state(
+                accel,
+                self._r2_in_wall,
+                s.throttle_wall_engage_at,
+                s.throttle_wall_release_at,
+            )
+            if self._r2_in_wall:
+                return self.wall
 
         # 6. Optional G/boost and normal throttle resistance
         base = self.anim.throttle_ramp(t, s, now)

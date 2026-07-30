@@ -17,9 +17,11 @@ class Settings:
     # MARK: Pedal shared
     pedal_value_max: int = 255                # raw pedal byte range. DO NOT CHANGE
     wall_zones: int = 2                       # firmware end-wall depth; 1=top zone only, 9=full travel
+    enable_trigger_feedback: bool = True       # master gate for all adaptive-trigger output
 
     # MARK: L2 brake resistance
-    # Rigid curve: 0..wall_engage_at maps baseline..max_force, then firmware wall at 100%.
+    # This switch owns both the rigid curve and its firmware end wall.
+    # 0..wall_engage_at maps baseline..max_force, then the wall protects full travel.
     enable_brake_resistance: bool = True
     brake_deadzone: int = 0                   # community-informed baseline
     brake_baseline_force: int = 0             # force at deadzone exit
@@ -53,7 +55,8 @@ class Settings:
     abs_wall_zones: int = 3                   # top zones remain a maximum wall
 
     # MARK: R2 throttle resistance
-    # Light rigid curve: 0..wall_engage_at maps baseline..max_force, then firmware wall at 100%.
+    # This switch owns both the light rigid curve and its firmware end wall.
+    # 0..wall_engage_at maps baseline..max_force, then the wall protects full travel.
     enable_throttle_resistance: bool = True
     accel_deadzone: int = 0                   # community-informed baseline
     throttle_baseline_force: int = 0          # force at deadzone exit
@@ -76,7 +79,7 @@ class Settings:
 
     # MARK: R2 trigger redline warning
     enable_rev_limiter: bool = False
-    rev_limit_ratio: float = 0.93             # fraction of max_rpm to fire at
+    rev_limit_ratio: float = 0.95             # fraction of learned redline to fire at
     rev_limit_freq: int = 30                  # adaptive-trigger vibration frequency
     rev_limit_amp: int = 12                   # adaptive-trigger vibration strength
     rev_limit_hold_ms: float = 120.0          # anti-stutter hold after falling below the ratio
@@ -86,8 +89,8 @@ class Settings:
     enable_grip_redline_haptics: bool = True
     grip_redline_left: bool = True
     grip_redline_right: bool = False
-    grip_redline_ratio: float = 0.93
-    grip_redline_release_ratio: float = 0.90
+    grip_redline_ratio: float = 0.95
+    grip_redline_release_ratio: float = 0.92
     grip_redline_freq: int = 10
     grip_redline_amp: int = 220
     grip_redline_gain: float = 1.5
@@ -179,7 +182,7 @@ class Settings:
     # MARK: R4 optional controller lighting
     enable_tachometer_lightbar: bool = False
     tachometer_start_ratio: float = 0.70
-    tachometer_flash_ratio: float = 0.93
+    tachometer_flash_ratio: float = 0.95
     tachometer_flash_rate_hz: float = 10.0
     tachometer_brightness: float = 0.70
     tachometer_start_red: int = 57

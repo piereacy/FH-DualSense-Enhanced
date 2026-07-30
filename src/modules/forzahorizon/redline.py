@@ -30,6 +30,10 @@ _MIN_EVENT_GAP_S = 0.20
 _MIN_POWER_W = 5_000.0
 _MAX_SLIP_FOR_LEARNING = 1.5
 _CANDIDATES_REQUIRED = 3
+_BOOTSTRAP_CANDIDATES_FOR_SIGNAL = 2
+_MIN_BOOTSTRAP_RPM = 1_500.0
+_MIN_FORWARD_GEAR = 1
+_MAX_FORWARD_GEAR = 10
 
 
 def _number(value, default: float = 0.0) -> float:
@@ -50,12 +54,18 @@ def predict_redline_rpm(max_rpm: float) -> float:
     return max_rpm * ratio
 
 
+def _is_forward_gear(gear: int) -> bool:
+    """Reject reverse and Forza's out-of-range neutral sentinel."""
+    return _MIN_FORWARD_GEAR <= gear <= _MAX_FORWARD_GEAR
+
+
 @dataclass(frozen=True, slots=True)
 class RedlineState:
     effective_rpm: float
     limiter_active: bool
     learned: bool
     confidence: float
+    redline_alert_allowed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,13 +81,14 @@ class _PendingCut:
     at: float
     gear: int
     rpm: float
+    near_prediction: bool
 
 
 class RedlineDetector:
     """Learn a stable rev limit without confusing shifts with fuel cut."""
 
     def __init__(self) -> None:
-        self._identity: tuple[int, int, int] | None = None
+        self._identity: tuple[int, int, int, int] | None = None
         self._learned_rpm: float | None = None
         self._confidence = 0.0
         self._candidates: deque[float] = deque(maxlen=12)
@@ -110,15 +121,20 @@ class RedlineDetector:
         self.reset_transients()
 
     @staticmethod
-    def _identity_for(telemetry: Mapping[str, object], max_rpm: float) -> tuple[int, int, int]:
+    def _identity_for(
+        telemetry: Mapping[str, object],
+        max_rpm: float,
+    ) -> tuple[int, int, int, int]:
         ordinal = int(_number(telemetry.get("car_ordinal"), -1.0))
         performance_index = int(_number(
             telemetry.get("car_performance_index"), -1.0
         ))
+        cylinders = int(_number(telemetry.get("num_cylinders"), -1.0))
         return (
             ordinal if ordinal > 0 else 0,
             performance_index if performance_index > 0 else 0,
             int(round(max_rpm / 50.0)),
+            cylinders if cylinders >= 0 else -1,
         )
 
     def _effective_rpm(self, max_rpm: float) -> float:
@@ -133,6 +149,18 @@ class RedlineDetector:
             # must not keep warning permanently below the engine's real range.
             return min(max_rpm, self._observed_peak * 1.003)
         return min(max_rpm, self._learned_rpm)
+
+    def _redline_alert_allowed(
+        self,
+        telemetry: Mapping[str, object],
+    ) -> bool:
+        """Disable shift-oriented redline haptics for every electric vehicle."""
+        cylinders = telemetry.get("num_cylinders")
+        if cylinders is None:
+            # Older synthetic/forwarded mappings may omit this field. Preserve
+            # the established behavior rather than guessing an electric motor.
+            return True
+        return int(_number(cylinders, -1.0)) != 0
 
     @staticmethod
     def _slip(telemetry: Mapping[str, object]) -> float:
@@ -171,10 +199,15 @@ class RedlineDetector:
         predicted: float,
         max_rpm: float,
         idle_rpm: float,
-    ) -> None:
-        minimum = max(idle_rpm * 2.0, predicted * 0.80)
+        *,
+        allow_broad_bootstrap: bool = False,
+    ) -> int:
+        minimum = max(
+            idle_rpm * 2.0,
+            _MIN_BOOTSTRAP_RPM if allow_broad_bootstrap else predicted * 0.80,
+        )
         if not minimum <= candidate <= max_rpm * 1.01:
-            return
+            return 0
 
         self._candidates.append(candidate)
         tolerance = max(100.0, min(260.0, predicted * 0.025))
@@ -187,7 +220,7 @@ class RedlineDetector:
                 self._confidence,
                 len(cluster) / (_CANDIDATES_REQUIRED + 2.0),
             )
-            return
+            return len(cluster)
 
         estimate = float(median(cluster))
         previous = self._learned_rpm
@@ -211,6 +244,7 @@ class RedlineDetector:
                 len(cluster),
                 self._confidence,
             )
+        return len(cluster)
 
     def update(self, telemetry: Mapping[str, object], now: float) -> RedlineState:
         now = _number(now)
@@ -220,7 +254,7 @@ class RedlineDetector:
 
         if max_rpm <= 0.0:
             self.reset_transients()
-            return RedlineState(0.0, False, False, 0.0)
+            return RedlineState(0.0, False, False, 0.0, True)
 
         identity = self._identity_for(telemetry, max_rpm)
         has_vehicle_identity = identity[0] > 0 or identity[1] > 0
@@ -251,6 +285,7 @@ class RedlineDetector:
                 False,
                 self._learned_rpm is not None,
                 self._confidence,
+                self._redline_alert_allowed(telemetry),
             )
 
         gear = int(_number(telemetry.get("gear")))
@@ -260,6 +295,13 @@ class RedlineDetector:
         power = _number(telemetry.get("power"))
         torque = _number(telemetry.get("torque"))
         slip = self._slip(telemetry)
+        cylinders = telemetry.get("num_cylinders")
+        broad_bootstrap_allowed = (
+            self._learned_rpm is None
+            and cylinders is not None
+            and int(_number(cylinders, -1.0)) > 0
+        )
+        bootstrap_rpm_floor = max(idle_rpm * 2.0, _MIN_BOOTSTRAP_RPM)
 
         if gear != self._gear:
             self._gear = gear
@@ -269,7 +311,7 @@ class RedlineDetector:
             self._cut_latched = False
             self._pending = None
 
-        valid_gear = gear > 0
+        valid_gear = _is_forward_gear(gear)
         if not valid_gear:
             self.reset_transients()
             return RedlineState(
@@ -277,8 +319,8 @@ class RedlineDetector:
                 False,
                 self._learned_rpm is not None,
                 self._confidence,
+                self._redline_alert_allowed(telemetry),
             )
-
         self._discard_pending_if_invalid(
             gear=gear,
             accel=accel,
@@ -290,9 +332,20 @@ class RedlineDetector:
         if self._pending is not None and now - self._pending.at >= _CUT_CONFIRM_S:
             pending = self._pending
             self._pending = None
-            self._record_candidate(pending.rpm, predicted, max_rpm, idle_rpm)
-            self._last_event_at = now
-            self._limiter_until = now + _CUT_HOLD_S
+            cluster_size = self._record_candidate(
+                pending.rpm,
+                predicted,
+                max_rpm,
+                idle_rpm,
+                allow_broad_bootstrap=not pending.near_prediction,
+            )
+            if cluster_size > 0:
+                self._last_event_at = now
+                if (
+                    pending.near_prediction
+                    or cluster_size >= _BOOTSTRAP_CANDIDATES_FOR_SIGNAL
+                ):
+                    self._limiter_until = now + _CUT_HOLD_S
 
         self._recent.append(_Sample(now, rpm, power, torque))
         while self._recent and now - self._recent[0].at > _RECENT_WINDOW_S:
@@ -304,7 +357,13 @@ class RedlineDetector:
             and accel >= _THROTTLE_ARM
             and clutch <= _CLUTCH_MAX
             and speed >= _MIN_SPEED_KMH
-            and rpm >= effective * 0.78
+            and (
+                rpm >= effective * 0.78
+                or (
+                    broad_bootstrap_allowed
+                    and rpm >= bootstrap_rpm_floor
+                )
+            )
             and power >= _MIN_POWER_W
             and slip <= _MAX_SLIP_FOR_LEARNING
         )
@@ -334,16 +393,40 @@ class RedlineDetector:
             rpm_drop = peak_rpm - rpm >= max(60.0, effective * 0.006)
             exact_cut = peak_power >= _MIN_POWER_W and power <= 0.0
             near_limit = peak_rpm >= effective * 0.82
+            broad_bootstrap_cut = (
+                broad_bootstrap_allowed
+                and not near_limit
+                and peak_rpm >= bootstrap_rpm_floor
+                and power_collapsed
+                and torque_collapsed
+                and (exact_cut or rpm_drop)
+            )
             event_gap = now - self._last_event_at >= _MIN_EVENT_GAP_S
 
             if (
                 self._pending is None
                 and not self._cut_latched
-                and near_limit
                 and event_gap
-                and (exact_cut or (power_collapsed and (torque_collapsed or rpm_drop)))
+                and (
+                    (
+                        near_limit
+                        and (
+                            exact_cut
+                            or (
+                                power_collapsed
+                                and (torque_collapsed or rpm_drop)
+                            )
+                        )
+                    )
+                    or broad_bootstrap_cut
+                )
             ):
-                self._pending = _PendingCut(now, gear, peak_rpm)
+                self._pending = _PendingCut(
+                    now,
+                    gear,
+                    peak_rpm,
+                    near_prediction=near_limit,
+                )
                 self._cut_latched = True
 
             recovery_level = max(2_000.0, peak_power * 0.35)
@@ -356,4 +439,5 @@ class RedlineDetector:
             limiter_active=now < self._limiter_until,
             learned=self._learned_rpm is not None,
             confidence=self._confidence,
+            redline_alert_allowed=self._redline_alert_allowed(telemetry),
         )

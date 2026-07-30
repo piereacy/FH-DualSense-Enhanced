@@ -20,3 +20,7 @@ class ControlsTab(SettingsTab):
     SHOW_EXPERIMENTAL = True
     PAGE_TITLE = "Trigger feedback"
     PAGE_SUBTITLE = "L2/R2 switches and tuning. Changes save instantly."
+    FULL_WIDTH_SWITCH_SECTIONS = frozenset({
+        "Trigger feedback",
+        "Shared trigger feedback",
+    })

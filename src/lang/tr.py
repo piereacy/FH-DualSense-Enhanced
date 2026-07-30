@@ -309,6 +309,8 @@ STRINGS.update({
 
 STRINGS.update({
     "Trigger feedback": "Tetik geri bildirimi",
+    "Enable adaptive trigger output": "Uyarlanabilir tetik çıkışını etkinleştir",
+    "Immediately releases L2 and R2 while preserving individual settings. Grip haptics remain independent.": "Kapatıldığında L2/R2 hemen serbest kalır ve ayrı ayarlar korunur. Tutma kolu dokunsalı bağımsız kalır.",
     "L2/R2 switches and tuning. Changes save instantly.": "L2/R2 anahtarları ve ayarları. Değişiklikler anında kaydedilir.",
     "Grip switches and tuning. Changes save instantly.": "Tutma kolu dokunsalı anahtarları ve ayarları. Değişiklikler anında kaydedilir.",
     "Shared trigger feedback": "Ortak tetik geri bildirimi",

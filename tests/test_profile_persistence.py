@@ -138,6 +138,89 @@ def test_r7_reconnect_migration_runs_once_and_preserves_driving_settings(tmp_pat
     assert saved["migrations"][preferences.R7_RECONNECT_MIGRATION] is True
 
 
+def _old_redline_timing() -> dict[str, float]:
+    return {
+        "rev_limit_ratio": 0.93,
+        "grip_redline_ratio": 0.93,
+        "grip_redline_release_ratio": 0.90,
+        "tachometer_flash_ratio": 0.93,
+    }
+
+
+def test_r8_redline_timing_migrates_only_untouched_default_once(
+    tmp_path,
+    monkeypatch,
+):
+    _paths(tmp_path, monkeypatch)
+    raw = {
+        "version": "7",
+        "active_profile": "Default",
+        "profiles": {
+            "Default": {**_old_redline_timing(), "brake_max_force": 3},
+            "Track": _old_redline_timing(),
+        },
+        "globals": {},
+    }
+    preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
+
+    migrated = Settings()
+    preferences.load(migrated)
+    saved = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+
+    assert migrated.rev_limit_ratio == 0.95
+    assert migrated.grip_redline_ratio == 0.95
+    assert migrated.grip_redline_release_ratio == 0.92
+    assert migrated.tachometer_flash_ratio == 0.95
+    assert migrated.brake_max_force == 3
+    assert {
+        key: saved["profiles"]["Track"][key]
+        for key in _old_redline_timing()
+    } == _old_redline_timing()
+    assert (
+        saved["migrations"][preferences.R8_REDLINE_TIMING_MIGRATION]
+        is True
+    )
+
+    for key, value in _old_redline_timing().items():
+        setattr(migrated, key, value)
+    assert preferences.save(migrated)
+
+    reloaded = Settings()
+    preferences.load(reloaded)
+    assert {
+        key: getattr(reloaded, key)
+        for key in _old_redline_timing()
+    } == _old_redline_timing()
+
+
+def test_r8_redline_timing_preserves_a_customized_default_group(
+    tmp_path,
+    monkeypatch,
+):
+    _paths(tmp_path, monkeypatch)
+    customized = {**_old_redline_timing(), "rev_limit_ratio": 0.91}
+    raw = {
+        "version": "7",
+        "active_profile": "Default",
+        "profiles": {"Default": customized},
+        "globals": {},
+    }
+    preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
+
+    loaded = Settings()
+    preferences.load(loaded)
+    saved = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+
+    assert {
+        key: getattr(loaded, key)
+        for key in customized
+    } == customized
+    assert (
+        saved["migrations"][preferences.R8_REDLINE_TIMING_MIGRATION]
+        is True
+    )
+
+
 def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     monkeypatch.setattr(preferences, "detect_system_language", lambda: "zh_tw")

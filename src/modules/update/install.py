@@ -355,14 +355,14 @@ def detect_legacy_bootstrap(
     current_version: int | None = None,
     version_reader=None,
 ) -> LegacyBootstrapCandidate | None:
-    """Recognize the exact R6-helper output without trusting filenames alone."""
+    """Recognize an overwrite-style legacy-helper output from PE versions."""
     if executable is None:
         if not self_update_supported():
             return None
         executable = Path(sys.executable)
     executable = Path(executable).resolve()
     try:
-        old_version = release_version(executable.name)
+        filename_version = release_version(executable.name)
     except TransactionError:
         return None
     if current_version is None:
@@ -374,15 +374,27 @@ def detect_legacy_bootstrap(
         except ValueError:
             return None
     current_version = int(current_version)
-    if current_version <= old_version:
+    if current_version <= filename_version:
         return None
     backup = Path(str(executable) + ".old").resolve()
     if not executable.is_file() or not backup.is_file():
         return None
     reader = version_reader or _pe_major_version
-    if reader(executable) != current_version or reader(backup) != old_version:
+    executable_version = reader(executable)
+    backup_version = reader(backup)
+    if executable_version != current_version:
         return None
-    return LegacyBootstrapCandidate(executable, backup, old_version, current_version)
+    if (
+        type(backup_version) is not int
+        or backup_version < filename_version
+        or backup_version >= current_version
+    ):
+        return None
+    # The overwrite-style helper may itself have been launched from an already
+    # wrong-named EXE. For example, R5.exe can contain R6 before its next update
+    # leaves R7 in R5.exe and the real R6 bytes in R5.exe.old. The rollback PE
+    # version is authoritative here; the canonical filename is only its floor.
+    return LegacyBootstrapCandidate(executable, backup, backup_version, current_version)
 
 
 def launch_legacy_bootstrap(
@@ -393,7 +405,7 @@ def launch_legacy_bootstrap(
     argv: list[str] | None = None,
     version_reader=None,
 ) -> Path | None:
-    """Start R7's second-stage helper when R6 launched it under the R6 name."""
+    """Start the second-stage helper after an overwrite-style legacy update."""
     candidate = detect_legacy_bootstrap(
         executable=executable,
         current_version=current_version,

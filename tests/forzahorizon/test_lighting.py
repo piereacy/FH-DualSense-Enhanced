@@ -1,6 +1,7 @@
 from modules.config.settings import Settings
 from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from modules.forzahorizon.lighting import LightingController
+from modules.forzahorizon.redline import RedlineDetector
 
 
 def _telemetry(**overrides):
@@ -12,6 +13,49 @@ def _telemetry(**overrides):
     }
     value.update(overrides)
     return value
+
+
+def _detector_telemetry(**overrides):
+    value = {
+        "on": True,
+        "rpm": 6100.0,
+        "max_rpm": 12_000.0,
+        "idle_rpm": 900.0,
+        "gear": 3,
+        "accel": 255,
+        "clutch": 0,
+        "speed": 120.0,
+        "power": 120_000.0,
+        "torque": 300.0,
+        "car_ordinal": 101,
+        "car_performance_index": 800,
+        "num_cylinders": 8,
+    }
+    for wheel in ("fl", "fr", "rl", "rr"):
+        value[f"tire_slip_ratio_{wheel}"] = 0.0
+        value[f"tire_combined_slip_{wheel}"] = 0.0
+    value.update(overrides)
+    return value
+
+
+def _confirm_broad_cut(detector, start, rpm):
+    detector.update(_detector_telemetry(rpm=rpm), start)
+    detector.update(
+        _detector_telemetry(
+            rpm=rpm - 90.0,
+            power=8_000.0,
+            torque=20.0,
+        ),
+        start + 0.02,
+    )
+    return detector.update(
+        _detector_telemetry(
+            rpm=rpm - 100.0,
+            power=100_000.0,
+            torque=260.0,
+        ),
+        start + 0.15,
+    )
 
 
 def test_lighting_does_not_claim_controller_fields_by_default():
@@ -58,6 +102,42 @@ def test_tachometer_uses_the_shared_dynamic_redline_when_available():
     assert state.lightbar == (178, 27, 56)
 
 
+def test_tachometer_follows_the_new_broad_learning_result_end_to_end():
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+    lighting = LightingController()
+    detector = RedlineDetector()
+
+    before_learning = lighting.update(
+        _telemetry(rpm=5900.0, max_rpm=12_000.0),
+        settings,
+        2.0,
+    )
+
+    detector.update(_detector_telemetry(), 0.0)
+    detector.update(_detector_telemetry(), 0.40)
+    _confirm_broad_cut(detector, 0.50, 6200.0)
+    _confirm_broad_cut(detector, 0.90, 6240.0)
+    learned = _confirm_broad_cut(detector, 1.30, 6180.0)
+
+    after_learning = lighting.update(
+        _telemetry(
+            rpm=5900.0,
+            max_rpm=12_000.0,
+            effective_redline_rpm=learned.effective_rpm,
+            rev_limiter_active=learned.limiter_active,
+            redline_alert_allowed=learned.redline_alert_allowed,
+        ),
+        settings,
+        2.0,
+    )
+
+    assert learned.learned is True
+    assert 6100.0 <= learned.effective_rpm <= 6300.0
+    assert before_learning.lightbar == (0, 0, 0)
+    assert after_learning.lightbar == (178, 27, 56)
+
+
 def test_confirmed_limiter_event_forces_the_tachometer_flash():
     settings = Settings()
     settings.enable_tachometer_lightbar = True
@@ -74,6 +154,61 @@ def test_confirmed_limiter_event_forces_the_tachometer_flash():
     )
 
     assert state.lightbar == (178, 27, 56)
+
+
+def test_ev_tachometer_stays_steady_red_without_shift_flashing():
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+    controller = LightingController()
+    electric_limit = _telemetry(
+        rpm=9000.0,
+        effective_redline_rpm=9000.0,
+        redline_alert_allowed=False,
+        rev_limiter_active=True,
+    )
+
+    first = controller.update(electric_limit, settings, 1.0)
+    terrain_dip = controller.update(
+        {**electric_limit, "rpm": 8950.0, "rev_limiter_active": False},
+        settings,
+        1.05,
+    )
+    repeated_limit = controller.update(electric_limit, settings, 1.10)
+
+    assert first.lightbar == (178, 27, 56)
+    assert terrain_dip.lightbar == (178, 27, 56)
+    assert repeated_limit.lightbar == (178, 27, 56)
+
+
+def test_multi_speed_ev_tachometer_keeps_near_limit_gradient_and_steady_red():
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+    controller = LightingController()
+    electric = _telemetry(
+        gear=2,
+        effective_redline_rpm=9000.0,
+        redline_alert_allowed=False,
+    )
+
+    approaching = controller.update(
+        {**electric, "rpm": 8100.0},
+        settings,
+        1.00,
+    )
+    limit_on_flash_phase = controller.update(
+        {**electric, "rpm": 9000.0},
+        settings,
+        1.05,
+    )
+    limit_on_dark_phase = controller.update(
+        {**electric, "rpm": 9000.0},
+        settings,
+        1.10,
+    )
+
+    assert approaching.lightbar not in {(0, 0, 0), (178, 27, 56)}
+    assert limit_on_flash_phase.lightbar == (178, 27, 56)
+    assert limit_on_dark_phase.lightbar == (178, 27, 56)
 
 
 def test_gear_player_leds_progress_from_one_to_five():

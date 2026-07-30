@@ -5,9 +5,9 @@ import zlib
 
 from .output_state import ControllerVisualState, NO_VISUAL_CONTROL
 
-# Bluetooth audio-haptics framing is based on hurryman2212/vds 0.3.0-rc7
-# and cross-checked against awalol/DS5Dongle. Both repository LICENSE files
-# identify the referenced revisions as MIT; see docs/THIRD_PARTY_NOTICES.md.
+# Bluetooth audio-haptics framing was adopted from hurryman2212/vds
+# 0.3.0-rc7, revalidated against 0.4.0-rc1, and cross-checked against
+# awalol/DS5Dongle. The referenced revisions are MIT; see the notices file.
 BT_HAPTICS_REPORT_ID = 0x36
 BT_HAPTICS_REPORT_SIZE = 398
 BT_HAPTICS_SAMPLE_BYTES = 64

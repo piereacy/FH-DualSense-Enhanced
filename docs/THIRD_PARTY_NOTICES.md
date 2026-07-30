@@ -43,15 +43,19 @@ The DualSense Bluetooth HD haptics report framing, 3 kHz stereo sample format,
 sequence fields, and pacing design in this project were informed by vDS:
 
 - Source: <https://github.com/hurryman2212/vds>
-- Reference version: `0.3.0-rc7`
-- Reference commit: `2d27ab0b2ea02e735cd3aa758cc5bf3d6e578534`
+- Original adoption version: `0.3.0-rc7`
+- Original adoption commit: `2d27ab0b2ea02e735cd3aa758cc5bf3d6e578534`
+- Reference version: `0.4.0-rc1`
+- Reference commit: `ec531599dfdd02e14ce68efd8c0d2dcb439894a5`
 - Copyright: Copyright (c) 2026 Jihong Min
 - License: MIT
 
-FH-DualSense-Enhanced does not bundle the vDS daemon, virtual USB device,
-filter driver, installer, or Opus runtime. It sends only its own telemetry-
-generated haptic stream to the physical controller through the existing
-hidapi connection.
+The framing was originally adopted from `0.3.0-rc7` and revalidated against
+`0.4.0-rc1`; the later release does not change the haptics packet builder used
+by this project. FH-DualSense-Enhanced does not bundle the vDS daemon, legacy
+vDS drivers, USB/IP, HidHide, installer, or Opus runtime. It sends only its own
+telemetry-generated haptic stream to the physical controller through the
+existing hidapi connection.
 
 ```text
 MIT License

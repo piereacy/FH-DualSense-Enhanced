@@ -892,8 +892,37 @@ def test_legacy_bootstrap_detection_requires_matching_embedded_versions(tmp_path
     ) is None
 
 
-def test_launch_legacy_bootstrap_stages_current_bytes_and_starts_new_helper(tmp_path, monkeypatch):
-    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+def test_legacy_bootstrap_detection_accepts_filename_lag_from_prior_legacy_update(tmp_path):
+    running = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+    backup = Path(str(running) + ".old")
+    running.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    versions = {running.resolve(): 7, backup.resolve(): 6}
+
+    candidate = install.detect_legacy_bootstrap(
+        executable=running,
+        current_version=7,
+        version_reader=lambda path: versions.get(Path(path).resolve()),
+    )
+
+    assert candidate is not None
+    assert candidate.executable == running.resolve()
+    assert candidate.backup == backup.resolve()
+    assert candidate.old_version == 6
+    assert candidate.new_version == 7
+
+    versions[backup.resolve()] = 4
+    assert install.detect_legacy_bootstrap(
+        executable=running,
+        current_version=7,
+        version_reader=lambda path: versions.get(Path(path).resolve()),
+    ) is None
+
+
+def test_launch_legacy_bootstrap_repairs_filename_lag_and_starts_new_helper(
+    tmp_path, monkeypatch
+):
+    running = tmp_path / "FH-DualSense-Enhanced-R5.exe"
     backup = Path(str(running) + ".old")
     running.write_bytes(b"MZ-r7")
     backup.write_bytes(b"MZ-r6")
@@ -922,6 +951,8 @@ def test_launch_legacy_bootstrap_stages_current_bytes_and_starts_new_helper(tmp_
     assert transaction.args == ("--gui",)
     assert transaction.staged.read_bytes() == b"MZ-r7"
     assert transaction.old == running.resolve()
+    assert transaction.old_version == 5
+    assert transaction.new.name == "FH-DualSense-Enhanced-R7.exe"
     assert transaction.legacy_backup_path == str(backup.resolve())
     assert launched[0][0][-1] == str(plan)
 

@@ -3,6 +3,10 @@ import runpy
 from pathlib import Path
 
 from modules.gui.controls_tab import responsive_column_count
+from modules.gui.settings_tab import logical_widget_width
+from modules.gui.settings_tab import responsive_hint_wraplength
+from modules.gui.settings_tab import responsive_switch_placements
+from modules.gui.widgets import wrapped_label_height
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +56,54 @@ def test_driving_layout_switches_to_one_column_before_cards_clip():
     assert responsive_column_count(1040) == 2
     assert responsive_column_count(720) == 2
     assert responsive_column_count(719) == 1
+
+
+def test_trigger_master_and_shared_cards_span_full_width_around_pedal_pair():
+    titles = (
+        "Trigger feedback",
+        "L2 - Brake",
+        "R2 - Throttle",
+        "Shared trigger feedback",
+    )
+    full_width = frozenset({"Trigger feedback", "Shared trigger feedback"})
+
+    assert responsive_switch_placements(titles, 2, full_width) == (
+        (0, 0, 2),
+        (1, 0, 1),
+        (1, 1, 1),
+        (2, 0, 2),
+    )
+    assert responsive_switch_placements(titles, 1, full_width) == (
+        (0, 0, 1),
+        (1, 0, 1),
+        (2, 0, 1),
+        (3, 0, 1),
+    )
+
+
+def test_feedback_helper_text_wraps_to_each_card_interior():
+    assert logical_widget_width(590, 1.25) == 472
+    assert logical_widget_width(468, 1.0) == 468
+    assert responsive_hint_wraplength(468, 20) == 428
+    assert responsive_hint_wraplength(700, 20) == 660
+    assert responsive_hint_wraplength(1, 20) == 1
+
+    source = (ROOT / "src/modules/gui/settings_tab.py").read_text(encoding="utf-8")
+    assert 'card.bind(' in source
+    assert '"<Configure>"' in source
+    assert "hint.configure(wraplength=wrap)" in source
+    assert 'fill="x"' in source
+    assert "self.app.px(520)" not in source
+
+
+def test_wrapped_helper_text_grows_tall_enough_for_every_line():
+    assert wrapped_label_height(46, 1.0) == 46
+    assert wrapped_label_height(46, 2.0) == 28
+    assert wrapped_label_height(70, 2.0, minimum_height=30) == 35
+
+    source = (ROOT / "src/modules/gui/widgets.py").read_text(encoding="utf-8")
+    assert "self.after_idle(self._fit_wrapped_height)" in source
+    assert "self._label.winfo_reqheight()" in source
 
 
 def test_feedback_resize_is_debounced_and_reuses_existing_grid_items():

@@ -616,7 +616,10 @@ class TriggerGUI:
         s = self.settings
         try:
             preferences.load(s)
-            self._ds = make_backend(s, s.enable_startup_pulse)
+            self._ds = make_backend(
+                s,
+                s.enable_startup_pulse and s.enable_trigger_feedback,
+            )
             self._ds.open()
             self._xinput_service.sync(self._ds)
             self._backend_error = ""

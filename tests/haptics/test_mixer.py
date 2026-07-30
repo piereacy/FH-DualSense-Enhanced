@@ -132,6 +132,57 @@ def test_redline_grip_warning_starts_immediately_on_left_by_default(settings):
     assert frame.engine_amplitude > 0.0
 
 
+def test_redline_grip_suppresses_all_ev_redline_alerts(
+    settings,
+):
+    mixer = HapticMixer()
+
+    suppressed = _redline_frame(
+        settings,
+        mixer,
+        now=1.0,
+        redline_alert_allowed=False,
+    )
+    confirmed = _redline_frame(
+        settings,
+        mixer,
+        now=1.01,
+        redline_alert_allowed=False,
+        rev_limiter_active=True,
+    )
+    repeated = _redline_frame(
+        settings,
+        mixer,
+        now=1.25,
+        redline_alert_allowed=False,
+        rev_limiter_active=True,
+    )
+
+    assert suppressed.left_low == 0.0
+    assert suppressed.left_high == 0.0
+    assert confirmed.left_low == 0.0
+    assert confirmed.left_high == 0.0
+    assert repeated.left_low == 0.0
+    assert repeated.left_high == 0.0
+    assert mixer._redline_active is False
+
+
+def test_active_grip_redline_clears_when_ev_alert_is_disabled(settings):
+    mixer = HapticMixer()
+    assert _redline_frame(settings, mixer, now=1.0).left_high > 0.0
+
+    suppressed = _redline_frame(
+        settings,
+        mixer,
+        now=1.01,
+        redline_alert_allowed=False,
+    )
+
+    assert suppressed.left_low == 0.0
+    assert suppressed.left_high == 0.0
+    assert mixer._redline_active is False
+
+
 def test_redline_grip_uses_shared_effective_limit_but_engine_keeps_raw_max(settings):
     settings.grip_redline_attack_strength = 0.0
     mixer = HapticMixer()

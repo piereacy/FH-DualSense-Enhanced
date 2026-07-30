@@ -40,7 +40,7 @@ def _log_zuv_status() -> None:
 
 
 def run(s: Settings, *, on_ready=None) -> None:
-    ds = make_backend(s, s.enable_startup_pulse)
+    ds = make_backend(s, s.enable_startup_pulse and s.enable_trigger_feedback)
     xinput = XInputBridgeService(s)
     try:
         ds.open()

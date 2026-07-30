@@ -121,6 +121,7 @@ def run(ds, listener, s, stop_event=None, usb_audio=None):
                 t["effective_redline_rpm"] = redline.effective_rpm
                 t["rev_limiter_active"] = redline.limiter_active
                 t["redline_confidence"] = redline.confidence
+                t["redline_alert_allowed"] = redline.redline_alert_allowed
             except Exception as e:
                 # The raw max_rpm path remains a safe fallback if inference
                 # sees malformed or incomplete telemetry.

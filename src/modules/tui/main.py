@@ -196,7 +196,10 @@ class TriggerTUI(App):
         try:
             # MARK: resync prefs - user may have switched profile before this deferred call ran
             preferences.load(s)
-            self._ds = make_backend(s, s.enable_startup_pulse)
+            self._ds = make_backend(
+                s,
+                s.enable_startup_pulse and s.enable_trigger_feedback,
+            )
             self._ds.open()
             self._xinput_service.sync(self._ds)
             self._listener_cm = forzahorizon.UDPListener(

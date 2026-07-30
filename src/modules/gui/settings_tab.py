@@ -89,6 +89,52 @@ def responsive_column_count(width: int, threshold: int = 720) -> int:
     return 2 if width >= threshold else 1
 
 
+def responsive_switch_placements(
+    titles: tuple[str, ...],
+    columns: int,
+    full_width_titles: frozenset[str] = frozenset(),
+) -> tuple[tuple[int, int, int], ...]:
+    """Return ``(row, column, columnspan)`` without rebuilding any cards."""
+    columns = max(1, int(columns))
+    if columns == 1:
+        return tuple((index, 0, 1) for index in range(len(titles)))
+
+    placements: list[tuple[int, int, int]] = []
+    row = 0
+    column = 0
+    for title in titles:
+        if title in full_width_titles:
+            if column:
+                row += 1
+                column = 0
+            placements.append((row, 0, columns))
+            row += 1
+            continue
+
+        placements.append((row, column, 1))
+        column += 1
+        if column == columns:
+            row += 1
+            column = 0
+    return tuple(placements)
+
+
+def responsive_hint_wraplength(
+    card_width: int,
+    horizontal_padding: int,
+) -> int:
+    """Keep helper text inside the card's padded content area."""
+    width = max(1, int(card_width))
+    padding = max(0, int(horizontal_padding))
+    return max(1, width - padding * 2)
+
+
+def logical_widget_width(rendered_width: int, widget_scaling: float) -> int:
+    """Convert a Tk configure-event width into CTk logical units."""
+    scaling = max(0.01, float(widget_scaling))
+    return max(1, round(int(rendered_width) / scaling))
+
+
 class SettingsTab(ctk.CTkFrame):
     """Header + scrollable sectioned list. System tab subclasses this."""
     RESIZE_DEBOUNCE_MS = 80
@@ -99,6 +145,7 @@ class SettingsTab(ctk.CTkFrame):
     SHOW_EXPERIMENTAL = True
     PAGE_TITLE = "Grip haptics"
     PAGE_SUBTITLE = "Grip switches and tuning. Changes save instantly."
+    FULL_WIDTH_SWITCH_SECTIONS: frozenset[str] = frozenset()
 
     def __init__(self, parent, app):
         super().__init__(parent, fg_color="transparent")
@@ -113,6 +160,7 @@ class SettingsTab(ctk.CTkFrame):
         self._experimental_body: ctk.CTkFrame | None = None
         self._switch_grid: ctk.CTkFrame | None = None
         self._switch_cards: list[ctk.CTkFrame] = []
+        self._switch_card_titles: list[str] = []
         self._switch_columns = 0
         self._layout_after = None
 
@@ -145,18 +193,34 @@ class SettingsTab(ctk.CTkFrame):
         for title, fields in self.SWITCH_SECTIONS:
             card = W.Card(self._switch_grid)
             self._switch_cards.append(card)
+            self._switch_card_titles.append(title)
             W.H2(card, t(title)).pack(
                 anchor="w",
                 padx=T.PAD_MD,
                 pady=(T.PAD_MD, T.PAD_SM),
             )
+            card_hints: list[W.Hint] = []
             for attr, label, _lo, _hi, *rest in fields:
                 hint = rest[0] if rest else ""
-                self._add_quick_switch(card, attr, label, hint)
+                hint_widget = self._add_quick_switch(card, attr, label, hint)
+                if hint_widget is not None:
+                    card_hints.append(hint_widget)
+            if card_hints:
+                card.bind(
+                    "<Configure>",
+                    lambda event, hints=tuple(card_hints):
+                        self._resize_switch_hints(event.width, hints),
+                )
             ctk.CTkFrame(card, fg_color="transparent", height=T.PAD_SM).pack()
         self._schedule_layout()
 
-    def _add_quick_switch(self, parent, attr: str, label: str, hint: str):
+    def _add_quick_switch(
+        self,
+        parent,
+        attr: str,
+        label: str,
+        hint: str,
+    ) -> W.Hint | None:
         switch = ctk.CTkSwitch(
             parent,
             text=t(label),
@@ -167,11 +231,38 @@ class SettingsTab(ctk.CTkFrame):
         switch.pack(anchor="w", padx=T.PAD_MD, pady=T.PAD_XS)
         self._switches[attr] = switch
         if hint:
-            W.Hint(parent, t(hint), wrap=self.app.px(520)).pack(
+            hint_widget = W.Hint(
+                parent,
+                t(hint),
+                wrap=self.app.px(240),
+            )
+            hint_widget.pack(
                 anchor="w",
+                fill="x",
                 padx=T.PAD_MD,
                 pady=(0, T.PAD_SM),
             )
+            return hint_widget
+        return None
+
+    def _resize_switch_hints(
+        self,
+        card_width: int,
+        hints: tuple[W.Hint, ...],
+    ) -> None:
+        padding = self.app.px(T.PAD_MD)
+        if card_width <= 0:
+            return
+        for hint in hints:
+            logical_width = logical_widget_width(
+                card_width,
+                hint._get_widget_scaling(),
+            )
+            if logical_width <= padding * 2:
+                continue
+            wrap = responsive_hint_wraplength(logical_width, padding)
+            if int(float(hint.cget("wraplength"))) != wrap:
+                hint.configure(wraplength=wrap)
 
     def _schedule_layout(self, _event=None):
         if self._switch_grid is None:
@@ -205,15 +296,29 @@ class SettingsTab(ctk.CTkFrame):
             weight=1 if columns == 2 else 0,
             uniform="feedback" if columns == 2 else "",
         )
-        for index, card in enumerate(self._switch_cards):
-            row, column = divmod(index, columns)
+        placements = responsive_switch_placements(
+            tuple(self._switch_card_titles),
+            columns,
+            self.FULL_WIDTH_SWITCH_SECTIONS,
+        )
+        for card, (row, column, columnspan) in zip(
+            self._switch_cards,
+            placements,
+            strict=True,
+        ):
+            full_width = columnspan == columns
             card.grid(
                 row=row,
                 column=column,
+                columnspan=columnspan,
                 sticky="nsew",
-                padx=(0, T.PAD_MD // 2)
-                if columns == 2 and column == 0
-                else ((T.PAD_MD // 2, 0) if columns == 2 else (0, 0)),
+                padx=(0, 0)
+                if full_width or columns == 1
+                else (
+                    (0, T.PAD_MD // 2)
+                    if column == 0
+                    else (T.PAD_MD // 2, 0)
+                ),
                 pady=(0, T.PAD_MD),
             )
 

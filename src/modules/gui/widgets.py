@@ -1,6 +1,7 @@
 """Reusable widget primitives. Build screens by composing these, not by
 re-implementing colors/spacing each time.
 """
+import math
 import tkinter as tk
 import weakref
 from typing import Any
@@ -35,14 +36,53 @@ class Body(ctk.CTkLabel):
                          text_color=T.TEXT, **kw)
 
 
+def wrapped_label_height(
+    required_pixels: int,
+    widget_scaling: float,
+    minimum_height: int = 28,
+) -> int:
+    """Translate Tk's wrapped text request into a CTk logical height."""
+    scaling = max(0.01, float(widget_scaling))
+    return max(int(minimum_height), math.ceil(int(required_pixels) / scaling))
+
+
 class Hint(ctk.CTkLabel):
     """Muted helper text."""
     def __init__(self, parent, text: str, wrap: int = 0, **kw):
+        self._wrapped_height_after = None
+        self._wrapped_minimum_height = int(kw.get("height", 28))
         super().__init__(parent, text=text, anchor="w", justify="left",
                          font=ctk.CTkFont(size=T.FS_SMALL),
                          text_color=T.TEXT_MUTED, **kw)
         if wrap:
             self.configure(wraplength=wrap)
+
+    def configure(self, require_redraw=False, **kwargs):
+        reflow = "wraplength" in kwargs or "text" in kwargs or "font" in kwargs
+        super().configure(require_redraw=require_redraw, **kwargs)
+        if reflow and int(getattr(self, "_wraplength", 0)) > 0:
+            self._schedule_wrapped_height()
+
+    def _schedule_wrapped_height(self) -> None:
+        if self._wrapped_height_after is not None:
+            try:
+                self.after_cancel(self._wrapped_height_after)
+            except Exception:
+                pass
+        self._wrapped_height_after = self.after_idle(self._fit_wrapped_height)
+
+    def _fit_wrapped_height(self) -> None:
+        self._wrapped_height_after = None
+        if not self.winfo_exists():
+            return
+        required = self._label.winfo_reqheight()
+        height = wrapped_label_height(
+            required,
+            self._get_widget_scaling(),
+            self._wrapped_minimum_height,
+        )
+        if int(self.cget("height")) != height:
+            super().configure(height=height)
 
 
 class Warning(ctk.CTkLabel):

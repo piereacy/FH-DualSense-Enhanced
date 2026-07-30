@@ -308,7 +308,7 @@ def create_legacy_transaction(
     transaction_id: str | None = None,
     token: str | None = None,
 ) -> tuple[UpdateTransaction, Path]:
-    """Create the second-stage transaction needed by the already shipped R6 helper."""
+    """Create the second-stage transaction needed by an overwrite-style legacy helper."""
     staged = Path(staged).resolve()
     wrong_named_executable = Path(wrong_named_executable).resolve()
     backup = Path(backup).resolve()
@@ -325,7 +325,7 @@ def create_legacy_transaction(
         raise TransactionError("legacy update backup path is invalid")
     new_digest = sha256_file(staged)
     if sha256_file(wrong_named_executable) != new_digest:
-        raise TransactionError("legacy running executable does not match staged R7 bytes")
+        raise TransactionError("legacy running executable does not match staged update bytes")
     txid = transaction_id or uuid.uuid4().hex
     secret = token or secrets.token_urlsafe(32)
     transaction = UpdateTransaction(

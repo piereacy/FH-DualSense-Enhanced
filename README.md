@@ -18,7 +18,7 @@ This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6
 
 ## What Enhanced adds over upstream 1.6.2
 
-- Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, dynamic redline learning, and directional impact feedback.
+- Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, directional impacts, and dynamic redline learning shared with the tachometer lightbar.
 - Expanded adaptive-trigger behavior adds dynamic traction and wheelspin, surface-aware frequency bands, zoned ABS, and optional telemetry layers.
 - USB and Bluetooth use the same stereo haptic mix; Bluetooth adds HD transport and falls back only when that transport actually fails.
 - Community-informed Default values, a built-in Original preset, persistent autosave, named profiles, and safe factory restore provide a reliable configuration workflow.

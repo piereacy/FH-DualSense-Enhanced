@@ -1,23 +1,23 @@
 # FH-DualSense-Enhanced 当前项目状态
 
-最后更新时间：2026-07-22
+最后更新时间：2026-07-30
 
 ## 当前阶段
 
-- 当前开发版本：`Enhanced R7`，`src/pyproject.toml` 版本为 `7`。
-- 当前公开稳定版：GitHub Release `R6`，本地 tag `R6` 指向 `68ef199`。
-- 当前阶段：R7 生产代码与本地发布准备已经完成。错误 `valid_flag0=0x20` / `valid_flag1=0x20` HID 音频控制链已删除，USB stream 的 start/stop 保持 Enhanced R6 语义；Bluetooth 阶段不提前导入 sounddevice，稳定 USB 候选等待 3 秒并通过 Windows endpoint readiness 后才进入已验收的 handover。动态红线同时驱动 R2 扳机键、握把和转速灯条；Xbox App flat-file 安装现可通过本地磁盘 `.GamingRoot` 和默认 `XboxGames` 受限自动发现，手动目录与直接 `Content` 继续作为 fallback。三语 README、R7 中英双语 Release body、发布契约和最新标准 Windows/ZUV 产物均已准备。
-- 当前开发重心：发布前复核用户可见说明、标准 R7 产物和明确保留的实机验证缺口。不得为了赶发布改动已知可用的 `dist-usb-audio-gate-1` USB/BT 握把生命周期，也不得把真实 Xbox App、DualSense Edge、动态红线车辆或 Linux 验收写成已经完成。
-- 当前代码尚未发布为 R7。公开稳定版仍是 R6；未创建或移动 R7 tag，也未创建 GitHub Release。发布动作必须等用户最终确认。
+- 当前开发版本：`Enhanced R8`，`src/pyproject.toml` 版本为 `8`。
+- 当前公开稳定版：GitHub Release `R7`，tag `R7` 指向 `4e70265`，发布于 2026-07-22。
+- 当前阶段：以已发布 R7 为基线的 R8 源码与双语发布契约已经完成发布前收口。R8 修复 L2/R2 基础阻力关闭后仍残留顶部双 zone firmware end wall、导致约 89% 行程被定住的问题；同时新增全部自适应扳机输出总开关，修复旧式多跳更新造成的文件名落后和 `.old` 未消费。扳机页整行布局与高 DPI 说明文字裁切已修正，电动车红线 gate 已收敛为全部电驱关闭触觉并保留极限灯效，燃油车默认提前提醒后移到学习红线的 95%。中英双语 Release 正文现只保留四类用户可感知更新、安装与必需设置，内部链路已归档到老三样并关闭自动生成的 commit notes；Bluetooth 协议参考已从原始采用的 vDS `0.3.0-rc7` 复核到 `0.4.0-rc1`，封包代码无需变化。最终本地 R8 Windows 候选已从最新源码重建并完成静态与无界面启动校验。
+- 当前开发重心：提交并推送已验证的 R8 源码，创建 `R8` tag，等待 GitHub Release 的 Windows、Linux 与 ZUV jobs 完成，再从线上重新下载资产独立复核。真实 Forza/DualSense 行程验收仍需继续，确认燃油车警告时机、单挡/多挡电动车触觉静默与灯条极限显示；不得为了该修复改动已知可用的 R7 USB/BT 握把生命周期。
+- 用户已于 2026-07-30 明确确认发布；当前记录时尚未创建 R8 tag 或 GitHub Release。
 
 ## 代码中已经实现
 
 ### 1. 事务式 Windows 自更新
 
 - `src/modules/update/transaction.py` 定义原子 transaction journal、严格 schema/path/version/hash 校验、随机 token 健康 ACK 与阶段恢复。
-- `src/modules/update/install.py` 在配置与 GUI/backend 初始化前检测 R6 legacy bootstrap，并按 journal 恢复未完成事务；不再看到 `.old` 就盲删。
+- `src/modules/update/install.py` 在配置与 GUI/backend 初始化前检测旧覆盖式 Helper 的 legacy bootstrap，并按 journal 恢复未完成事务；不再看到 `.old` 就盲删。
 - `packaging/windows/update_helper.py` 对 R7 以后版本采用规范文件名并排安装。新版在 30 秒内确认并继续存活约 3 秒后才迁移快捷方式和清理旧版；正常路径不创建 `.old`。
-- 已发布 R6 的旧 Helper 输出由一次性第二阶段处理：严格验证当前/备份 PE 版本后恢复规范 R6、安装规范 R7，再提交健康状态。快捷方式部分失败时保留真实 R6，而不是遗留 `.old`。
+- 旧覆盖式 Helper 输出由一次性第二阶段处理：运行 PE 必须等于当前版本，紧邻 `.old` 的 PE 必须不低于文件名版本且低于当前版本。该顺序兼容 `R5.exe` 内置更高版本、`.old` 保存中间回滚版本的多跳形态；随后安装当前规范文件名并提交健康状态。快捷方式部分失败时保留真实回滚版本，而不是盲删 `.old`。
 - `packaging/windows/shortcut_links.py` 使用原生 Shell Link COM 扫描当前用户 Desktop、Programs 和已知 pinned 目录，只迁移绝对 target 精确匹配旧 EXE 的 `.lnk`，并保留参数、工作目录和 icon index。
 - 健康提交后会枚举同目录全部严格命名且低于新版的规范 EXE，逐个迁移快捷方式并静默删除；严格同名的旧 `.exe.old` 与 `.exe.sha256` 也会清理，包括 R5 更新遗留。其他 EXE、任意 `.old`、同版和更高版本不在清理范围；某一旧版快捷方式失败时只保留该规范 EXE。
 - 安装前验证应用目录可写并阻止同一目录内其他规范版本进程参与更新；Helper/主程序竞争、陈旧 ACK、启动恢复和有限重试均有测试。
@@ -46,14 +46,14 @@
 - GUI/TUI 的设备分组改为“连接与重连”，现有 Reconnect 已改为真实 I/O 命令；Rescan 语义保持列表刷新。
 - 顶部 DualSense 状态框显示 phase、USB/BT、电量和充电状态。仅使用电池且为 10% 时电量细节为红色，连接点仍为绿色；断开后不保留旧电量。Profile/控制器控件已收敛为 28 logical px 高、8 logical px 圆角的小型状态框，并跳过相同状态的重复渲染。
 - UDP bind 错误只进入总览遥测状态与日志，不再覆盖顶部控制器 Pill。全部非英语 catalog 已补齐新字段。
-- `src/modules/feedback_schema.py` 统一声明扳机与握把字段归属。GUI/Console 的 `Trigger feedback` 只显示 L2/R2 开关、调节和扳机实验项，`Grip haptics` 只显示握把开关、调节和握把实验项；两页字段互斥并由翻译覆盖测试约束。
+- `src/modules/feedback_schema.py` 统一声明扳机与握把字段归属。GUI/Console 的 `Trigger feedback` 顶部显示 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、调节和扳机实验项；`Grip haptics` 只显示独立握把开关、调节和握把实验项。两页字段互斥并由翻译覆盖测试约束。
 
 ### 4. Windows Per-Monitor v2 与可复现构建
 
 - `packaging/windows/fhds.manifest` 为主 EXE 与 Update Helper 声明 `PerMonitorV2, PerMonitor`、旧 fallback 和 `asInvoker`。
 - `packaging/windows/dpi_runtime_hook.py` 与 `src/main.py` 在任何 Tk/CustomTkinter 窗口前调用 `modules.dpi.bootstrap_windows_dpi()`；旧的 GUI 构造后 `SetProcessDpiAwareness(2)` 已删除。
 - `src/modules/dpi.py` 查询实际 thread/window awareness、窗口 DPI 与缩放率。GUI 系统页显示该诊断，不是 PMv2 时提示检查 Windows 兼容性覆盖，不修改注册表。
-- `src/modules/gui/widgets.py` 让隐藏页暂停 `FastScroll` canvas 尺寸回流，可见页以 40 ms debounce 合并 resize；反馈开关卡片以 80 ms debounce 处理列数变化并复用既有 grid item。`src/modules/gui/main.py` 在 `tkraise()` 导航边界切换活跃页，避免最大化时所有常驻长页同时重新布局；系统更新卡片只在稳定 presentation 变化时重绘，不再每 250 ms 无条件显隐按钮。
+- `src/modules/gui/widgets.py` 让隐藏页暂停 `FastScroll` canvas 尺寸回流，可见页以 40 ms debounce 合并 resize；反馈开关卡片以 80 ms debounce 处理列数变化并复用既有 grid item。卡片说明按实际内宽换行：Tk configure 事件的物理像素先换回 CustomTkinter logical px，`W.Hint` 再根据文本请求高度增长，避免双列、窗口缩放和 125% DPI 下裁切后半句。`src/modules/gui/main.py` 在 `tkraise()` 导航边界切换活跃页，避免最大化时所有常驻长页同时重新布局；系统更新卡片只在稳定 presentation 变化时重绘，不再每 250 ms 无条件显隐按钮。
 - `src/pyproject.toml` 和 `src/uv.lock` 固定 PyInstaller `6.16.0`；`packaging/windows/build_exe.bat` 使用 `uv run --project src --frozen pyinstaller` 构建 Helper 和主 EXE，不再用任意最新 `uvx` 解析。
 - 审计后的 R7 候选已重新嵌入并验证 PMv2 manifest、R7 PE 版本资源和项目图标；精确产物信息见下方“已执行的测试和验证”。
 
@@ -64,16 +64,17 @@
 - UDP 与遥测：listener 只在完整 324 字节包成功解析后推进“最后有效遥测”，字段进入效果计算前会清理非有限数；损坏流量不能持续刷新在线状态或让旧效果继续输出。
 - 触觉：USB stream 生命周期保持 Enhanced R6。GUI/TUI 的 `UsbAudioLifecycle` 在周期 eligibility sync 中按 `_running` 启动或停止共享 stream；headless `HapticManager` 在同一 transport epoch 启动失败后设置闩锁，避免逐遥测帧重开，并在 transport 或 eligibility 变化时复位。Windows `UsbAudioHaptics` 只在 `start()` 延迟导入 sounddevice，再查询当时初始化的 WASAPI snapshot；Bluetooth 阶段不会提前初始化 PortAudio。代码不调用私有 PortAudio refresh、不做 callback 心跳判活，也不增加 lifecycle lock。Bluetooth worker、`0x36`、USB/BT stop 和 compatible fallback 的失败隔离与释放路径仍保留。
 - Linux：`_hidraw.py` 改用 wrapper 实际支持的 `timeout_ms` 关键字；`packaging/linux/build_elf.sh` 改为 `uv.lock` 冻结环境，并跳过 one-file 不需要的 PyGObject/pycairo。当前只完成 Windows 上的单元测试和 Bash 语法检查，不等同真实 Linux 构建。
-- GUI/TUI：TUI 新增与 GUI 同语义的 `ProfileSession` 退出流程；快捷键、按钮、backend shutdown 和更新安装都经过统一关闭入口，取消时不会提前调度 Helper。更新健康 callback 在 backend、listener 和 telemetry worker 启动后才执行，构造窗口本身不再提前确认健康。扳机/握把两页现在从共享 schema 渲染，开关、常用调节和实验项不再混页。
+- GUI/TUI：TUI 新增与 GUI 同语义的 `ProfileSession` 退出流程；快捷键、按钮、backend shutdown 和更新安装都经过统一关闭入口，取消时不会提前调度 Helper。更新健康 callback 在 backend、listener 和 telemetry worker 启动后才执行，构造窗口本身不再提前确认健康。扳机/握把两页现在从共享 schema 渲染，开关、常用调节和实验项不再混页。GUI 扳机页双列时让总开关和共享反馈各跨整行、L2/R2 同行配对，消除行高对齐造成的大块空白；窄窗口仍为单列。R2 与握把红线开关不再重复显示电动车运行时规则说明。
 - 启动与依赖：删除 `src/dev.env` 和运行时 `python-dotenv`，主程序不再因快捷方式工作目录中的同名文件改变配置。Pillow、PyInstaller、Pyrefly 与锁文件依赖已经固定到当前项目声明。
 - 更新与文件工具：Release、sidecar、pending metadata、transaction plan、路径和 checksum 采用严格 schema/HTTPS/credential/大小校验；FH6 语言与图标文件操作在无法证明目标、备份或进程状态时失败关闭，不以宽泛删除“修复”未知残留。
 
 ### 6. 共享动态红线估计
 
-- `src/modules/forzahorizon/redline.py` 保留原始仪表 `max_rpm`，学习前提供经验预测；在接近预测红线、高油门、稳定同挡、低离合和低轮胎滑移条件下检测功率/扭矩切断，并用 120 ms 延迟确认排除换挡。
-- 第一次确认断油即可产生短暂 `rev_limiter_active`；三个相近候选以中位数建立 `effective_redline_rpm`，后续允许平滑修正。车辆 ordinal、PI 或仪表范围改变时重置，菜单临时归零不清除学习。
-- `src/modules/loop.py` 把同一派生状态交给 `effects.py` 的 R2 扳机键、`haptics/mixer.py` 的握把红线和 `forzahorizon/lighting.py` 的转速灯条；确认断油会立即强制灯条闪烁，动态估计不可用时灯条回退原始 `max_rpm`。发动机底噪继续读取原始范围，代码未采用参考分支直接覆盖 telemetry 的做法。
-- 当前只有自动测试和合成遥测验证，尚未用真实大红区车辆确认学习速度、误触发和手感。
+- `src/modules/forzahorizon/redline.py` 保留原始仪表 `max_rpm`，学习前提供经验预测。预测窗口内继续在高油门、稳定同挡、低离合和低轮胎滑移条件下检测功率/扭矩切断；已确认燃油车还可在预测窗口外用功率与扭矩同时塌陷进行宽范围冷启动，不再因仪表红区过大而无法收集第一个候选。两条路径都用 120 ms 同挡延迟确认排除换挡。
+- 预测窗口内第一次确认断油即可产生短暂 `rev_limiter_active`；预测窗口外第一次只收集候选，第二个相近 RPM 候选才发布 limiter，三个相近候选以中位数建立 `effective_redline_rpm`，不同转速的分散事件不能互相确认。后续允许平滑修正；车辆 ordinal、PI、气缸数或仪表范围改变时重置，菜单临时归零不清除学习。电驱与缺少气缸字段的旧映射不进入宽范围冷启动。
+- `src/modules/loop.py` 把同一派生状态交给 `effects.py` 的 R2 扳机键、`haptics/mixer.py` 的握把红线和 `forzahorizon/lighting.py` 的转速灯条；灯条直接消费学习后的极限，不再按仪表 `max_rpm` 重算另一套固定阈值。Default 的三路比例式提醒由 93% 后移到 95%，握把退出点为 92%；升级加载只在 Default 四项仍完整等于 R7 旧默认时一次性迁移，任一已调组合和命名 Profile 保持原样。alert gate 开启时确认断油仍会立即强制灯条闪烁，动态估计不可用时灯条回退原始 `max_rpm`。发动机底噪继续读取原始范围，代码未采用参考分支直接覆盖 telemetry 的做法。
+- `RedlineDetector` 还发布 `redline_alert_allowed`：只要 `NumCylinders == 0`，握把与 R2 的比例式和确认 limiter 红线路径都保持静默，观察到二挡或更高挡也不会恢复；灯条继续显示 RPM 渐变，在接近极限时保持稳定红色但不进行换挡式闪烁。缺失气缸字段时保持旧行为。
+- 合成遥测已覆盖预测红线约 `11760 RPM`、真实断油约 `6200 RPM` 的极端大红区冷启动，以及一次/不同 RPM 功率塌陷不触发和电驱不进入宽范围学习；灯效端到端回归还固定了学习前同一 RPM 不亮、学习到约 `6200 RPM` 后按共享极限进入红色。尚未用真实大红区车辆确认学习速度、牵引力控制误触发和手感。
 
 ### 7. Xbox bridge 长时间运行恢复与诊断
 
@@ -88,10 +89,24 @@
 - 通用 `discover_xbox_forza_install()` 按 FH4/FH5/FH6 精确 EXE 验证候选；FH6 语言和图标入口还要求各自资源目录。GUI/TUI 在 Xbox App 模式自动调用该发现并缓存 payload 根目录到 `fh6_xbox_install_path`。
 - 手动选择仍可指向 payload 根目录或其直接父目录 `Content`。GUI 的显式选择以新 serial 抢占后台扫描，无效选择提供可见提示。生产代码和自动测试已完成；真实 Xbox App FH4/FH5/FH6 安装仍未在当前电脑验证。
 
+### 9. L2/R2 基础阻力与 firmware end wall 所有权
+
+- 旧 `Controller.L2()` 与 `Controller.R2()` 会在检查 `enable_brake_resistance` / `enable_throttle_resistance` 之前无条件锁存 `build_wall(wall_zones=2)`。因此即使两个基础阻力开关已经关闭，满踏板输入仍会返回 mode `0x21`，顶部两个 zone 保持满强度，形成约 80% 到 90% 行程的硬墙。
+- 现在只有对应的 `Brake stiffness` 或 `Throttle stiffness` 开启时才更新并返回通用 end wall；运行中关闭开关会立即清除对应 latch。同一份满输入诊断从修复前的双 `0x21` frame 变为双 `off()` frame。
+- 可选静态刹车 wall 继续独立生效；手刹附加阻力、boost/G 力阻力、ABS、抓地力、红线和其他震动效果仍服从各自开关。只关闭震动而保留基础阻力时，渐进阻力与末端 wall 仍是预期行为。
+- 自动回归覆盖两侧先锁存再运行中关闭、满输入释放，以及基础刹车阻力关闭后独立静态 wall 仍保留。真实 DualSense/Forza 行程与手感尚未执行。
+
+### 10. 自适应扳机总开关
+
+- 现场 Profile 已关闭基础刹车/油门阻力、ABS、红线、换挡、碰撞和路面扳机效果，但 `enable_wheelspin_buzz=True` 仍可在油门与驱动轮打滑时输出 R2 vibration mode；这就是“震动全关后仍有反馈”的另一条独立路径。握把红线和 body collision 还会通过外壳传到扣住扳机键的手指，但不属于 L2/R2 frame。
+- `enable_trigger_feedback=False` 现在位于全部 L2/R2 priority 之前：下一帧返回双 `off()`，清除换挡、ABS、抓地力、红线、碰撞、EWMA 和两侧 wall latch。direct `L2()` / `R2()` 也有相同 gate，`modules.make_backend()` 还会在总开关关闭时拒绝自动启动脉冲。
+- 总开关默认 `True` 以保持现有 Profile 行为；关闭不会改写任何子开关或调节值。握把触觉仍由 `Grip haptics` 独立控制。
+- 新冻结 R8 已在 Bluetooth DualSense 90% 电量、实时 Forza 遥测现场显示并保存总开关。冒烟时故意保留轮胎抓地力、刹车/油门阻力和 body haptics 为开启，只关闭总开关；偏好文件复核为 `enable_trigger_feedback=False`。实际 L2/R2 触感是否立即完全释放仍需用户确认。
+
 ## 文档、代码和推测的边界
 
-- 已由生产代码和自动测试证明：transaction 恢复决策、R6 legacy 识别、快捷方式精确匹配、健康 token 与 ACK 时机、ControllerSnapshot、输入超时、电量映射、拓扑去抖、handover 候选预验证与 1/2/5 秒候选退避、switching 无启动脉冲、重连迁移、物理 HID worker 自恢复、ViGEm session 自恢复、100 ms 中立后 target 保留、短暂 Bluetooth 输入空档保持 HD 队列、UDP 有效包边界、配置/分享码校验、TUI 正常退出、Enhanced R6 USB stream 状态语义、扳机/握把字段互斥、可见页 resize 合并、更新卡片 presentation cache、状态展示和 DPI 几何契约。Xbox 自动发现测试覆盖 `.GamingRoot`、默认库、FH4/FH5/FH6 精确识别、不安全 marker、非递归和链接逃逸拒绝。新增测试固定 sounddevice 构造时不加载、首次 `start()` 只加载一次，Windows endpoint active/inactive/权限错误边界，3 秒非阻塞 settle、等待期间 Bluetooth haptics 保持、readiness 失败/异常保留 BT、候选消失清理状态及 body haptics 关闭时绕过。字节级测试继续固定普通 USB/BT report 不声明两个未经验证的 `0x20` 控制位，以及 Bluetooth power-off feature report 的 48 字节布局和 `0x53` seed CRC `0x23A2EFE0`。真实长时间连接、DualSense Edge、握把恢复和真实 Xbox 游戏目录仍不属于自动测试已经证明的事实。
-- 已由真实 Windows 隔离环境证明：已发布 R6 旧 Helper 形态可以迁移到规范 R7，测试快捷方式 target/icon 已改为 R7，参数和工作目录保留，事务提交后 R6/`.old` 被清理。
+- 已由生产代码和自动测试证明：transaction 恢复决策、多跳 legacy PE 顺序识别、快捷方式精确匹配、健康 token 与 ACK 时机、自适应扳机总开关、启动脉冲 gate、ControllerSnapshot、输入超时、电量映射、拓扑去抖、handover 候选预验证与 1/2/5 秒候选退避、switching 无启动脉冲、重连迁移、物理 HID worker 自恢复、ViGEm session 自恢复、100 ms 中立后 target 保留、短暂 Bluetooth 输入空档保持 HD 队列、UDP 有效包边界、配置/分享码校验、TUI 正常退出、Enhanced R6 USB stream 状态语义、扳机/握把字段互斥、可见页 resize 合并、更新卡片 presentation cache、状态展示和 DPI 几何契约。Xbox 自动发现测试覆盖 `.GamingRoot`、默认库、FH4/FH5/FH6 精确识别、不安全 marker、非递归和链接逃逸拒绝。新增测试固定 sounddevice 构造时不加载、首次 `start()` 只加载一次，Windows endpoint active/inactive/权限错误边界，3 秒非阻塞 settle、等待期间 Bluetooth haptics 保持、readiness 失败/异常保留 BT、候选消失清理状态及 body haptics 关闭时绕过。字节级测试继续固定普通 USB/BT report 不声明两个未经验证的 `0x20` 控制位，以及 Bluetooth power-off feature report 的 48 字节布局和 `0x53` seed CRC `0x23A2EFE0`。真实长时间连接、DualSense Edge、握把恢复和真实 Xbox 游戏目录仍不属于自动测试已经证明的事实。
+- 已由真实 Windows 隔离环境证明：当前线上 R7 资产可以事务升级到规范 R8，健康提交后 R7 EXE、严格同名 `.old` 与 `.sha256` 被清理，无关 `notes.old` 保留；另一次 `R5.exe` 内置 R8、`R5.exe.old` 保存真实 R6 的多跳引导也成功提交并规范化为 R8。早期已发布 R6 旧 Helper 到 R7 的快捷方式迁移演练仍作为历史证据保留。
 - 已由当前 Windows 进程证明：源码 DPI probe 报告 Per-Monitor v2、120 DPI、125%；最终 PE manifest 可提取并包含 PMv2。
 - 已由当前真实 Windows USB 设备证明：系统和新启动的 sounddevice 进程能枚举 index 27 的四声道 DualSense WASAPI endpoint；旧 teardown 候选却在同一现场报告找不到端点。当前锁定的 sounddevice 在 import 尾部调用 `_initialize()`，因此旧进程的 PortAudio snapshot 早于 USB hotplug。源码手工检查还证明导入 `modules` 和构造 native backend 都不会再把 sounddevice 放入 `sys.modules`，readiness probe 返回 `True` 时也不会加载它。
 - 已由真实硬件复现并验收当前 `dist-usb-audio-gate-1`：USB 与 Bluetooth 冷启动握把正常，BT → USB 后 USB 握把恢复；代价是拔掉 USB 时手柄会关机，需要重新按 PS 键开机。旧 R6-lifecycle 和 `0x08 / 0x02` teardown 候选的失败记录仅作为根因历史保留。
@@ -101,19 +116,20 @@
 
 ## 正在进行
 
-1. 非破坏性 BT/USB HID handover、switching 脉冲抑制、Bluetooth `0x36`、扳机与握把分页、状态框像素对齐、更新 UI 缓存和最大化布局合并保留在当前候选。PortAudio 私有 refresh、并发 lifecycle lock、callback 心跳和额外 USB audio backoff 均未恢复。
-2. `dist-usb-audio-gate-1` 已由用户实机确认：USB 与 Bluetooth 冷启动握把正常，Bluetooth 插入 USB 后 USB 握把恢复；拔掉 USB 时手柄会关机，需要用户重新开机。用户已接受该行为作为当前 R7 handover 基线，后续修复不得改动这条生命周期。
-3. Xbox App Bluetooth 高延迟与长期掉线修复已进入 `src/modules/dualsense/main.py`、`src/modules/xinput/bridge.py` 和 `src/modules/runtime_logging.py`：包括 input-first/latest-only drain、重复 Bluetooth 写入合并、HID/ViGEm 自恢复、target 保留和持久日志。早期 350 ms `0x36` stall 永久降级已因无法从短暂弱信号自动恢复而撤销；真实 Bluetooth/XInput/DualSense Edge 手感与长时间稳定性尚待验证。
-4. 动态红线估计已经进入生产路径并进入当前标准 R7 产物。其预测、同挡位确认、换挡/打滑排除、三样本聚类、车辆切换复位，以及 R2 扳机键、握把和转速灯条共享消费均有自动测试；真实车辆尚未验收。
-5. Xbox App flat-file 自动发现已进入通用游戏模块与 FH6 语言/图标页面。代码和合成目录测试完成，本机 `.GamingRoot` 解析成功；真实 Xbox App 游戏目录仍待验收。
+1. R8 的扳机 end-wall 所有权、自适应扳机总开关、多跳 legacy 修复、版本与双语发布契约均已完成；上一份标准 Windows 构建和两条真实隔离升级已验证，但它们早于最新排版、文案和 95% 红线阈值，最终 EXE 仍需重建。真实 DualSense/Forza 行程与手感验收仍待执行。
+2. 非破坏性 BT/USB HID handover、switching 脉冲抑制、Bluetooth `0x36`、扳机与握把分页、状态框像素对齐、更新 UI 缓存和最大化布局合并保留在当前候选。PortAudio 私有 refresh、并发 lifecycle lock、callback 心跳和额外 USB audio backoff 均未恢复。
+3. `dist-usb-audio-gate-1` 已由用户实机确认：USB 与 Bluetooth 冷启动握把正常，Bluetooth 插入 USB 后 USB 握把恢复；拔掉 USB 时手柄会关机，需要用户重新开机。用户已接受该行为作为当前 R7 handover 基线，后续修复不得改动这条生命周期。
+4. Xbox App Bluetooth 高延迟与长期掉线修复已进入 `src/modules/dualsense/main.py`、`src/modules/xinput/bridge.py` 和 `src/modules/runtime_logging.py`：包括 input-first/latest-only drain、重复 Bluetooth 写入合并、HID/ViGEm 自恢复、target 保留和持久日志。早期 350 ms `0x36` stall 永久降级已因无法从短暂弱信号自动恢复而撤销；真实 Bluetooth/XInput/DualSense Edge 手感与长时间稳定性尚待验证。
+5. 动态红线估计已经进入生产路径；宽范围燃油车冷启动已解除大红区无法进入预测窗口的循环依赖，合成测试覆盖 `11760 → 6200 RPM` 学习、第二次聚类才发布 limiter、第三次建立学习值、分散事件不合并和电驱排除。R2、握把与灯条共用学习值，Default 提前点为 95%，握把退出点为 92%。全部电动车 alert gate 已进入当前源码：一挡、二挡和更高挡都禁止握把/R2 红线触觉，灯条继续渐变并在极限稳定红色；真实燃油车与电动车验收仍未执行。
+6. Xbox App flat-file 自动发现已进入通用游戏模块与 FH6 语言/图标页面。代码和合成目录测试完成，本机 `.GamingRoot` 解析成功；真实 Xbox App 游戏目录仍待验收。
 
 ## 尚未完成
 
-1. `dist-dynamic-redline-1` 需要选一辆仪表红区明显大于真实断油范围的车辆，保持 Forza 游戏内振动关闭并记录 Steam Input 状态，至少连续触发三次同挡位断油；检查第一次实际断油可感知、第三次后接近红线警告提前到正确区间，并确认普通换挡、漂移和严重空转不会训练或误触发。
-2. 新的标准 R7 产物需要先在 Bluetooth、Xbox App bridge 开启、Steam Input 关闭时做短时操控/握把/L2/R2 扳机键冒烟，再在可用的 DualSense Edge 上运行 30 至 60 分钟并检查 `data/runtime.log`。用户当前无法执行长时间实机段，因此明确保留为未执行；`dist-usb-audio-gate-1` 仍是已知可用回退基线。
-3. Windows DPI：在 100%、125%、150% 分别目测顶部两个状态框边缘，并检查窗口最大化/还原和页面切换；混合 DPI 还需验证显示器间往返、运行中 scale 变化和弹窗/原生 Tk 控件清晰度。
+1. 动态红线需要三组实车：一辆仪表红区明显大于真实断油范围的燃油车，至少连续触发三次同挡位断油；一辆单挡电动车和一辆多挡电动车，分别从低速持续全油门到极速并经过坡度/颠簸，确认握把/R2 全程没有红线触觉、灯条仍随转速接近极限并只保持红色而不闪烁。各组都保持 Forza 游戏内振动关闭并记录 Steam Input 状态；仍需确认普通换挡、漂移、腾空和严重空转边界。
+2. 最终本地 R8 EXE 已从最新源码重建并通过无界面启动；仍需在 Bluetooth、Xbox App bridge 开启、Steam Input 关闭时做短时操控/握把/L2/R2 扳机键冒烟，并在可用的 DualSense Edge 上运行 30 至 60 分钟检查 `data/runtime.log`。用户当前无法执行长时间实机段，因此明确保留为未执行；`dist-usb-audio-gate-1` 仍是已知可用回退基线。
+3. Windows DPI：125% 隔离设置窗口已确认扳机/握把卡片不吞字；仍需在 100%、125%、150% 的冻结 EXE 中目测顶部两个状态框边缘，并检查窗口最大化/还原和页面切换。混合 DPI 还需验证显示器间往返、运行中 scale 变化和弹窗/原生 Tk 控件清晰度。
 4. Xbox App FH6 自动发现需要在真实安装上确认 `.GamingRoot`、wrapper/`Content` 布局、ACL、语言表和图标目标；当前机器只有库 marker，没有对应游戏。
-5. R7 三语 README 增量、双语 Release body 和 workflow 版本正文已经准备并通过本地契约测试；R7 tag、GitHub Release、线上构建和线上重新下载验证仍未执行。
+5. R8 双语 Release body、workflow 版本正文和最终本地 Windows 候选已经准备并复核；R8 tag、GitHub Release、线上构建和线上重新下载验证仍未执行。
 6. R7 到 R8 的正常并排更新尚无真实已发布 R8 资产可做端到端验收；当前由自动测试覆盖。
 7. 真实只读/被占用快捷方式、任务栏 pin 缓存和快捷方式部分失败后的跨启动修复尚未在用户 shell 环境执行。
 8. 真实 Linux ELF 构建、`/dev/hidraw` 权限与桌面托盘未执行；Windows 上的脚本语法和适配层测试不能替代它们。
@@ -122,19 +138,17 @@
 
 ## 下一步建议顺序
 
-1. 向用户交付标准 R7 EXE 的路径、哈希、体积、双语发布说明摘要和未验证边界，取得最终发布确认。
-2. 用户确认接受当前范围后创建 `R7` tag 并触发 GitHub Release；等待 Windows、ZUV 与 Linux jobs 完成，从线上重新下载 EXE 和 sidecar 独立复核大小、MZ 与 SHA-256。
-3. 若发布前还要补实机验收，优先在 Bluetooth、Xbox App bridge、Steam Input 关闭且 Forza 游戏内振动关闭时检查短时操控、握把和 L2/R2 扳机键，再执行 30 至 60 分钟稳定性并保留 `data/runtime.log`。
-4. 用大红区车辆验收动态红线，并在 100%、125%、150% 和可用的混合 DPI 环境验收界面；没有条件时保持未验证，不得改写为通过。
-5. 在有真实 Xbox App FH6 的机器上切到 Xbox App 并打开 FH6 实用功能，确认自动出现安装路径；如果受 ACL 或非标准布局影响，再用手动选择验证 fallback，并保留日志。
-6. 在真实 Linux 主机生成 ELF，并验证 hidraw 权限、USB audio 与托盘。
+1. 在 Steam 模式保持 Steam Input 开启、游戏内振动关闭；关闭 `Brake stiffness` 与 `Throttle stiffness`，分别把 L2/R2 压到全行程，确认不再约 89% 定住。随后逐项开启基础阻力和独立静态刹车 wall，确认各自所有权。
+2. 保留真实测试的连接方式、Steam Input 与游戏内振动状态；自动测试或 EXE 冒烟不能替代手感验收。
+3. 用户确认范围后再创建 R8 tag 与 GitHub Release，并从线上重新下载 EXE 和 sidecar 独立复核。
+4. 在真实 Linux 主机生成 ELF，并验证 hidraw 权限、USB audio 与托盘。
 
 ## 当前已知 Bug 和限制
 
 - `dist-usb-audio-gate-1` 已实机恢复 BT → USB 后的 USB 握把，但代价是拔掉 USB 时手柄关机，需要用户重新开机；当前不尝试保持无线会话的替代方案。
 - Xbox App FH4/FH5/FH6 真实游戏仍未在当前电脑验收。自动发现只支持可访问的 GDK flat-file 游戏库，不扫描受保护 `WindowsApps`；未找到或布局不兼容时仍需手动选择 payload 根目录或其直接父目录。
 - Forza 游戏内振动必须关闭，否则 native rumble/Steam Input 可能掩盖本项目握把方向与细节；项目不接管游戏原生 rumble。
-- 动态红线没有 Forza 官方 limiter flag，只能从功率、扭矩、RPM、挡位、油门、离合和滑移推断。合成测试已覆盖主要误判边界，但真实车辆与改装组合尚未验证，不能写成已经解决全部红线差异。
+- 动态红线没有 Forza 官方 limiter flag 或总挡位数字段，只能从功率、扭矩、RPM、挡位、油门、离合、滑移与 `NumCylinders` 推断。宽范围冷启动用重复同 RPM 聚类降低一次功率波动误报，但真实牵引力控制、特殊限速、改装传动与游戏字段异常尚未验证；全部电动车 gate 目前仍只有合成回归。若游戏把改装或混合动力错误报告为 `NumCylinders == 0`，它也会关闭红线触觉，因此不能写成已经解决全部车型差异。
 - XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板或陀螺仪映射。
 - Bluetooth 弱信号下仍可能出现短时输入延迟或最终触发约 3 秒物理连接 watchdog；撤销 350 ms 永久降级避免了靠近主机后仍停留在 compatible rumble，但真实 Xbox App、不同蓝牙适配器和 DualSense Edge 的长期稳定性仍待实机验证。
 - ViGEm 上游 EOL；固定哈希不能替代未来安全维护。
@@ -179,17 +193,23 @@
 - 触觉与平台：`src/modules/haptics/audio.py`、`src/modules/haptics/windows_endpoint.py`、`src/modules/haptics/manager.py`、`src/modules/haptics/lifecycle.py`、`src/modules/dualsense/bt_haptics.py`、`src/modules/dualsense/main.py`、`src/modules/dualsense/_hidraw.py`、`src/modules/__init__.py`、`packaging/linux/build_elf.sh`。
 - 红线：`src/modules/forzahorizon/redline.py`、`src/modules/loop.py`、`src/modules/forzahorizon/effects.py`、`src/modules/haptics/mixer.py`、`tests/forzahorizon/test_redline.py`。
 - Xbox 安装发现：`src/modules/forzahorizon/game_launch.py`、`src/modules/forzahorizon/fh6_language.py`、`src/modules/gui/fh6_utilities_tab.py`、`src/modules/tui/fh6_utilities_tab.py`、`tests/forzahorizon/test_game_launch.py`、`tests/forzahorizon/test_fh6_language.py`。
+- R8 扳机与 updater 修复：`src/modules/forzahorizon/effects.py`、`src/modules/config/settings.py`、`src/modules/feedback_schema.py`、`src/modules/__init__.py`、`src/modules/update/install.py`、`src/modules/update/transaction.py`、`tests/forzahorizon/test_effects.py`、`tests/test_backend_factory.py`、`tests/test_updater.py`、`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DECISIONS.md`。
 - 构建与测试：`packaging/windows/build_exe.bat`、`packaging/windows/fhds.spec`、`src/pyproject.toml`、`src/uv.lock`、`tests/test_update_*.py`、`tests/test_profile_persistence.py`、`tests/test_main_runtime.py`、`tests/test_tui_lifecycle.py`、`tests/haptics/test_audio.py`、`tests/haptics/test_windows_endpoint.py`、`tests/haptics/test_manager.py`、`tests/test_backend_factory.py`、`tests/dualsense/test_output_report.py`、`tests/dualsense/test_controller_runtime.py`、`tests/dualsense/test_controller_state.py`、`tests/dualsense/test_topology.py`、`tests/gui/test_header_status_frame.py`、`tests/test_dpi_contract.py`。
 
 ## 当前 Git 工作区状态
 
 - 分支：`main`。R7 runtime foundation、随后覆盖上游/R1-R7 的审计整改、生产源码、测试、老三样和构建配置已纳入当前 `main` 提交历史；精确 HEAD 与远端同步状态以 `git status -sb` 和 `git log -1` 为准。
-- Xbox App 自动发现批次开始前已 fetch 并确认 `HEAD` 与 `origin/main` 同步，远端没有新增 README 改动或冲突；本批次只会显式提交源码、测试、三语 README、Release workflow 和项目文档，不纳入本地隔离产物。
+- R8 构建开始前已 fetch 并确认 `HEAD`、`origin/main` 与 R7 tag 同指向 `4e70265`，远端没有新增 README 改动或冲突；当前改动只保留扳机/updater 修复、动态红线与灯效同步、反馈页排版、版本、发布契约和项目文档，不纳入本地隔离产物。
 - `packaging/windows/build-*`、`dist-*`、`diagnostics-*` 和 `helper_work-*` 是本地隔离构建或诊断产物，不随源码提交；已知可用的 `dist-usb-audio-gate-1` 基线没有被覆盖。
-- 没有创建或移动 R7 tag，也没有发布 R7 Release。当前公开稳定版仍是 R6。
+- R7 tag 与 GitHub Release 已于 2026-07-22 发布；当前工作树只包含未发布的 R8 源码、发布契约和文档，没有创建 R8 tag 或 Release。`packaging/windows/dist/` 已从当前最新源码重建最终本地 R8 Windows 候选；该忽略目录不进入提交，线上资产仍由干净 GitHub runner 独立构建。
 
 ## 已执行的测试和验证
 
+- 2026-07-30 R8 最终本地 Windows 候选：`packaging/windows/dist/FH-DualSense-Enhanced-R8.exe` 为 `52,035,627` 字节（`49.625 MiB`），SHA-256 `239660997abd709207895826e2c6cf16d3ebd6478eca69a2f34607642a330d12`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、sidecar `--check`、`PerMonitorV2, PerMonitor`、`true/pm`、`asInvoker` 和隐藏窗口 `--help` 退出码 `0` 均通过；相对当前线上 R7 增加 `253,594` 字节（约 `0.490%`），低于体积确认门槛。构建前保护的 `runtime.log`、`user_preferences.json` 与 `.bak` 已恢复并逐文件确认 SHA-256 未变化。
+- 2026-07-30 R8 用户侧 Release 与 vDS 复核基线回归：Release 正文收敛为扳机、红线、排版、自动更新四类用户可感知更新，关闭自动 commit notes；内部链路留在老三样，vDS 声明同时保留 `0.3.0-rc7` 原始采用提交与 `0.4.0-rc1` 当前复核提交。发行与第三方声明定向回归为 `28 passed in 3.96s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `742 passed in 8.51s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`；一次性 PyYAML 解析、`uv lock --check --project src` 与 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。
+- 2026-07-30 R8 排版/文案/红线时机发布前回归：相关 GUI、Profile 迁移、默认值、R2、握把、动态红线、灯条、loop、updater 与发行契约为 `281 passed in 7.77s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `741 passed in 10.68s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。Windows 125% 隔离 GUI 目测确认双列/整行卡片、握把长说明完整多行以及电动车红线开关说明移除；隔离窗口未连接手柄、未启动 Forza、未操作用户现有 EXE。
+- 2026-07-30 动态红线大红区冷启动回归：`tests/forzahorizon/test_redline.py` 为 `17 passed in 0.21s`；红线、R2、握把、灯条与 loop 定向链路为 `162 passed in 0.35s`。完整 `uv run --project src --frozen pytest -q -W error` 为 `735 passed in 9.73s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`94 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。合成测试确认预测红线约 `11760 RPM`、真实断油约 `6200 RPM` 时第一次宽范围候选静默、第二次发布 limiter、第三次学习到约 `6200 RPM`；单次候选、不同 RPM 的三次候选和同条件电驱均不学习。
+- 2026-07-30 R8 扳机/updater/电动车红线/排版最终回归：修复前在两个基础阻力开关均关闭、刹车/油门均为 `255` 时可复现 L2/R2 同时输出 mode `0x21`；修复后同条件为 mode `0x05` 的 `off()`。当前 Profile 的轮胎抓地力开关还可单独复现 R2 vibration，总开关关闭后双侧强制 `off()` 并清理 transient/latch。最终红线、扳机、握把、灯条、loop、翻译与发行契约定向回归为 `202 passed in 5.47s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `732 passed in 9.66s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`94 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。
 - 审计后最终完整测试：`uv run --project src --frozen pytest -q -W error`，结果 `648 passed`。Coverage 单独运行同样为 `648 passed`，总行覆盖率 `57%`；haptics mixer、XInput、Bluetooth haptics 和更新 transaction 等核心逻辑覆盖率较高，GUI/TUI 事件路径与 Windows 上无法执行的 Linux hidraw 路径仍较低。
 - 第二轮 handover/audio/UI 定向回归为 `114 passed in 2.39s`；最终执行 `uv run --project src --frozen pytest -q -W error`，结果 `666 passed in 9.08s`。
 - 最终 Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`88 warnings not shown`；限定路径 `compileall` 和 `uv lock --check --project src` 通过；`git diff --check` 只有现有 LF/CRLF 转换提示，没有 whitespace error。
@@ -209,8 +229,11 @@
 - 当前 Windows 源码进程手工检查：导入 `modules`、构造 native backend 和调用 endpoint readiness 均未导入 sounddevice；当前已连接 USB 的 registry probe 返回 `True`。这只证明依赖边界和系统可见性，不证明游戏内握把。
 - Ruff 全仓库检查通过；Pyrefly 为 `0 errors`，仍有 warning；Vulture 对显式生产源码列表未发现确定的 dead code。`pip-audit` 对当前锁定环境未发现已知漏洞。Bandit 无 high severity，两个 medium 为允许配置的 UDP wildcard bind 和已经自行验证 HTTPS/redirect 的 `urlopen` 路径，属于人工复核后接受的告警。
 - Windows Shell Link 临时集成测试通过：target、icon、参数与工作目录均可读写并保持。
+- 2026-07-30 从当前 GitHub R7 Release 重新下载的 Windows 资产为 `51,782,033` 字节，SHA-256 `8cd7ceb1fa6c6dc4b72c259bddc0eee970577c5e48cf4fc7383585708b8cc8f0`，PE 为 R7；它与桌面 `FH-DualSense-Enhanced-R5.exe` 内的字节完全一致，说明旧文档记录的 `4cc106...` 已不是当前线上资产。
+- 使用上述当前线上 R7、真实 R6 回滚字节作为故意放置的 `FH-DualSense-Enhanced-R7.exe.old`，以及新构建 R8，在短隔离目录执行正常事务：journal 为 `committed`，规范 R8 存在，R7 EXE、严格同名 `.old` 和 `.sha256` 全部删除，故意放置的无关 `notes.old` 保留。
+- 另在短隔离目录把新 R8 复制为错误名称 `FH-DualSense-Enhanced-R5.exe`，旁边放置真实 R6 的严格 `.old`，直接启动冻结 EXE：legacy journal 为 `committed`、记录 `old_version=5` / `new_version=8`，规范 R8 生成，错误 R5 与 `.old` 删除，无关 `notes.old` 保留。两轮新 R8、Helper 和诊断进程最终计数均为 0；三处临时诊断目录已移入回收站，可恢复。
 - 使用实际发布的 R6 EXE 构造旧 Helper 的真实输出形态，在隔离目录启动审计前 R7 候选：journal 为 `committed`，两条分别指向 R5/R6 的 Start Menu 测试快捷方式 target/icon 均迁移为 R7，参数和工作目录保持；R5 EXE、R5 `.old`、R5 `.sha256`、R6 EXE 与 R6 `.old` 全部清理。故意放置的 R8 EXE 和无关 `notes.old` 均保留，证明清理没有扩展为通配删除。
-- 上述真实升级使用线上 R6 SHA-256 `2a6c1ec005fd8cfd056ccdc68ef8d291cc8f7376bc632cc40c737b10cc01c1da`。外层进程 PID 与健康 ACK 内层 PID 不同的早期演练已证明并修复；审计前最终演练同样成功提交。两轮测试进程、快捷方式和临时目录均已清理，复核计数为 0。审计后精确候选未重复这项会启动真实 EXE 的演练，当前由 109 项 updater/packaging 定向测试覆盖。
+- 上述历史 R6 到 R7 真实升级使用线上 R6 SHA-256 `2a6c1ec005fd8cfd056ccdc68ef8d291cc8f7376bc632cc40c737b10cc01c1da`。外层进程 PID 与健康 ACK 内层 PID 不同的早期演练已证明并修复；审计前最终演练同样成功提交。两轮历史测试进程、快捷方式和临时目录均已清理，复核计数为 0。
 - 恢复 R6 USB 生命周期的上一 R7 候选：`packaging/windows/dist/FH-DualSense-Enhanced-R7.exe`，SHA-256 `16430403acc2c4ff60d242181977e4604ad3cbc63e350d8b937c1ceaaa92c7aa`。真实硬件确认其 USB/BT 冷启动握把正常，但 BT → USB 后 USB 握把持续失效，应用重启和 USB 重插不能恢复，手柄完全关机可以恢复。
 - Bluetooth teardown 隔离候选：`packaging/windows/dist-bt-teardown-1/FH-DualSense-Enhanced-R7.exe`，SHA-256 `84370969e02467b220c4db3c734693a5ea2a1dab4d20e666d10881f363aaa4c3`。真实硬件已经确认它在 teardown accepted、HID 切到 USB 后仍找不到四声道 endpoint，USB 握把无输出；该候选失败且已被替代。
 - 当前 USB audio readiness 基线：`packaging/windows/dist-usb-audio-gate-1/FH-DualSense-Enhanced-R7.exe`，`51,959,364` 字节（`49.552 MiB`），SHA-256 `32604c85cb50ca0c404a07ccce0a36baeca480df2c5a553356f3286527492d5b`。用户已实机确认 USB/BT 冷启动和 BT → USB 握把；拔掉 USB 会让手柄关机。
@@ -218,19 +241,24 @@
 - 当前 R7 发布候选：`packaging/windows/dist-r7-release-candidate-1/FH-DualSense-Enhanced-R7.exe`，`51,963,061` 字节（`49.556 MiB`），SHA-256 `2e913541d6a01cfd1fc9598d8eaeb0a88b89ba91fcd9795c7cd16936e939c507`。它在上一延迟候选上加入灯效页隔离、Original body haptics 和 Default ABS 关闭；版本资源与 sidecar 校验通过，尚待用户界面和 Bluetooth/XInput 实机确认。
 - 当前动态红线候选：`packaging/windows/dist-dynamic-redline-1/FH-DualSense-Enhanced-R7.exe`，`51,972,532` 字节（`49.565 MiB`），SHA-256 `798a5ad98c856d7f8f93f14e1018d4e52805b70587755f4a0c30d15380581c31`。MZ 头、R7 File/ProductVersion、OriginalFilename 和 `.sha256 --check` 均通过；相对已知可用 `dist-usb-audio-gate-1` 增加 `13,168` 字节（`0.0253%`），未启动真实 EXE 或运行游戏。
 - 当前 Xbox/DualSense Edge 恢复候选：`packaging/windows/dist-xinput-dse-recovery-1/FH-DualSense-Enhanced-R7.exe`，`52,023,359` 字节（`49.613 MiB`），SHA-256 `dd7a4ea10327526fd8fd5e8b03d9b5f5da466dd46dccbca95eaf1592a745f6f9`。MZ 头为 `4D 5A`，`FileVersion/ProductVersion=R7`、`OriginalFilename=FH-DualSense-Enhanced-R7.exe` 和 sidecar `--check` 均通过；相对已知可用 `dist-usb-audio-gate-1` 增加 `63,995` 字节（`0.1232%`），相对公开 R6 增加 `574,417` 字节（约 `0.548 MiB`，`1.116%`），低于体积确认门槛。未启动真实 EXE 或执行硬件长测。
-- 当前标准 R7 发布产物：`packaging/windows/dist/FH-DualSense-Enhanced-R7.exe`，`52,027,090` 字节（`49.617 MiB`），SHA-256 `4cc106c0615164a5bbddbb35cacdb4708a863ee01b54bfbfecd64db7971aa32d`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R7`、`OriginalFilename=FH-DualSense-Enhanced-R7.exe`、sidecar `--check` 和 `--help` 退出码 `0` 均通过。相对已验收 `dist-usb-audio-gate-1` 增加 `67,726` 字节（约 `0.065 MiB`，`0.1303%`），相对公开 R6 增加 `578,148` 字节（约 `0.551 MiB`，`1.1237%`），低于体积确认门槛。该产物包含动态红线灯条、Xbox App 手动 fallback 与受限自动发现，尚未在真实 Xbox App 安装上验证。
-- 本地 ZUV 发布产物：`packaging/zuv/dist/FH-DualSense-Enhanced.zuv.py`，`7,437,544` 字节，SHA-256 `117b3cb3085c7f223f4294525ee4f98e200980d0b0842e3881320911215a1222`，更新源为 `piereacy/FH-DualSense-Enhanced`。构建结束时旧 `.zuv` 运行目录中的 CustomTkinter Roboto 文件导致清理提示，但目标 bundle 正常生成；GitHub workflow 在干净 runner 的独立 `release/` 目录构建，不复用该残留目录。
+- 当前线上 R7 基线资产：`FH-DualSense-Enhanced-R7.exe`，`51,782,033` 字节（`49.383 MiB`），SHA-256 `8cd7ceb1fa6c6dc4b72c259bddc0eee970577c5e48cf4fc7383585708b8cc8f0`，`FileVersion/ProductVersion=R7`、`OriginalFilename=FH-DualSense-Enhanced-R7.exe`。此前本地记录的 `52,027,090` 字节与 `4cc106...` 只保留为被线上资产替换前的历史值，不能继续用于当前下载校验。
+- 上一份标准 R8 本地产物：`packaging/windows/dist/FH-DualSense-Enhanced-R8.exe` 当时为 `52,028,356` 字节（`49.618 MiB`），SHA-256 `3c00fb834344ee420022d508e0e46bb338711483cf94d79038a5967b71dfe711`。该版本的 125% 冻结 GUI 冒烟确认 R8 标识、Bluetooth DualSense 90%、实时 Forza 遥测、总开关显示/保存、长页滚动和更新入口正常；它已被本轮全部电动车 gate 构建覆盖。
+- 历史扳机排版/单速电动车候选：`packaging/windows/dist-r8-ev-layout-2/FH-DualSense-Enhanced-R8.exe`，`52,031,213` 字节（`49.621 MiB`），SHA-256 `f1aa0140ff1ac04cf92c9ddb91679826d2bff9f203ab2049cb92173e181e0fd5`。MZ、R8 版本资源、OriginalFilename 和 sidecar 均曾通过；该候选已被后续 gate 规则替代。
+- 历史单速电动车三路 gate 候选：`packaging/windows/dist-r8-ev-layout-3/FH-DualSense-Enhanced-R8.exe`，`52,031,956` 字节（`49.622 MiB`），SHA-256 `f02ee93001b2cbec09bd7b87f4b7706033770eacc2fd7f84b362e6c540a28f0e`。它仍在用户进程中运行，但“观察到二挡后恢复触觉”的旧规则已被全部电动车 gate 替代；本轮构建和校验没有关闭该进程。
+- 上一份标准 R8 本地产物：`packaging/windows/dist/FH-DualSense-Enhanced-R8.exe`，`52,032,999` 字节（`49.623 MiB`），SHA-256 `558ba6ef4c4acd2f613dccb585a4ab9ae1bd6b6e8580d78b4361efb3fc0f3af1`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe` 和 sidecar `--check` 均通过；相对上一份标准 R8 增加 `4,643` 字节（`0.0089%`），相对 `layout-3` 增加 `1,043` 字节（`0.0020%`），相对线上 R7 增加 `250,966` 字节（`0.4847%`），低于体积确认门槛。全量回归为 `736 passed`，Ruff、Pyrefly、compileall、锁文件与 `git diff --check` 均通过。标准 `dist/data` 中原有的 `runtime.log`、`user_preferences.json` 与 `.bak` 已在构建前保全，构建后逐文件 SHA-256 相同；冻结 EXE 在已有 `layout-3` 单实例运行时返回 `0`，未执行独立 GUI/真实手柄冒烟。该文件早于本轮 DPI 换行、UI 文案移除和 95% 红线默认值，只能作为历史候选，不能作为最终 R8 发布资产。
+- 上一份本地 ZUV 产物：`packaging/zuv/dist/FH-DualSense-Enhanced.zuv.py`，`7,437,544` 字节，SHA-256 `117b3cb3085c7f223f4294525ee4f98e200980d0b0842e3881320911215a1222`，更新源为 `piereacy/FH-DualSense-Enhanced`。它早于本次扳机总开关和 updater 修复，不是当前 R8 源码的最终 ZUV；本轮只重建并验收 Windows EXE。GitHub workflow 会在干净 runner 的独立 `release/` 目录重新构建，不复用旧 `.zuv` 运行目录残留。
 - 相对实际发布 R6 资产 `51,448,942` 字节，延迟候选增加 `512,988` 字节（约 `0.489 MiB`，`0.997%`），低于 `5 MiB` 和 `10%` 门槛。
 - 已用 Windows SDK `mt.exe` 从审计后 R7 主 EXE 与 Update Helper 分别提取 manifest，均确认包含 `PerMonitorV2, PerMonitor`、`true/pm` 和 `asInvoker`。构建后的 updater/packaging 定向套件为 `109 passed in 4.41s`。
 
 ## 尚未执行或失败的验证
 
+- 本次扳机修复尚未取得用户的真实触感结论：冻结 GUI 已识别 Bluetooth DualSense 90% 并接收实时 Forza 遥测，总开关也已在轮胎抓地力、刹车/油门阻力和 body haptics 仍开启时保存为关闭；但游戏内振动状态未记录，Steam Input 状态未记录，是否在手上立即完全释放尚未确认。仍需先保持总开关关闭分别把 L2/R2 压到全行程，再开启总开关并关闭 `Brake stiffness` / `Throttle stiffness` 复核约 89% wall，最后逐项开启独立效果确认所有权。
 - `dist-xinput-dse-recovery-1` 尚未做真实 Bluetooth/XInput 延迟、30 至 60 分钟稳定性、DualSense Edge 和驾驶反馈验收；真实 Xbox App FH4/FH5/FH6 也仍未在当前电脑验证。
-- 当前标准 R7 产物尚未做真实大红区车辆的三次断油学习、换挡/打滑误触发、灯条同步、USB/Bluetooth 一致性或驾驶手感验收。
-- 当前 125% 环境曾对上一份 EXE 完成基础目测：两个顶部状态框没有原黑底白点问题，边缘未见先前的明显锯齿；最大化成功且没有等待所有页面重载。最新候选又加入反馈卡片/更新卡片缓存，尚未重新目测。100%、150%、最大化后的连续跨页操作、混合 DPI、多屏移动、动态缩放、睡眠/唤醒、扩展坞和远程桌面仍未执行。
+- 当前源码尚未做真实大红区燃油车的三次断油学习、单挡/多挡电动车极速与地形波动静默、灯条接近极限和稳定红色、USB/Bluetooth 一致性或驾驶手感验收。
+- 当前 125% 环境对隔离的当前源码设置窗口完成目测：扳机总开关与共享反馈各占整行、L2/R2 同行，握把 USB/蓝牙长说明会完整换成多行，两个红线开关下不再出现电动车说明。该 QA 未连接手柄、未启动 Forza，也未触碰用户此前运行的旧冻结 EXE。最终冻结 EXE 只完成 `--help` 无界面启动；100%、150%、最终冻结 GUI、最大化后的连续跨页操作、混合 DPI、多屏移动、动态缩放、睡眠/唤醒、扩展坞和远程桌面仍未执行。
 - 真实 Linux ELF 构建、hidraw 权限和托盘验证未执行；仅完成 Windows 测试与 Bash 语法检查。
-- clean-machine Update Helper、杀毒软件锁文件、真实只读 shortcut 和部分迁移提示未执行；自动测试与隔离目录不能完全替代这些环境。
-- R7 三语 README 与 Release workflow 正文已在本地准备并通过契约测试；线上构建、tag、Release、线上重新下载和 R7 到下一版本更新仍未执行。
+- clean-machine Update Helper、杀毒软件锁文件、真实只读 shortcut 和部分迁移提示未执行；自动测试与隔离目录不能完全替代这些环境。当前线上 R7 到本地 R8 的真实隔离事务与多跳 legacy 引导已执行，但桌面现有安装未被原地改名或清理。
+- R7 已线上发布；R8 尚未创建 tag 或 GitHub Release。R7 到 R8 的真实隔离更新已提交成功，发布后的真实在线按钮更新仍待 R8 Release 存在后执行。
 - Xbox App 自动发现和手动 fallback 已通过合成目录测试，本机 `.GamingRoot` 解析也成功；真实 Xbox App FH4/FH5/FH6 游戏、目录 ACL 与 FH6 文件工具仍未验证。
 
 ## 下一次 Codex 会话交接
@@ -255,4 +283,4 @@
 16. `src/modules/__init__.py`
 17. `src/modules/feedback_schema.py`
 
-建议首先处理的具体任务：复核 R7 中英双语发布说明、标准 EXE 信息和上述未验证边界。用户最终确认当前范围后创建 `R7` tag、等待 GitHub Release jobs 完成，并从线上重新下载 Windows EXE 与 `.sha256` 独立复核；不得在确认前发布。
+建议首先处理的具体任务：用户已经确认发布；提交并推送当前已验证的 R8 源码，创建 `R8` tag，等待 GitHub Release jobs 完成，并从线上重新下载 Windows EXE 与 `.sha256` 独立复核。

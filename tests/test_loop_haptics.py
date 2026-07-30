@@ -173,6 +173,7 @@ def test_packet_routes_haptics_and_writes_one_atomic_controller_frame(monkeypatc
     routed_telemetry = _Mixer.instances[0].calls[0][0]
     assert routed_telemetry["effective_redline_rpm"] == 0.0
     assert routed_telemetry["rev_limiter_active"] is False
+    assert routed_telemetry["redline_alert_allowed"] is True
     assert controller.calls == [
         (LEFT, RIGHT, RUMBLE),
         (off(), off(), SILENT_RUMBLE),

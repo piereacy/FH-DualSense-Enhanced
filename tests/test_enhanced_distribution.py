@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "7"
-CURRENT_RELEASE_VERSION = "R7"
+CURRENT_INTERNAL_VERSION = "8"
+CURRENT_RELEASE_VERSION = "R8"
 
 
 def _source(path: str) -> str:
@@ -166,19 +166,42 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R7 中文说明" in workflow
-    assert "Enhanced R7 English notes" in workflow
-    assert "控制器连接真值" in workflow
-    assert "动态红线估计器" in workflow
-    assert "转速灯条" in workflow
-    assert "`.GamingRoot`" in workflow
-    assert "自动读取本地磁盘" in workflow
-    assert "discover Xbox App flat-file installs" in workflow
-    assert "direct `Content` payload" in workflow
-    assert "事务式并排安装" in workflow
-    assert "temporary Bluetooth signal gap" in workflow
-    assert "transactional side-by-side installation" in workflow
-    assert "runtime.log" in workflow
+    assert "Enhanced R8 中文说明" in workflow
+    assert "Enhanced R8 English notes" in workflow
+    assert "generate_release_notes: false" in workflow
+    assert "扳机可以真正关闭" in workflow
+    assert "Trigger feedback can be fully disabled" in workflow
+    assert "Brake stiffness" in workflow
+    assert "Throttle stiffness" in workflow
+    assert "约 89%" in workflow
+    assert "around 89%" in workflow
+    assert "默认提醒由 `93%` 后移到 `95%`" in workflow
+    assert "default warning moves later from `93%` to `95%`" in workflow
+    assert "已自定义的时机和命名 Profile 不会被覆盖" in workflow
+    assert "Custom timing and named profiles are preserved" in workflow
+    assert "全部电动车不再输出红线震动" in workflow
+    assert "Electric vehicles no longer produce redline vibration" in workflow
+    assert "界面排版修正" in workflow
+    assert "Layout fixes" in workflow
+    assert "说明文字在双列、窗口缩放和高 DPI 环境下不再被截断" in workflow
+    assert "helper text no longer clips" in workflow
+    assert "启用自适应扳机输出" in workflow
+    assert "Enable adaptive trigger output" in workflow
+    assert "恢复正确的 `FH-DualSense-Enhanced-R8.exe` 文件名" in workflow
+    assert "restore the correct `FH-DualSense-Enhanced-R8.exe` filename" in workflow
+    assert "无关文件不会被删除" in workflow
+    assert "Unrelated files are not deleted" in workflow
+    for implementation_term in (
+        "effective_redline_rpm",
+        "redline_alert_allowed",
+        "NumCylinders",
+        "firmware end wall",
+        "运行 PE 已是 R7",
+        "running PE is R7",
+        "transaction 哈希",
+        "transaction hash",
+    ):
+        assert implementation_term not in workflow
     assert "[@hotline1337](https://github.com/hotline1337)" not in workflow
     assert "https://www.nexusmods.com/forzahorizon6/mods/2" not in workflow
     for readme_path in ("README.md", "docs/ReadmeZH.md", "docs/ReadmeJA.md"):
@@ -186,8 +209,23 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
         assert "@hotline1337" in readme
         assert "https://www.nexusmods.com/forzahorizon6/mods/2" in readme
     assert "disable in-game vibration" in workflow
-    assert "Forza-Horizon-DualSense-Python 1.6.2" in workflow
-    assert "HorizonHaptics 1.3.0" in workflow
+    assert "Forza-Horizon-DualSense-Python 1.6.2" not in workflow
+    assert "HorizonHaptics 1.3.0" not in workflow
+    assert "vDS" not in workflow
+
+
+def test_bluetooth_haptics_reference_is_revalidated_against_vds_rc1():
+    implementation = _source("src/modules/dualsense/bt_haptics.py")
+    architecture = _source("docs/ARCHITECTURE.md")
+    decisions = _source("docs/DECISIONS.md")
+    notices = _source("docs/THIRD_PARTY_NOTICES.md")
+
+    assert "0.3.0-rc7" in implementation
+    assert "revalidated against 0.4.0-rc1" in implementation
+    assert "vDS `0.4.0-rc1`" in architecture
+    assert "vDS 0.4.0-rc1 只更新协议复核基线" in decisions
+    assert "Reference version: `0.4.0-rc1`" in notices
+    assert "ec531599dfdd02e14ce68efd8c0d2dcb439894a5" in notices
 
 
 def test_r_series_release_refuses_version_or_bilingual_notes_mismatch():
@@ -374,7 +412,7 @@ def test_readmes_require_in_game_vibration_off_but_keep_steam_input_on():
     assert "握把フィードバックが正常に動作しません" in japanese
 
 
-def test_release_identity_uses_public_r7_and_internal_pep440_version():
+def test_release_identity_uses_public_r_series_and_internal_pep440_version():
     project = tomllib.loads(_source("src/pyproject.toml"))
     workflow = _source(".github/workflows/release.yml")
 

@@ -11,7 +11,10 @@ def make_backend(s, enable_startup_pulse):
     """Build the trigger writer the settings ask for: DualSense (HID) or DSXClient
     (UDP to DualSenseX). Both share the set/open/close/connected surface, so callers
     treat them interchangeably. Callers pass the pulse flag explicitly (the UIs
-    suppress it on a restart)."""
+    suppress it on a restart); the adaptive-trigger master remains the final gate."""
+    enable_startup_pulse = bool(
+        enable_startup_pulse and s.enable_trigger_feedback
+    )
     if s.use_dsx:
         return dsx.DSXClient(
             host=s.dsx_host,

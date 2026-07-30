@@ -28,3 +28,18 @@ def test_native_backend_uses_live_body_haptics_audio_gate(monkeypatch):
     settings.enable_body_haptics = False
     assert readiness() is True
     assert endpoint_checks == [True]
+
+
+def test_trigger_master_suppresses_requested_startup_pulse(monkeypatch):
+    captured = {}
+
+    class Controller:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(modules_package.dualsense, "DualSense", Controller)
+    settings = Settings(enable_startup_pulse=True, enable_trigger_feedback=False)
+
+    make_backend(settings, True)
+
+    assert captured["enable_startup_pulse"] is False

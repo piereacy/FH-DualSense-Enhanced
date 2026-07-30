@@ -604,9 +604,29 @@ def test_trigger_and_grip_pages_have_complete_disjoint_field_ownership():
     assert trigger_groups["R2 - Throttle"]["enable_rev_limiter"] == (
         "R2 trigger redline vibration"
     )
+    assert trigger_groups["Trigger feedback"] == {
+        "enable_trigger_feedback": "Enable adaptive trigger output",
+    }
     assert trigger_groups["Shared trigger feedback"] == {
         "enable_wheelspin_buzz": "Tire grip trigger feedback",
     }
+
+    redline_trigger = next(
+        item
+        for title, items in TRIGGER_SWITCH_SECTIONS
+        if title == "R2 - Throttle"
+        for item in items
+        if item[0] == "enable_rev_limiter"
+    )
+    redline_grip = next(
+        item
+        for title, items in GRIP_SWITCH_SECTIONS
+        if title == "Redline feedback"
+        for item in items
+        if item[0] == "enable_grip_redline_haptics"
+    )
+    assert redline_trigger[4] == ""
+    assert redline_grip[4] == ""
     assert "enable_grip_gear_shift_haptics" in grip_fields
     assert "enable_grip_redline_haptics" in grip_fields
     assert "enable_body_haptics" in grip_fields

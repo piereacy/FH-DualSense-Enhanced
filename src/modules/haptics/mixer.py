@@ -202,10 +202,11 @@ class HapticMixer:
             rpm / effective_redline_rpm if effective_redline_rpm > 0.0 else 0.0
         )
         limiter_active = bool(telemetry.get("rev_limiter_active", False))
-        enter_ratio = clamp01(_setting(settings, "grip_redline_ratio", 0.93))
+        alert_allowed = bool(telemetry.get("redline_alert_allowed", True))
+        enter_ratio = clamp01(_setting(settings, "grip_redline_ratio", 0.95))
         release_ratio = min(
             enter_ratio,
-            clamp01(_setting(settings, "grip_redline_release_ratio", 0.90)),
+            clamp01(_setting(settings, "grip_redline_release_ratio", 0.92)),
         )
         throttle_active = accel_raw >= accel_deadzone
         redline_available = (
@@ -223,6 +224,9 @@ class HapticMixer:
                 exit_reason = "engine-intensity"
             else:
                 exit_reason = "body-intensity"
+            self._redline_active = False
+        elif not alert_allowed:
+            exit_reason = "electric-powertrain"
             self._redline_active = False
         elif not throttle_active:
             exit_reason = "throttle"

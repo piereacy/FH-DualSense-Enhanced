@@ -346,6 +346,8 @@ STRINGS.update({
 
 STRINGS.update({
     "Trigger feedback": "Trigger-Feedback",
+    "Enable adaptive trigger output": "Adaptive Trigger-Ausgabe aktivieren",
+    "Immediately releases L2 and R2 while preserving individual settings. Grip haptics remain independent.": "Gibt L2 und R2 sofort frei und behält die einzelnen Trigger-Einstellungen bei. Die Griff-Haptik bleibt unabhängig.",
     "L2/R2 switches and tuning. Changes save instantly.": "L2/R2-Schalter und Abstimmung. Änderungen werden sofort gespeichert.",
     "Grip switches and tuning. Changes save instantly.": "Griff-Haptik und Abstimmung. Änderungen werden sofort gespeichert.",
     "Shared trigger feedback": "Gemeinsames Trigger-Feedback",

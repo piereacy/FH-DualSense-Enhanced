@@ -6,6 +6,11 @@ device page in one frontend only.
 """
 
 TRIGGER_SWITCH_SECTIONS = (
+    ("Trigger feedback", (
+        ("enable_trigger_feedback", "Enable adaptive trigger output", None, None,
+         "Immediately releases L2 and R2 while preserving individual settings. "
+         "Grip haptics remain independent."),
+    )),
     ("L2 - Brake", (
         ("enable_gear_shift_brake", "Shift thump", None, None, ""),
         ("enable_abs", "ABS rumble", None, None, ""),

@@ -23,6 +23,10 @@ def test_r4_grip_effects_use_safe_defaults():
 
     assert settings.enable_rev_limiter is False
     assert settings.enable_grip_redline_haptics is True
+    assert settings.rev_limit_ratio == 0.95
+    assert settings.grip_redline_ratio == 0.95
+    assert settings.grip_redline_release_ratio == 0.92
+    assert settings.tachometer_flash_ratio == 0.95
     assert settings.grip_redline_amp == 220
     assert settings.grip_redline_gain == 1.5
     assert settings.grip_redline_duty_cycle == 0.7

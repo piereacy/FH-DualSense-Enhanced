@@ -345,6 +345,8 @@ STRINGS.update({
 
 STRINGS.update({
     "Trigger feedback": "扳機回饋",
+    "Enable adaptive trigger output": "啟用自適應扳機輸出",
+    "Immediately releases L2 and R2 while preserving individual settings. Grip haptics remain independent.": "關閉後立即釋放 L2/R2，並保留各項扳機設定；握把觸覺仍由自己的開關控制。",
     "L2/R2 switches and tuning. Changes save instantly.": "L2/R2 扳機鍵開關與調整，變更會立即儲存。",
     "Grip switches and tuning. Changes save instantly.": "握把觸覺開關與調整，變更會立即儲存。",
     "Shared trigger feedback": "共用扳機回饋",

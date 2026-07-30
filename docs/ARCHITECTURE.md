@@ -15,7 +15,7 @@ FH-DualSense-Enhanced 是一个运行在 PC 上的本地 Python 应用。它监�
 
 项目不是游戏插件，不注入游戏进程，也没有数据库或远程业务服务。游戏只通过 UDP 单向发送遥测，程序只在本机控制手柄或向配置的 UDP 目标转发原始包。
 
-用户文档以 `Forza-Horizon-DualSense-Python 1.6.2` 作为能力比较基线。三语 README 描述当前 Enhanced 版本相对该基线的累计核心增强；单个 GitHub Release body 描述该版本相对上一稳定 Enhanced 版本的增量。前者回答“本项目比上游多什么”，后者回答“这次更新比上一版多什么”，两者不得共用“本版新增”等含混措辞。README 的累计清单只总结用户可感知能力，具体实现和传输约束仍以本架构文档与代码为准。GitHub 仓库已经脱离 fork network，但 Git 历史、许可证署名、原项目链接和第三方归属继续保留。
+用户文档以 `Forza-Horizon-DualSense-Python 1.6.2` 作为能力比较基线。三语 README 描述当前 Enhanced 版本相对该基线的累计核心增强；单个 GitHub Release body 描述该版本相对上一稳定 Enhanced 版本的增量。前者回答“本项目比上游多什么”，后者回答“这次更新比上一版多什么”，两者不得共用“本版新增”等含混措辞。README 与 Release 都只总结用户可感知能力、升级影响、安装方式和必需设置，不展开内部字段、状态机、协议字节、动态学习链路、PE 版本顺序或 transaction 哈希。R8 的 updater、扳机、红线、灯效和布局链路分别保留在本文件 3.3、5、6、8.1 节，产品取舍保留在 `docs/DECISIONS.md`，开发不变量保留在 `AGENTS.md`。GitHub 仓库已经脱离 fork network，但 Git 历史、许可证署名、原项目链接和第三方归属继续保留。
 
 README 同时存在本地开发输入和用户在 GitHub 直接提交的远端输入。发布或同步链路必须先获取远端提交，再以逐段语义合并维持两者；远端 README 改动属于需要保留和理解的用户内容，不是可由本地工作树整体覆盖的生成物。发生冲突时应结合远端改动意图与本次本地更新重新组织文本，不能默认以本地版本为准。
 
@@ -58,7 +58,7 @@ flowchart LR
 启动顺序如下：
 
 1. `main()` 首先调用 `modules.dpi.bootstrap_windows_dpi()`；冻结 Windows 构建还会在 Python 入口前执行 `packaging/windows/dpi_runtime_hook.py`，确保 Tk 创建窗口前已确定 DPI awareness。运行配置只读取进程环境，不隐式加载当前目录的 dotenv 文件。
-2. 解析公开 CLI 与更新器内部 transaction/token 参数，先检测 R6 legacy bootstrap，再按 journal 恢复未完成更新事务。
+2. 解析公开 CLI 与更新器内部 transaction/token 参数，先检测旧覆盖式 Helper 的 legacy bootstrap，再按 journal 恢复未完成更新事务。
 3. 创建 `Settings`，再由 `preferences.load()` 应用 global settings 和当前 Profile。偏好文件损坏时，GUI 模式显示真实 Tk 恢复弹窗；TUI/headless 才使用终端确认。
 4. 处理 `--host`、`--port`、`--debug`、`--headless`、`--gui` 和 `--tui`。
 5. 默认启动 `CustomTkinter` GUI。`--tui` 启动 Textual，`--headless` 在当前线程运行后端。更新健康 ACK 只在所选模式达到最低可用边界后写入：headless 完成 controller、可选 XInput 与 UDP listener 初始化；GUI/TUI 由构造函数保存的一次性 callback 在 backend、listener 和 telemetry worker 已启动后提交。该 callback 失败会终止新版本，使 Helper 进入回滚，而不是把“窗口构造成功”误当成可用。
@@ -79,7 +79,7 @@ flowchart LR
 
 GUI 的 Tk widget 只由主线程访问。后台日志进入最多 4000 条的 queue，再由 Tk 定时读取。最小化到托盘由 `settings.minimize_to_tray` 控制；窗口关闭、托盘退出、游戏关闭、遥测超时和更新重启都进入 `TriggerGUI.request_close()`，再由同一 teardown 顺序退出。TUI 的快捷键、退出按钮、backend shutdown 和更新重启同样进入 `TriggerTUI.request_close()`。两套入口都先处理 `Default` Profile 的可选命名保存，更新安装 callback 只在确认退出后执行。托盘实现位于 `src/modules/gui/tray.py`。
 
-Enhanced R4 只保留一个左侧导航壳层。其青绿色视觉来源在项目内部称为 Miku Console 设计理念，但当前产品名称、窗口标题和构建资产只使用 `FH-DualSense-Enhanced`。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。`TriggerGUI._build_body()` 创建全部页面后，把每个 tab frame 只 `grid()` 到同一内容单元格一次；`_select_nav()` 通过 `tkraise()` 和可选 `on_show()`/`on_hide()` 改变当前页，不再以 `pack_forget()`/`pack()` 触发整页重复布局。长页面使用 `widgets.FastScroll` 注册到根窗口 `WheelRouter`：根窗口命中测试只返回当前 raised 页的指针祖先，内层到达目标方向边界后才转交外层。只有 raised 页的 `FastScroll` 响应 canvas 尺寸变化，40 ms debounce 合并最大化/拖拽产生的连续事件；隐藏页只记住最新尺寸，重新显示时同步一次，从而保留常驻页面状态又避免所有长页同时回流。驾驶反馈页的卡片保持自然高度，内容宽度低于阈值时只重新排列为单列，不重建开关。顶部 Profile 和控制器状态沿用 `W.Pill` 接口，但渲染为 28 logical px 高、8 logical px 圆角的小型状态框；间距与状态点尺寸使用 4 的倍数，重复 presentation 值不再次调用 `configure()`。Enhanced R7 由嵌入 manifest 与早期 runtime bootstrap 共同目标化 Per-Monitor v2；`modules.dpi.query_dpi_state()` 查询实际 thread/window awareness 和缩放，系统页与日志展示结果。CustomTkinter 继续负责自身 widget scaling，项目不额外叠加用户缩放系数。
+Enhanced R4 只保留一个左侧导航壳层。其青绿色视觉来源在项目内部称为 Miku Console 设计理念，但当前产品名称、窗口标题和构建资产只使用 `FH-DualSense-Enhanced`。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。`TriggerGUI._build_body()` 创建全部页面后，把每个 tab frame 只 `grid()` 到同一内容单元格一次；`_select_nav()` 通过 `tkraise()` 和可选 `on_show()`/`on_hide()` 改变当前页，不再以 `pack_forget()`/`pack()` 触发整页重复布局。长页面使用 `widgets.FastScroll` 注册到根窗口 `WheelRouter`：根窗口命中测试只返回当前 raised 页的指针祖先，内层到达目标方向边界后才转交外层。只有 raised 页的 `FastScroll` 响应 canvas 尺寸变化，40 ms debounce 合并最大化/拖拽产生的连续事件；隐藏页只记住最新尺寸，重新显示时同步一次，从而保留常驻页面状态又避免所有长页同时回流。驾驶反馈页的卡片保持自然高度，内容宽度低于阈值时只重新排列为单列，不重建开关。卡片说明文字读取每张卡片的实际 configure-event 宽度，把 Tk 的物理像素按 CustomTkinter widget scaling 换算回 logical px 后设置 `wraplength`；`W.Hint` 再按 Tk 文本请求高度增长，避免 125% 等 DPI 下发生二次缩放与多行裁切。顶部 Profile 和控制器状态沿用 `W.Pill` 接口，但渲染为 28 logical px 高、8 logical px 圆角的小型状态框；间距与状态点尺寸使用 4 的倍数，重复 presentation 值不再次调用 `configure()`。Enhanced R7 由嵌入 manifest 与早期 runtime bootstrap 共同目标化 Per-Monitor v2；`modules.dpi.query_dpi_state()` 查询实际 thread/window awareness 和缩放，系统页与日志展示结果。CustomTkinter 继续负责自身 widget scaling，项目不额外叠加用户缩放系数。
 
 GUI 的 `src/modules/gui/about_tab.py` 和 TUI 的 `src/modules/tui/about_tab.py` 是独立的“关于与许可证”页面，均位于日志之后，复用 `src/modules/about.py` 的署名、原项目、Sponsor URL、ViGEm 第三方链接和 `@hotline1337` 的 Nexus MOD 链接。`settings_tab.py` 只负责握把触觉与调校，不再承载许可证卡片；总览页也不展示 Sponsor 或无功能的版本工作台。
 
@@ -105,7 +105,7 @@ Windows 不能覆盖正在运行的主程序。`src/modules/update/transaction.p
 
 R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n>.exe`，把已验证资产安装为规范 `R<n+1>.exe`，启动新版，在 30 秒内等待 token、版本、路径和哈希一致的原子健康 ACK，再观察进程约 3 秒。PyInstaller one-file 的外层 bootloader PID 与写 ACK 的内层应用 PID 可以不同，因此 token 是身份凭据，Helper 只要求外层启动进程继续存活。健康失败删除未提交新版并重启旧版；健康成功后才进入目录收口。Helper 枚举新版所在目录中名称严格匹配 `FH-DualSense-Enhanced-R<n>.exe` 且版本低于新版的规范 EXE，逐个迁移其快捷方式；迁移成功后静默删除这些旧 EXE，以及严格同名的 `.exe.old` 和 `.exe.sha256`。它不执行宽泛的 `*.exe` 或 `*.old` 清理，不碰同级其他程序，也不删除同版或更高版本。正常路径不创建 `.old`。
 
-已经发布的 R6 旧 Helper 无法并排安装，会把 R7 字节写入 `R6.exe` 并留下真实 R6 的 `R6.exe.old`。`launch_legacy_bootstrap()` 只有在文件名版本、内置版本、两份 PE 版本资源和 `.old` 形态全部匹配时才进入第二阶段：恢复规范 R6，安装规范 R7，再走相同健康确认。提交时的目录收口也会删除更早更新遗留的严格命名文件，例如 `FH-DualSense-Enhanced-R5.exe.old`。`packaging/windows/shortcut_links.py` 使用原生 Shell Link COM 精确迁移 Desktop、Programs 和已知 pinned 目录中目标绝对路径匹配旧 EXE 的 `.lnk`，保留参数、工作目录和图标索引；无匹配静默成功，某一旧版存在失败项时只保留该规范旧 EXE 并让 journal 停在 `cleanup_pending`，其他已成功迁移的旧版和遗留 sidecar 仍可清理。Helper 与构建均使用 `src/uv.lock` 中固定的 PyInstaller，不在构建时解析任意最新版本。
+已经发布的旧覆盖式 Helper 无法并排安装，会把新版字节写回旧文件名并留下上一份真实字节的 `.old`。连续经过这种更新后，文件名可能落后多代，例如 `R5.exe` 的 PE 已是 R7，而 `R5.exe.old` 的 PE 是 R6。`launch_legacy_bootstrap()` 不把文件名当成真实字节版本：它要求文件名版本低于当前版本、运行 EXE 的 PE 版本等于当前版本、紧邻 `.old` 的 PE 版本不低于文件名版本且低于当前版本；备份 PE 是真实回滚版本，文件名只作为允许范围的下界。两份字节随后仍由 transaction SHA-256 严格绑定。第二阶段把运行中的新版字节安装到当前规范文件名、临时恢复备份，再走相同健康确认和严格目录收口。`packaging/windows/shortcut_links.py` 使用原生 Shell Link COM 精确迁移 Desktop、Programs 和已知 pinned 目录中目标绝对路径匹配旧 EXE 的 `.lnk`，保留参数、工作目录和图标索引；无匹配静默成功，某一旧版存在失败项时只保留该规范旧 EXE 并让 journal 停在 `cleanup_pending`，其他已成功迁移的旧版和遗留 sidecar 仍可清理。Helper 与构建均使用 `src/uv.lock` 中固定的 PyInstaller，不在构建时解析任意最新版本。
 
 ### 3.4 Windows FH6 语言包按钮
 
@@ -169,11 +169,13 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 ### 5.2 Forza 效果和优先级
 
-`src/modules/forzahorizon/effects.py` 的 `TriggerAnimations` 保存换挡、通用抓地力 EWMA/hysteresis 和 ABS hold deadline 等跨帧状态。`Controller` 每个遥测 tick 只计算一次抓地力 effect，再按踏板状态路由到 L2 或 R2 frame；两侧仍采用 first-match priority，较高优先级会遮蔽后续效果。遥测 `on=False` 时会复位这些 transient state 和两侧 wall latch，防止恢复后沿用旧效果。
+`src/modules/forzahorizon/effects.py` 的 `TriggerAnimations` 保存换挡、通用抓地力 EWMA/hysteresis 和 ABS hold deadline 等跨帧状态。`Controller` 每个遥测 tick 只计算一次抓地力 effect，再按踏板状态路由到 L2 或 R2 frame；两侧仍采用 first-match priority，较高优先级会遮蔽后续效果。`enable_trigger_feedback=False` 位于整条优先级链之外：下一帧直接返回两侧 `off()`，同时复位全部 transient state 和两侧 wall latch；`modules.make_backend()` 还会拒绝自动启动脉冲。该总开关保留所有子设置，不代管独立的握把触觉。遥测 `on=False` 采用相同复位，防止恢复后沿用旧效果。
 
-`src/modules/forzahorizon/redline.py` 在 `src/modules/loop.py` 的同一遥测帧中先生成共享的 `effective_redline_rpm`、`rev_limiter_active` 和置信度。Forza Data Out 没有显式断油标志，因此未学习时根据仪表 `max_rpm` 使用受限经验曲线，并保证估计值不低于已经稳定观察到的发动机转速；高油门、稳定同挡、接近预测红线且无离合或严重打滑时，检测相对功率/扭矩骤降或非正功率。候选事件需要继续保持同一挡位 120 ms 才确认，连续三个接近的候选以中位数建立学习值，之后允许缓慢修正。车辆 ordinal、PI 或仪表转速范围变化会重置学习；菜单中暂时归零的车辆身份不会清除已有结果。
+`src/modules/forzahorizon/redline.py` 在 `src/modules/loop.py` 的同一遥测帧中先生成共享的 `effective_redline_rpm`、`rev_limiter_active`、`redline_alert_allowed` 和置信度。Forza Data Out 没有显式断油标志或总挡位数，因此未学习时根据仪表 `max_rpm` 使用受限经验曲线，并保证估计值不低于已经稳定观察到的发动机转速。高油门、稳定同挡且无离合或严重打滑时，预测窗口内继续以相对功率/扭矩骤降或非正功率走快速确认；已确认燃油车还可在预测窗口之外用更严格的功率与扭矩同时塌陷进行宽范围冷启动，候选最低转速为 `max(2 × idle_rpm, 1500)`。全部候选都需要继续保持同一挡位 120 ms 才确认；宽范围第一次事件只进入有界候选队列，第二个相近 RPM 事件才发布短暂 limiter，三个相近候选以中位数建立学习值，分散在不同 RPM 的事件不能互相确认。学习完成后当前默认 `0.95` 等设置仅表示相对真实红线的可调提前量，之后的新候选允许平滑修正。电驱和缺少气缸字段的旧映射不使用宽范围冷启动，避免把再生制动或未知字段语义当成燃油断油。车辆 ordinal、PI、气缸数或仪表转速范围变化会重置学习；菜单中暂时归零的车辆身份不会清除已有结果。
 
-估计器不修改 UDP parser 返回的原始 `max_rpm`。R2 扳机键红线、握把红线和 `LightingController` 转速灯条读取 `effective_redline_rpm`，已经确认的断油事件还能短暂强制红线反馈与灯条闪烁；动态估计不可用时灯条回退到原始 `max_rpm`。发动机连续底噪和其他未明确迁移的 RPM 归一化仍读取原始范围，避免覆盖共享 telemetry 后连带改变无关效果。学习状态只存在于当前进程和当前车辆，不写入 Profile，也不跨启动持久化。
+`preferences._migrate_r8_redline_timing_defaults()` 只处理升级时仍完整保留 R7 四项旧时机默认值的 `Default` snapshot，将 R2、握把进入、握把退出和灯条分别迁移为 `0.95/0.95/0.92/0.95` 并写入一次性 marker。只要其中任一项已经调节，整组都不改；命名 Profile 永远不参与。marker 完成后用户再次选择旧值也会按普通 Profile 设置持久化，不会被下一次启动重复迁移。
+
+估计器不修改 UDP parser 返回的原始 `max_rpm`。R2 扳机键红线、握把红线和 `LightingController` 转速灯条读取 `effective_redline_rpm` 与 `redline_alert_allowed`；动态估计不可用时灯条回退到原始 `max_rpm`。对于任何 `NumCylinders == 0` 的车辆，`redline_alert_allowed=False` 会同时阻止 R2 与握把的比例式红线和确认 limiter 路径，避免电驱在持续加速、极速附近坡度或功率波动时输出不对应真实机械断油的触觉；当前挡位与已经观察到的其他前进挡不会重新开启该 gate。检测器仍可保留 limiter 事件用于内部估计，灯条继续显示共享 RPM 渐变，到达红线或检测到 limiter 时保持稳定红色，不做换挡式闪烁。缺失 `NumCylinders` 的旧映射保持原行为。发动机连续底噪和其他未明确迁移的 RPM 归一化仍读取原始范围。学习只存在于当前进程和当前车辆，不写入 Profile，也不跨启动持久化。
 
 当前 L2 顺序：
 
@@ -181,7 +183,7 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 2. 换挡冲击。
 3. GT7 风格 ABS zoned wall：顶部 zone 保持满强度 wall，下部 zone 动态振动。
 4. 仅踩刹车时的通用纵向抓地力反馈。
-5. 接近行程末端的 firmware wall。
+5. `Brake stiffness` 所属的接近行程末端 firmware wall。
 6. 可选静态刹车 wall。
 7. 刹车阻力曲线。
 8. L2 未踩下且以上均无输出时的可选路面/减速带纹理。
@@ -193,9 +195,11 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 3. 原地轻踩油门 idle buzz。
 4. 踩油门或同时踩下两块踏板时的通用纵向抓地力反馈。
 5. 踩住油门时的红线震动。
-6. 接近行程末端的 firmware wall。
+6. `Throttle stiffness` 所属的接近行程末端 firmware wall。
 7. 涡轮增压、G 力与普通油门阻力的合成 ramp；新增两层均默认关闭。
 8. R2 扳机键未踩下且以上均无输出时的可选路面/减速带纹理。
+
+两侧通用 firmware end wall 都使用顶部两个满强度 zone，但它不是独立的隐藏效果。L2 wall 归 `enable_brake_resistance` 所有，R2 wall 归 `enable_throttle_resistance` 所有；运行中关闭对应的 `Brake stiffness` 或 `Throttle stiffness` 时，`Controller` 必须先清除 latch，再继续判断其他独立效果。这样关闭两项基础阻力并关闭其余扳机反馈后，踏板遥测即使仍为 `255` 也会输出 `off()`，不会在约 80% 到 90% 物理行程留下 `rigid_zones` 硬墙。可选静态刹车 wall 继续由 `enable_brake_static_wall` 单独拥有，并在启用时保留自身 wall；手刹附加阻力、boost/G 力阻力和震动效果同样不被基础阻力开关代管。用户不需要逐项证明这些开关都已关闭时，可以直接关闭 `enable_trigger_feedback`，由总开关统一释放两侧执行器。
 
 第 7 层由 `TriggerAnimations.throttle_ramp()` 加法合成，而不是在基础油门阻力与实验层之间二选一。基础项在 `enable_throttle_resistance=True` 时使用 `_ramp(accel, accel_deadzone, throttle_baseline_force, throttle_max_force, throttle_curve, throttle_wall_engage_at)`；Enhanced R3 与 Enhanced R4 的默认值均为 `baseline=0`、`max_force=1`、`curve=5.0`。可选 boost 项和 G 力项只在各自开关开启时增加 force，最终统一交给 `rigid()`。
 
@@ -234,7 +238,7 @@ ABS 以四轮 longitudinal slip ratio 为主、combined slip 为低权重辅助�
 - 路面材质只有车辆滚动或对应车轮实际空转时进入混音。
 - 碰撞和悬挂冲击即使静止也保持左右方向性。
 - 车辆滚动使用 `0.5 km/h` 进入、`0.2 km/h` 退出的 hysteresis，避免零速附近抖动。
-- 握把红线要求油门达到 deadzone；`rpm / effective_redline_rpm` 默认在 `0.93` 进入、低于 `0.90` 退出，松开油门立即退出，不使用扳机红线的 hold。已经通过同挡位延迟确认的 `rev_limiter_active` 在短暂窗口内保持事件，确保真实断油即使发生在预测阈值之外也可输出。
+- 握把红线要求油门达到 deadzone；`redline_alert_allowed=True` 时，`rpm / effective_redline_rpm` 默认在 `0.95` 进入、低于 `0.92` 退出，松开油门立即退出，不使用扳机红线的 hold。电动车 gate 关闭时立即退出并保持静默，`rev_limiter_active` 不能重新进入。gate 开启时，已经通过同挡位延迟确认的 limiter 在短暂窗口内保持事件，确保真实限转即使发生在预测阈值之外也可输出。
 - R2 扳机键红线默认关闭，握把红线默认开启。握把侧默认只在左握把输出 10 Hz、70% duty、`220/255` 峰值和 `45%` low 比例的断油脉冲；进入红线后的前 120 ms 还叠加默认 `0.65` 起始冲击。兼容字段 `grip_redline_gain=1.5` 不再线性相乘后硬削顶，而以 `1 - (1 - base)^gain` 调整感知曲线，使峰值滑块仍有有效行程。左右握把可独立启用，握把红线使用独立的 `enable_grip_redline_haptics`，不受 R2 扳机键 `enable_rev_limiter` 控制。
 - 握把红线 active 时，连续路面和 engine 背景默认压至 `30%`，已启用的握把换挡、悬挂、ABS 等 transient 不随红线一起压低。进入和退出只记录状态边沿日志，不逐帧刷屏。
 - 握把换挡冲击默认关闭。启用 `enable_grip_gear_shift_haptics` 后，速度高于 `3 km/h` 的正挡变化会按独立 `grip_gear_shift_strength` 和 `grip_gear_shift_duration_ms` 向左右 low 通道加入 centered transient。它不读取 R2 扳机键的换挡开关、强度或持续时间；关闭时立即清除 event deadline，但继续更新挡位基线以防重新开启后补发旧事件。
@@ -264,6 +268,8 @@ GUI 和 TUI 共享一个 `UsbAudioHaptics`，由 `UsbAudioLifecycle` 在周期 s
 Bluetooth 不依赖 Windows 音频 endpoint。`src/modules/haptics/bt_audio.py` 以 3 kHz、每块 32 帧调用与 USB 相同的 `HapticPcmRenderer`。USB 的 512 / 48000 与 Bluetooth 的 32 / 3000 都是约 10.667 ms，因此低频、高频、engine、左右混音和 `0.35` 平滑位于相同时间尺度。Bluetooth renderer 在量化前使用归一化 `tanh` 软限幅，减少多层叠加被硬裁剪成方波；`BluetoothPcmQuantizer` 以默认 `0.75` 一阶误差反馈量化为 64 字节交错 signed int8，使低幅细节在多个采样间保留平均能量。USB 仍使用 float32 PCM 的常规 `[-1, 1]` 安全裁剪。
 
 `src/modules/dualsense/bt_haptics.py` 构建 398 字节 report `0x36`：63 字节 state block 携带当前 L2/R2 扳机状态，64 字节 haptics block 携带左右采样，bytes 142..393 不声明 controller-speaker block，末尾四字节使用 Bluetooth output prefix `0xA2` 的 CRC32。report sequence 以 4 bit 回绕，audio packet sequence 以 8 bit 回绕。
+
+该封包最初按 vDS `0.3.0-rc7` 与 DS5Dongle 交叉实现，2026-07-30 又逐文件复核到 vDS `0.4.0-rc1`（commit `ec531599dfdd02e14ce68efd8c0d2dcb439894a5`）。两版间 `HapticsPacketBuilder`、`0x36` 长度、haptics block、序号和 CRC 均未改变；协议模块的实际行为变化只涉及麦克风静音灯，另有一次等价容器初始化重写。vDS 0.4 的 Windows USB/IP + HidHide 架构、Opus 和虚拟 USB 仍不属于本项目运行链路，因此本次复核只更新来源基线，不产生 Bluetooth haptics 代码改动。
 
 同一模块还单独构建 BT → USB 交接用的 48 字节 feature report `0x08 / 0x02`。hidapi buffer 从 report id `0x08` 开始；Bluetooth HIDP 在系统层添加 SET_REPORT transaction byte `0x53`，因此 builder 以 `CRC32(0x53)` 作为 continuation seed，对校验字段前 44 字节计算 little-endian CRC。该控制命令依据 DS5Dongle 的 `bt_power_off_controller()`，不属于普通 `0x31`/`0x36` 状态或音频包，也不能由 renderer 直接发送。实机已经证明“系统接受该 report”本身不足以让 USB 握把接管，因此它只能在 endpoint readiness 通过后的既有 teardown 阶段使用，不能作为修复成立的证据。
 
@@ -303,7 +309,7 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 
 所有默认值位于 `src/modules/config/settings.py`。运行中的 GUI/TUI slider 直接修改同一个 `Settings` 实例，热循环下一帧即可读取多数变化。
 
-`src/modules/feedback_schema.py` 是扳机与握把界面字段归属的唯一声明。GUI 与 TUI 的 `ControlsTab` 只渲染 L2/R2 开关、常用调节以及扳机实验参数；各自的 `SettingsTab` 只渲染握把开关、常用调节以及握把实验参数。轮胎抓地力属于扳机反馈；body haptics、握把换挡和握把红线属于握把反馈。涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理继续位于扳机页默认折叠的实验性区域；握把红线曲线、起始冲击和碰撞包络位于握把页默认折叠区域。全部车辆手感字段仍属于 Profile。灯效有独立页面，转速灯带与挡位 Player LEDs 默认关闭。共享 schema、防重字段测试、翻译覆盖测试和 GUI/TUI class contract 防止同一字段漂移到两页或两套界面的不同位置。
+`src/modules/feedback_schema.py` 是扳机与握把界面字段归属的唯一声明。GUI 与 TUI 的 `ControlsTab` 顶部先渲染 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、常用调节以及扳机实验参数；各自的 `SettingsTab` 只渲染握把开关、常用调节以及握把实验参数。GUI 双列布局让总开关和共享扳机反馈各占整行，L2 与 R2 卡片并排；窄窗口仍退回单列，卡片只在列数变化时原地重新 `grid()`。轮胎抓地力属于扳机反馈，因此也受总开关截断；body haptics、握把换挡和握把红线属于独立握把反馈。电动车红线 gate 属于运行时规则，不在 R2 或握把红线开关下重复显示车型说明。涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理继续位于扳机页默认折叠的实验性区域；握把红线曲线、起始冲击和碰撞包络位于握把页默认折叠区域。全部车辆手感字段仍属于 Profile。灯效有独立页面，转速灯带与挡位 Player LEDs 默认关闭。共享 schema、防重字段测试、翻译覆盖测试和 GUI/TUI class contract 防止同一字段漂移到两页或两套界面的不同位置。
 
 ### 8.2 `user_preferences.json`
 
@@ -366,7 +372,7 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 - FH6 图标 MOD 的双目标一致性、路径绑定备份、哈希校验和显式用户动作是文件安全边界；不能把 bundled MOD 当成可直接覆盖游戏文件的普通资源复制。
 - GUI/TUI 与 backend 分线程，Tk widget 不得在 worker thread 直接更新。
 - 当前青绿色 GUI 是唯一壳层；Miku Console 只表示老三样中记录的内部设计来源，不是产品名称。不得重新引入构建时界面分叉、界面 marker 或多资产更新契约。
-- 更新 Helper 是唯一允许安装或清理版本化 EXE 的路径；主程序不得自行覆盖 `sys.executable`。正常更新必须并排安装规范新文件名并由 transaction/token/health ACK 提交，R6 legacy `.old` 只能在严格识别后由第二阶段消费，快捷方式未全部迁移时必须保留真实旧版。
+- 更新 Helper 是唯一允许安装或清理版本化 EXE 的路径；主程序不得自行覆盖 `sys.executable`。正常更新必须并排安装规范新文件名并由 transaction/token/health ACK 提交，旧覆盖式 Helper 的 `.old` 只能在 PE 版本顺序和严格路径都通过识别后由第二阶段消费，快捷方式未全部迁移时必须保留真实旧版。
 - 健康 ACK 表示所选模式的核心 backend 已经可运行，不表示只完成 Python/Tk 构造。GUI/TUI/backend 初始化失败必须让新进程退出并触发事务回滚。
 - Windows DPI awareness 必须在首个 Tk 窗口前由 manifest/runtime bootstrap 确定，UI 只展示实际查询结果；不得在 GUI 构造后重新设置 process awareness。
 - 内嵌第三方组件不能绕过 Windows EXE 体积预算；超过 `5 MiB` 或 `10%` 的增量必须先经明确确认，并在构建后复测。
@@ -380,12 +386,12 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 - 扳机与握把字段已经集中到 `feedback_schema.py`，但系统设置和灯效 section 仍由 GUI/TUI 分别声明；新增这些非反馈设置时仍可能漏改一侧。
 - DSX 无 ACK，无法判断 DSX 是否真正监听，也不支持本项目 body haptics。
 - USB 音频设备按名称和第一个匹配项选择，没有用户可选 endpoint，也没有多级 host API fallback。
-- Bluetooth HD haptics 的公开协议资料有限，目前以 vDS `0.3.0-rc7`、DS5Dongle 和真实 DualSense report descriptor/硬件探针交叉验证；不同旧固件或蓝牙适配器仍可能触发 compatible fallback。
+- Bluetooth HD haptics 的公开协议资料有限，最初以 vDS `0.3.0-rc7` 实现并已复核到 `0.4.0-rc1`，同时继续用 DS5Dongle、真实 DualSense report descriptor 和硬件探针交叉验证；不同旧固件或蓝牙适配器仍可能触发 compatible fallback。
 - 通用退出 `ProcessWatcher` 仍按 `forza` 子串匹配，存在误匹配其他进程的可能；分体启动按钮和 FH6 语言工具通过 `game_launch.py` 使用各代精确 EXE 名与可选完整路径，不受该子串规则影响。
 - Xbox App 自动发现依赖 Windows 当前 flat-file 安装布局和未作为稳定公开 API 承诺的 `.GamingRoot` 标记；真实 Xbox App FH4/FH5/FH6 尚未在当前电脑验证。它只解决可访问 flat-file 游戏根目录，不用于直接启动 EXE，也不尝试发现或读取受保护的 `WindowsApps` package。
 - 多处退出清理仍使用 best-effort `except`，个别设备边缘错误可能只写 debug；`runtime.log` 改善了跨会话取证，但尚未提供 UI 内的一键诊断包、HID sequence 丢包统计或适配器指标。
 - 英文、简体中文和日语用户指南是三个独立文件，共享事实仍需人工同步；`tests/test_enhanced_distribution.py` 只校验关键事实和篇幅，不能发现翻译语义的全部漂移。
-- 更新器目前每次启动都会在约 10 秒后检查，没有跨启动 24 小时节流；Release body 只通过浏览器链接查看，也没有代码签名信任链。PE 固定版本资源只用于严格识别 R6 legacy bootstrap，不能充当发布者身份验证。完成或回滚的 transaction journal 当前不会自动按保留期清理。
+- 更新器目前每次启动都会在约 10 秒后检查，没有跨启动 24 小时节流；Release body 只通过浏览器链接查看，也没有代码签名信任链。PE 固定版本资源只用于严格识别旧覆盖式 Helper 的 legacy bootstrap，不能充当发布者身份验证。完成或回滚的 transaction journal 当前不会自动按保留期清理。
 - `UpdateService.stop()` 不会中断或 join 已进入网络 I/O 的 daemon worker；退出期间可能留下带随机名的未完成 `.part`。无效 pending metadata 会被丢弃，但它此前指向且无法再证明归属的 staged EXE 不会被宽泛删除。
 - 偏好文件使用 UUID 临时文件和原子 replace 防止内容损坏，但没有跨进程锁；同时运行两个实例时仍可能发生最后写入者覆盖另一实例的独立设置。FH6 语言包与图标工具同样没有跨进程文件锁，只依靠游戏进程检测和单实例内的串行操作。
 - Xbox App 启动只用当前用户的 Start Apps AUMID 或产品页 fallback；当前没有 Xbox App 版 FH4/FH5/FH6 可做真实启动与输入验收，也没有自动发现受保护安装目录。产品页已打开不代表游戏已经安装或启动。

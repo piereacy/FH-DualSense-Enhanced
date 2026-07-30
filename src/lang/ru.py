@@ -320,6 +320,8 @@ STRINGS.update({
 
 STRINGS.update({
     "Trigger feedback": "Отдача курков",
+    "Enable adaptive trigger output": "Включить отдачу адаптивных курков",
+    "Immediately releases L2 and R2 while preserving individual settings. Grip haptics remain independent.": "При отключении сразу освобождает L2/R2 и сохраняет отдельные настройки. Отдача рукояток управляется независимо.",
     "L2/R2 switches and tuning. Changes save instantly.": "Переключатели и настройка L2/R2. Изменения сохраняются сразу.",
     "Grip switches and tuning. Changes save instantly.": "Переключатели и настройка отдачи рукояток. Изменения сохраняются сразу.",
     "Shared trigger feedback": "Общая отдача курков",
