@@ -5,10 +5,10 @@
 ## 当前阶段
 
 - 当前开发版本：`Enhanced R8`，`src/pyproject.toml` 版本为 `8`。
-- 当前公开稳定版：GitHub Release `R7`，tag `R7` 指向 `4e70265`，发布于 2026-07-22。
-- 当前阶段：以已发布 R7 为基线的 R8 源码与双语发布契约已经完成发布前收口。R8 修复 L2/R2 基础阻力关闭后仍残留顶部双 zone firmware end wall、导致约 89% 行程被定住的问题；同时新增全部自适应扳机输出总开关，修复旧式多跳更新造成的文件名落后和 `.old` 未消费。扳机页整行布局与高 DPI 说明文字裁切已修正，电动车红线 gate 已收敛为全部电驱关闭触觉并保留极限灯效，燃油车默认提前提醒后移到学习红线的 95%。中英双语 Release 正文现只保留四类用户可感知更新、安装与必需设置，内部链路已归档到老三样并关闭自动生成的 commit notes；Bluetooth 协议参考已从原始采用的 vDS `0.3.0-rc7` 复核到 `0.4.0-rc1`，封包代码无需变化。最终本地 R8 Windows 候选已从最新源码重建并完成静态与无界面启动校验。
-- 当前开发重心：提交并推送已验证的 R8 源码，创建 `R8` tag，等待 GitHub Release 的 Windows、Linux 与 ZUV jobs 完成，再从线上重新下载资产独立复核。真实 Forza/DualSense 行程验收仍需继续，确认燃油车警告时机、单挡/多挡电动车触觉静默与灯条极限显示；不得为了该修复改动已知可用的 R7 USB/BT 握把生命周期。
-- 用户已于 2026-07-30 明确确认发布；当前记录时尚未创建 R8 tag 或 GitHub Release。
+- 当前公开稳定版：GitHub Release `R8`，tag `R8` 指向 `d810c11`，发布于 2026-07-30。
+- 当前阶段：R8 源码、双语 Release、Windows EXE、Linux ELF 和 ZUV 已正式发布。R8 修复 L2/R2 基础阻力关闭后仍残留顶部双 zone firmware end wall、导致约 89% 行程被定住的问题；同时新增全部自适应扳机输出总开关，修复旧式多跳更新造成的文件名落后和 `.old` 未消费。扳机页整行布局与高 DPI 说明文字裁切已修正，电动车红线 gate 已收敛为全部电驱关闭触觉并保留极限灯效，燃油车默认提前提醒后移到学习红线的 95%。中英双语 Release 正文只保留四类用户可感知更新、安装与必需设置，内部链路已归档到老三样并关闭自动生成的 commit notes；Bluetooth 协议参考已从原始采用的 vDS `0.3.0-rc7` 复核到 `0.4.0-rc1`，封包代码无需变化。线上 Windows 资产已重新下载并完成独立字节、PE、manifest 与无界面启动校验。
+- 当前开发重心：用实际 R7 内置更新按钮完成线上 R7 → R8 端到端验收，并继续真实 Forza/DualSense 行程测试，确认燃油车警告时机、单挡/多挡电动车触觉静默与灯条极限显示。不得为了后续修复改动已知可用的 R7 USB/BT 握把生命周期。
+- R8 Release：<https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R8>。
 
 ## 代码中已经实现
 
@@ -129,18 +129,17 @@
 2. 最终本地 R8 EXE 已从最新源码重建并通过无界面启动；仍需在 Bluetooth、Xbox App bridge 开启、Steam Input 关闭时做短时操控/握把/L2/R2 扳机键冒烟，并在可用的 DualSense Edge 上运行 30 至 60 分钟检查 `data/runtime.log`。用户当前无法执行长时间实机段，因此明确保留为未执行；`dist-usb-audio-gate-1` 仍是已知可用回退基线。
 3. Windows DPI：125% 隔离设置窗口已确认扳机/握把卡片不吞字；仍需在 100%、125%、150% 的冻结 EXE 中目测顶部两个状态框边缘，并检查窗口最大化/还原和页面切换。混合 DPI 还需验证显示器间往返、运行中 scale 变化和弹窗/原生 Tk 控件清晰度。
 4. Xbox App FH6 自动发现需要在真实安装上确认 `.GamingRoot`、wrapper/`Content` 布局、ACL、语言表和图标目标；当前机器只有库 marker，没有对应游戏。
-5. R8 双语 Release body、workflow 版本正文和最终本地 Windows 候选已经准备并复核；R8 tag、GitHub Release、线上构建和线上重新下载验证仍未执行。
-6. R7 到 R8 的正常并排更新尚无真实已发布 R8 资产可做端到端验收；当前由自动测试覆盖。
-7. 真实只读/被占用快捷方式、任务栏 pin 缓存和快捷方式部分失败后的跨启动修复尚未在用户 shell 环境执行。
-8. 真实 Linux ELF 构建、`/dev/hidraw` 权限与桌面托盘未执行；Windows 上的脚本语法和适配层测试不能替代它们。
-9. Xbox App/Bluetooth 延迟修复尚未用真实 Xbox App 游戏验收；可先用 Steam 版关闭 Steam Input、选择 Xbox App bridge 做输入链路 A/B，但该结果不能替代真实 Xbox App。
-10. Xbox App FH6 自动发现、外层目录和直接 `Content` payload 的手动 fallback 均有自动测试，但尚未在真实 Xbox App 安装上验证权限、实际目录布局和语言/图标文件。
+5. R8 tag、GitHub Release、线上 Windows/Linux/ZUV 构建与 Windows 资产重新下载验证已经完成；仍未从实际运行的 R7 界面点击内置更新并确认线上 R7 → R8 正常事务、快捷方式迁移和旧文件清理。
+6. 真实只读/被占用快捷方式、任务栏 pin 缓存和快捷方式部分失败后的跨启动修复尚未在用户 shell 环境执行。
+7. GitHub runner 已成功构建 Linux ELF，但真实 Linux 主机上的 `/dev/hidraw` 权限、USB audio 与桌面托盘仍未执行；Windows 上的脚本语法和适配层测试不能替代它们。
+8. Xbox App/Bluetooth 延迟修复尚未用真实 Xbox App 游戏验收；可先用 Steam 版关闭 Steam Input、选择 Xbox App bridge 做输入链路 A/B，但该结果不能替代真实 Xbox App。
+9. Xbox App FH6 自动发现、外层目录和直接 `Content` payload 的手动 fallback 均有自动测试，但尚未在真实 Xbox App 安装上验证权限、实际目录布局和语言/图标文件。
 
 ## 下一步建议顺序
 
 1. 在 Steam 模式保持 Steam Input 开启、游戏内振动关闭；关闭 `Brake stiffness` 与 `Throttle stiffness`，分别把 L2/R2 压到全行程，确认不再约 89% 定住。随后逐项开启基础阻力和独立静态刹车 wall，确认各自所有权。
 2. 保留真实测试的连接方式、Steam Input 与游戏内振动状态；自动测试或 EXE 冒烟不能替代手感验收。
-3. 用户确认范围后再创建 R8 tag 与 GitHub Release，并从线上重新下载 EXE 和 sidecar 独立复核。
+3. 从实际 R7 界面执行一次线上更新，确认规范 R8 文件名、快捷方式、旧 EXE/`.old`/sidecar 清理和用户配置保留。
 4. 在真实 Linux 主机生成 ELF，并验证 hidraw 权限、USB audio 与托盘。
 
 ## 当前已知 Bug 和限制
@@ -198,13 +197,14 @@
 
 ## 当前 Git 工作区状态
 
-- 分支：`main`。R7 runtime foundation、随后覆盖上游/R1-R7 的审计整改、生产源码、测试、老三样和构建配置已纳入当前 `main` 提交历史；精确 HEAD 与远端同步状态以 `git status -sb` 和 `git log -1` 为准。
+- 分支：`main`。R8 生产源码、测试、老三样、发布契约和构建配置以 commit `d810c11` 发布，tag `R8` 指向该提交；精确 HEAD 与远端同步状态以 `git status -sb` 和 `git log -1` 为准。
 - R8 构建开始前已 fetch 并确认 `HEAD`、`origin/main` 与 R7 tag 同指向 `4e70265`，远端没有新增 README 改动或冲突；当前改动只保留扳机/updater 修复、动态红线与灯效同步、反馈页排版、版本、发布契约和项目文档，不纳入本地隔离产物。
 - `packaging/windows/build-*`、`dist-*`、`diagnostics-*` 和 `helper_work-*` 是本地隔离构建或诊断产物，不随源码提交；已知可用的 `dist-usb-audio-gate-1` 基线没有被覆盖。
-- R7 tag 与 GitHub Release 已于 2026-07-22 发布；当前工作树只包含未发布的 R8 源码、发布契约和文档，没有创建 R8 tag 或 Release。`packaging/windows/dist/` 已从当前最新源码重建最终本地 R8 Windows 候选；该忽略目录不进入提交，线上资产仍由干净 GitHub runner 独立构建。
+- R8 tag 与 GitHub Release 已于 2026-07-30 发布；发布流水线和线上资产复核结果见下方。`packaging/windows/dist/` 的本地候选及其他隔离构建目录均被忽略，不进入提交；线上资产由干净 GitHub runner 独立构建。
 
 ## 已执行的测试和验证
 
+- 2026-07-30 R8 正式发布与线上复核：commit/tag 为 `d810c11` / `R8`，GitHub Actions run [`30541439716`](https://github.com/piereacy/FH-DualSense-Enhanced/actions/runs/30541439716) 的 `prepare`、ZUV、Windows EXE、Linux ELF 与合并 Release 五个 job 全部成功；只有依赖 action 的 Node.js 20 弃用提示，没有构建错误。Release 为非 draft、非 prerelease，共 8 个资产。重新下载的线上 `FH-DualSense-Enhanced-R8.exe` 为 `51,790,427` 字节（`49.391 MiB`），SHA-256 `897b828a2be63775960941e8610f39733dfb186e021418461711843ac50378a9`，与 Release digest 和线上 `.sha256` 一致；MZ、`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、`PerMonitorV2, PerMonitor`、`true/pm`、`asInvoker` 与隐藏窗口 `--help` 退出码 `0` 均通过。线上 Linux ELF 为 `47,389,864` 字节，ZUV 为 `7,437,547` 字节。
 - 2026-07-30 R8 最终本地 Windows 候选：`packaging/windows/dist/FH-DualSense-Enhanced-R8.exe` 为 `52,035,627` 字节（`49.625 MiB`），SHA-256 `239660997abd709207895826e2c6cf16d3ebd6478eca69a2f34607642a330d12`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、sidecar `--check`、`PerMonitorV2, PerMonitor`、`true/pm`、`asInvoker` 和隐藏窗口 `--help` 退出码 `0` 均通过；相对当前线上 R7 增加 `253,594` 字节（约 `0.490%`），低于体积确认门槛。构建前保护的 `runtime.log`、`user_preferences.json` 与 `.bak` 已恢复并逐文件确认 SHA-256 未变化。
 - 2026-07-30 R8 用户侧 Release 与 vDS 复核基线回归：Release 正文收敛为扳机、红线、排版、自动更新四类用户可感知更新，关闭自动 commit notes；内部链路留在老三样，vDS 声明同时保留 `0.3.0-rc7` 原始采用提交与 `0.4.0-rc1` 当前复核提交。发行与第三方声明定向回归为 `28 passed in 3.96s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `742 passed in 8.51s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`；一次性 PyYAML 解析、`uv lock --check --project src` 与 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。
 - 2026-07-30 R8 排版/文案/红线时机发布前回归：相关 GUI、Profile 迁移、默认值、R2、握把、动态红线、灯条、loop、updater 与发行契约为 `281 passed in 7.77s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `741 passed in 10.68s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`；限定路径 `compileall`、`uv lock --check --project src` 和 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。Windows 125% 隔离 GUI 目测确认双列/整行卡片、握把长说明完整多行以及电动车红线开关说明移除；隔离窗口未连接手柄、未启动 Forza、未操作用户现有 EXE。
@@ -256,9 +256,9 @@
 - `dist-xinput-dse-recovery-1` 尚未做真实 Bluetooth/XInput 延迟、30 至 60 分钟稳定性、DualSense Edge 和驾驶反馈验收；真实 Xbox App FH4/FH5/FH6 也仍未在当前电脑验证。
 - 当前源码尚未做真实大红区燃油车的三次断油学习、单挡/多挡电动车极速与地形波动静默、灯条接近极限和稳定红色、USB/Bluetooth 一致性或驾驶手感验收。
 - 当前 125% 环境对隔离的当前源码设置窗口完成目测：扳机总开关与共享反馈各占整行、L2/R2 同行，握把 USB/蓝牙长说明会完整换成多行，两个红线开关下不再出现电动车说明。该 QA 未连接手柄、未启动 Forza，也未触碰用户此前运行的旧冻结 EXE。最终冻结 EXE 只完成 `--help` 无界面启动；100%、150%、最终冻结 GUI、最大化后的连续跨页操作、混合 DPI、多屏移动、动态缩放、睡眠/唤醒、扩展坞和远程桌面仍未执行。
-- 真实 Linux ELF 构建、hidraw 权限和托盘验证未执行；仅完成 Windows 测试与 Bash 语法检查。
+- GitHub runner 的 Linux ELF 构建已成功；真实 Linux 主机上的 hidraw 权限、USB audio、启动与托盘验证仍未执行。
 - clean-machine Update Helper、杀毒软件锁文件、真实只读 shortcut 和部分迁移提示未执行；自动测试与隔离目录不能完全替代这些环境。当前线上 R7 到本地 R8 的真实隔离事务与多跳 legacy 引导已执行，但桌面现有安装未被原地改名或清理。
-- R7 已线上发布；R8 尚未创建 tag 或 GitHub Release。R7 到 R8 的真实隔离更新已提交成功，发布后的真实在线按钮更新仍待 R8 Release 存在后执行。
+- R8 已线上发布且资产已独立复核；R7 到 R8 的真实隔离更新已提交成功，但实际 R7 界面的线上按钮更新仍未执行。
 - Xbox App 自动发现和手动 fallback 已通过合成目录测试，本机 `.GamingRoot` 解析也成功；真实 Xbox App FH4/FH5/FH6 游戏、目录 ACL 与 FH6 文件工具仍未验证。
 
 ## 下一次 Codex 会话交接
@@ -283,4 +283,4 @@
 16. `src/modules/__init__.py`
 17. `src/modules/feedback_schema.py`
 
-建议首先处理的具体任务：用户已经确认发布；提交并推送当前已验证的 R8 源码，创建 `R8` tag，等待 GitHub Release jobs 完成，并从线上重新下载 Windows EXE 与 `.sha256` 独立复核。
+建议首先处理的具体任务：从实际 R7 界面执行一次线上 R7 → R8 更新，记录规范文件名、快捷方式、旧文件清理和配置保留；随后完成燃油车与电动车的真实红线手感验收。
