@@ -9,6 +9,7 @@ import time
 from typing import Callable
 
 from ..dualsense.input_state import DualSenseInputState
+from .mapping import DEFAULT_BUTTON_MAPPING, XInputButtonMapping
 from .report import XUSBReport, map_dualsense_to_xusb
 from .vigem_client import ViGEmClient, ViGEmError, ViGEmErrorCode
 
@@ -80,6 +81,8 @@ class XInputBridge:
         self._lock = threading.Lock()
         self._latest: _PublishedInput | None = None
         self._sequence = 0
+        self._button_mapping = DEFAULT_BUTTON_MAPPING
+        self._mapping_revision = 0
         self._snapshot = BridgeSnapshot()
         self._wake = threading.Event()
         self._running = False
@@ -128,6 +131,17 @@ class XInputBridge:
         with self._lock:
             return self._snapshot
 
+    def set_button_mapping(self, mapping: XInputButtonMapping) -> None:
+        """Atomically replace the map and re-apply the latest live input."""
+        if not isinstance(mapping, XInputButtonMapping):
+            raise TypeError("mapping must be an XInputButtonMapping")
+        with self._lock:
+            if self._button_mapping == mapping:
+                return
+            self._button_mapping = mapping
+            self._mapping_revision += 1
+        self._wake.set()
+
     def stop(self) -> None:
         with self._lock:
             thread = self._thread
@@ -163,9 +177,11 @@ class XInputBridge:
         with self._lock:
             return self._running
 
-    def _read_latest(self) -> _PublishedInput | None:
+    def _read_latest_mapping(
+        self,
+    ) -> tuple[_PublishedInput | None, XInputButtonMapping, int]:
         with self._lock:
-            return self._latest
+            return self._latest, self._button_mapping, self._mapping_revision
 
     def _replace_snapshot(self, **changes) -> None:
         with self._lock:
@@ -231,23 +247,28 @@ class XInputBridge:
         """Forward one ViGEm session while retaining its player slot on input gaps."""
         target = None
         last_applied_sequence = 0
+        last_mapping_revision = -1
         stale_sent = False
         try:
             while self._is_running():
                 now = self._clock()
-                latest = self._read_latest()
+                latest, mapping, mapping_revision = self._read_latest_mapping()
                 age = float("inf") if latest is None else max(0.0, now - latest.received_at)
 
                 if (
                     latest is not None
-                    and latest.sequence != last_applied_sequence
+                    and (
+                        latest.sequence != last_applied_sequence
+                        or mapping_revision != last_mapping_revision
+                    )
                     and age < self._stale_after
                 ):
                     if target is None:
                         target = client.create_x360_target()
                         target.update(XUSBReport())
-                    target.update(map_dualsense_to_xusb(latest.state))
+                    target.update(map_dualsense_to_xusb(latest.state, mapping))
                     last_applied_sequence = latest.sequence
+                    last_mapping_revision = mapping_revision
                     stale_sent = False
                     with self._lock:
                         self._snapshot = replace(
@@ -270,7 +291,10 @@ class XInputBridge:
                 self._wake.clear()
                 if not self._is_running():
                     break
-                if self._read_latest() is not latest:
+                current_latest, _current_mapping, current_revision = (
+                    self._read_latest_mapping()
+                )
+                if current_latest is not latest or current_revision != mapping_revision:
                     continue
                 self._wake.wait(self._next_wait(age, target is not None, stale_sent))
         finally:

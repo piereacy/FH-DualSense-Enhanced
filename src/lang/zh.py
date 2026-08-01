@@ -303,6 +303,46 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Custom Xbox button mapping": "自定义 XBOX 按键映射",
+    "Customize the digital buttons sent by the Xbox App bridge. Sticks and L2/R2 remain unchanged.": "自定义 Xbox App 桥接输出的数字按键；摇杆和 L2/R2 保持不变。",
+    "Enable custom Xbox mapping": "启用自定义 Xbox 映射",
+    "Restore Steam defaults": "恢复 Steam 默认映射",
+    "Face buttons": "面板按键",
+    "Shoulder and system buttons": "肩键与系统按键",
+    "D-pad": "方向键",
+    "Touchpad": "触摸板",
+    "Cross": "叉键",
+    "Circle": "圆键",
+    "Square": "方块键",
+    "Triangle": "三角键",
+    "D-pad up": "方向键上",
+    "D-pad down": "方向键下",
+    "D-pad left": "方向键左",
+    "D-pad right": "方向键右",
+    "Touchpad left click": "触摸板左半区按下",
+    "Touchpad right click": "触摸板右半区按下",
+    "Disabled": "禁用",
+    "Left shoulder": "左肩键",
+    "Right shoulder": "右肩键",
+    "View / Back": "视图 / 返回",
+    "Menu / Start": "菜单 / 开始",
+    "Left stick click": "按下左摇杆",
+    "Right stick click": "按下右摇杆",
+    "Guide": "Xbox 键",
+    "A": "A",
+    "B": "B",
+    "X": "X",
+    "Y": "Y",
+    "L1": "L1",
+    "R1": "R1",
+    "Create": "Create",
+    "Options": "Options",
+    "L3": "L3",
+    "R3": "R3",
+    "PS": "PS",
+})
+
+STRINGS.update({
     "L2 - Brake": "L2 - 刹车",
     "R2 - Throttle": "R2 - 油门",
 })
@@ -580,4 +620,10 @@ STRINGS.update({
     "File contents are swapped. Game updates may restore the original files.": "文件内容已经互换；游戏更新可能恢复原始文件。",
     "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Game updates or file verification may restore the original files.": "FHDS 将互换 CHS.zip 与 EN.zip 的文件名。请先关闭 FH6；游戏更新或文件验证可能恢复原始文件。",
     "FH6 game language could not be verified as English. Continue only if the game is configured for English.": "无法确认 FH6 当前游戏语言为英语。仅当游戏已设置为英语时才应继续。",
+})
+
+STRINGS.update({
+    "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "请先在“游戏平台”中选择“XBOX 版”后再在此自定义。如果你是 Steam 版并需要更改映射，请在 Steam 内自行修改映射。",
+    "Or download manually: {url}": "或手动下载：{url}",
+    "Project repository": "项目仓库",
 })

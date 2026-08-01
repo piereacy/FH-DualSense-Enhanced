@@ -1,7 +1,10 @@
 import time
 
-from modules.dualsense.input_state import DPad, DualSenseInputState
+from modules.config.settings import Settings
+from modules.dualsense.input_state import DPad, DualSenseButton, DualSenseInputState
 from modules.xinput.bridge import BridgeStatus, XInputBridge
+from modules.xinput.mapping import active_mapping_from_settings
+from modules.xinput.report import XUSBButton, XUSBReport
 from modules.xinput.vigem_client import ViGEmError, ViGEmErrorCode
 
 
@@ -92,6 +95,29 @@ def test_first_input_creates_target_from_neutral_then_applies_current_state():
     assert client.targets[0].reports[1] != bytes(12)
     assert bridge.snapshot().received_reports == 1
     assert bridge.snapshot().forwarded_reports == 1
+
+
+def test_live_mapping_change_reapplies_held_input_without_recreating_target():
+    clock = _Clock()
+    client = _Client()
+    bridge = XInputBridge(client_factory=lambda: client, clock=clock)
+    bridge.start()
+    bridge.publish_latest(_state(buttons=frozenset({DualSenseButton.CROSS})))
+    _wait(lambda: bridge.snapshot().forwarded_reports == 1)
+
+    settings = Settings(
+        enable_custom_xinput_mapping=True,
+        xinput_mapping_cross="y",
+    )
+    bridge.set_button_mapping(active_mapping_from_settings(settings))
+    _wait(lambda: bridge.snapshot().forwarded_reports == 2)
+
+    assert len(client.targets) == 1
+    before = XUSBReport.from_buffer_copy(client.targets[0].reports[-2])
+    after = XUSBReport.from_buffer_copy(client.targets[0].reports[-1])
+    assert before.wButtons == XUSBButton.A
+    assert after.wButtons == XUSBButton.Y
+    bridge.stop()
 
 
 def test_latest_slot_discards_backlog_before_worker_starts():

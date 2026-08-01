@@ -9,6 +9,7 @@ import pytest
 from modules.config import preferences, profiles
 from modules.config.profile_session import ProfileSession
 from modules.config.settings import Settings
+from modules.xinput.mapping import MAPPING_SETTING_FIELDS
 
 
 def test_network_and_exit_timing_settings_are_global():
@@ -19,6 +20,11 @@ def test_network_and_exit_timing_settings_are_global():
         "game_poll_interval_s",
         "telemetry_lost_exit_s",
     } <= preferences.GLOBAL_FIELDS
+
+
+def test_experimental_xinput_mapping_is_global_not_profile_tuning():
+    assert "enable_custom_xinput_mapping" in preferences.GLOBAL_FIELDS
+    assert MAPPING_SETTING_FIELDS <= preferences.GLOBAL_FIELDS
 
 
 def _paths(tmp_path, monkeypatch):
@@ -36,6 +42,8 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
     settings.preferred_forza_platform = "xbox_app"
     settings.fh4_install_path = "D:/Steam/FH4"
     settings.fh6_xbox_install_path = "G:/Xbox/FH6"
+    settings.enable_custom_xinput_mapping = True
+    settings.xinput_mapping_cross = "y"
     assert preferences.save(settings)
 
     reloaded = Settings()
@@ -47,6 +55,8 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
     assert reloaded.preferred_forza_platform == "xbox_app"
     assert reloaded.fh4_install_path == "D:/Steam/FH4"
     assert reloaded.fh6_xbox_install_path == "G:/Xbox/FH6"
+    assert reloaded.enable_custom_xinput_mapping is True
+    assert reloaded.xinput_mapping_cross == "y"
 
 
 def test_original_profile_is_seeded_from_upstream_v162_defaults(
@@ -232,6 +242,8 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     settings.preferred_forza_platform = "xbox_app"
     settings.fh5_install_path = "E:/Steam/FH5"
     settings.fh6_xbox_install_path = "G:/Xbox/FH6"
+    settings.enable_custom_xinput_mapping = True
+    settings.xinput_mapping_touchpad_right = "guide"
     assert preferences.save(settings)
     assert profiles.save_profile("Track", settings) == "Track"
     settings.brake_max_force = 2
@@ -251,6 +263,8 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     assert settings.fh5_install_path == ""
     assert settings.fh6_install_path == ""
     assert settings.fh6_xbox_install_path == ""
+    assert settings.enable_custom_xinput_mapping is False
+    assert settings.xinput_mapping_touchpad_right == "start"
     assert settings.enable_reconnect is True
     assert settings.language == "zh_tw"
     assert preferences.PATH.with_suffix(".json.bak").exists()

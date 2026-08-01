@@ -340,6 +340,46 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Custom Xbox button mapping": "Benutzerdefinierte Xbox-Tastenbelegung",
+    "Customize the digital buttons sent by the Xbox App bridge. Sticks and L2/R2 remain unchanged.": "Die digitalen Tasten der Xbox-App-Brücke anpassen. Sticks und L2/R2 bleiben unverändert.",
+    "Enable custom Xbox mapping": "Benutzerdefinierte Xbox-Belegung aktivieren",
+    "Restore Steam defaults": "Steam-Standard wiederherstellen",
+    "Face buttons": "Aktionstasten",
+    "Shoulder and system buttons": "Schulter- und Systemtasten",
+    "D-pad": "Steuerkreuz",
+    "Touchpad": "Touchpad",
+    "Cross": "Kreuz",
+    "Circle": "Kreis",
+    "Square": "Quadrat",
+    "Triangle": "Dreieck",
+    "D-pad up": "Steuerkreuz oben",
+    "D-pad down": "Steuerkreuz unten",
+    "D-pad left": "Steuerkreuz links",
+    "D-pad right": "Steuerkreuz rechts",
+    "Touchpad left click": "Touchpad-Klick links",
+    "Touchpad right click": "Touchpad-Klick rechts",
+    "Disabled": "Deaktiviert",
+    "Left shoulder": "Linke Schultertaste",
+    "Right shoulder": "Rechte Schultertaste",
+    "View / Back": "Ansicht / Zurück",
+    "Menu / Start": "Menü / Start",
+    "Left stick click": "Linken Stick drücken",
+    "Right stick click": "Rechten Stick drücken",
+    "Guide": "Guide",
+    "A": "A",
+    "B": "B",
+    "X": "X",
+    "Y": "Y",
+    "L1": "L1",
+    "R1": "R1",
+    "Create": "Create",
+    "Options": "Options",
+    "L3": "L3",
+    "R3": "R3",
+    "PS": "PS",
+})
+
+STRINGS.update({
     "L2 - Brake": "L2 - Bremse",
     "R2 - Throttle": "R2 - Gas",
 })
@@ -546,4 +586,10 @@ STRINGS.update({
     "File contents are swapped. Game updates may restore the original files.": "Die Dateiinhalte sind vertauscht. Spielupdates können die Originaldateien wiederherstellen.",
     "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Game updates or file verification may restore the original files.": "FHDS vertauscht die Namen von CHS.zip und EN.zip. Zuerst FH6 schließen. Spielupdates oder eine Dateiprüfung können die Originaldateien wiederherstellen.",
     "FH6 game language could not be verified as English. Continue only if the game is configured for English.": "Englisch konnte nicht als aktuelle FH6-Spielsprache bestätigt werden. Nur fortfahren, wenn das Spiel auf Englisch eingestellt ist.",
+})
+
+STRINGS.update({
+    "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "Wähle die Xbox App als Forza-Plattform, um die Tasten hier anzupassen. Wenn du die Steam-Version verwendest, ändere die Controllerbelegung in Steam.",
+    "Or download manually: {url}": "Oder manuell herunterladen: {url}",
+    "Project repository": "Projekt-Repository",
 })

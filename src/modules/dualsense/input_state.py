@@ -60,6 +60,12 @@ class DualSenseButton(str, Enum):
     L3 = "l3"
     R3 = "r3"
     PS = "ps"
+    TOUCHPAD = "touchpad"
+
+
+class TouchpadRegion(str, Enum):
+    LEFT = "left"
+    RIGHT = "right"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +80,7 @@ class DualSenseInputState:
     buttons: frozenset[DualSenseButton]
     battery_level: int | None = None
     battery_status: BatteryStatus = BatteryStatus.UNKNOWN
+    touchpad_regions: frozenset[TouchpadRegion] = frozenset()
 
 
 _FACE_BUTTONS = (
@@ -90,6 +97,22 @@ _SECONDARY_BUTTONS = (
     (0x40, DualSenseButton.L3),
     (0x80, DualSenseButton.R3),
 )
+_TOUCH_POINT_OFFSETS = (32, 36)
+_TOUCH_POINT_INACTIVE = 0x80
+_TOUCHPAD_HALF_WIDTH = 1920 // 2
+
+
+def _pressed_touchpad_regions(data: bytes, base: int) -> frozenset[TouchpadRegion]:
+    regions: set[TouchpadRegion] = set()
+    for offset in _TOUCH_POINT_OFFSETS:
+        point = base + offset
+        if data[point] & _TOUCH_POINT_INACTIVE:
+            continue
+        x = data[point + 1] | ((data[point + 2] & 0x0F) << 8)
+        regions.add(TouchpadRegion.LEFT if x < _TOUCHPAD_HALF_WIDTH else TouchpadRegion.RIGHT)
+    # A physical click normally has an active contact. Preserve a useful View
+    # input if firmware timing produces a click frame without one.
+    return frozenset(regions or {TouchpadRegion.LEFT})
 
 
 def parse_input_report(
@@ -150,6 +173,7 @@ def parse_input_report(
         raise InputReportError(f"invalid DualSense d-pad value: {buttons0 & 0x0F}") from exc
 
     pressed: set[DualSenseButton] = set()
+    touchpad_regions: frozenset[TouchpadRegion] = frozenset()
     for mask, button in _FACE_BUTTONS:
         if buttons0 & mask:
             pressed.add(button)
@@ -158,6 +182,9 @@ def parse_input_report(
             pressed.add(button)
     if buttons2 & 0x01:
         pressed.add(DualSenseButton.PS)
+    if buttons2 & 0x02:
+        pressed.add(DualSenseButton.TOUCHPAD)
+        touchpad_regions = _pressed_touchpad_regions(data, base)
 
     status0 = data[base + 52]
     raw_level = status0 & 0x0F
@@ -189,4 +216,5 @@ def parse_input_report(
         buttons=frozenset(pressed),
         battery_level=battery_level,
         battery_status=battery_status,
+        touchpad_regions=touchpad_regions,
     )

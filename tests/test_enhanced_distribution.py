@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "8"
-CURRENT_RELEASE_VERSION = "R8"
+CURRENT_INTERNAL_VERSION = "9"
+CURRENT_RELEASE_VERSION = "R9"
 
 
 def _source(path: str) -> str:

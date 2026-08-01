@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ATTRIBUTION = "Originally created by Hamza Yeşilmen (HamzaYslmn)."
 SOURCE_URL = "https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python"
 SPONSOR_URL = "https://github.com/sponsors/HamzaYslmn"
+PROJECT_URL = "https://github.com/piereacy/FH-DualSense-Enhanced"
 MOD_URL = "https://www.nexusmods.com/forzahorizon6/mods/2"
 
 
@@ -20,6 +21,7 @@ def test_shared_about_metadata_matches_the_license_exactly():
     assert path.exists(), "shared about metadata module is missing"
     values = runpy.run_path(str(path))
     assert values["ATTRIBUTION"] == ATTRIBUTION
+    assert values["PROJECT_URL"] == PROJECT_URL
     assert values["SOURCE_URL"] == SOURCE_URL
     assert values["SPONSOR_URL"] == SPONSOR_URL
     assert values["CONTROLLER_ICON_MOD_ATTRIBUTION"] == "DualSense Icons MOD by @hotline1337."
@@ -36,6 +38,7 @@ def test_gui_about_page_exposes_attribution_and_clickable_links():
     settings = _source("src/modules/gui/settings_tab.py")
 
     assert "ATTRIBUTION" in source
+    assert "self.app._open_url(PROJECT_URL)" in source
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
     assert "self.app._open_url(CONTROLLER_ICON_MOD_URL)" in source
@@ -49,8 +52,10 @@ def test_tui_about_page_exposes_attribution_and_clickable_links():
     settings = _source("src/modules/tui/settings_tab.py")
 
     assert "ATTRIBUTION" in source
+    assert "about-project" in source
     assert "about-source" in source
     assert "about-sponsor" in source
+    assert "self.app._open_url(PROJECT_URL)" in source
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
     assert "self.app._open_url(CONTROLLER_ICON_MOD_URL)" in source
@@ -76,10 +81,11 @@ def test_about_page_is_after_logs_in_both_interfaces():
     gui = _source("src/modules/gui/main.py")
     tui = _source("src/modules/tui/main.py")
 
-    assert '"System", "FH6Utilities", "Language", "Logs", "About"' in gui
+    assert '"XboxMapping", "System", "FH6Utilities", "Language", "Logs", "About"' in gui
     assert "self.about_tab = AboutTab" in gui
     assert '"About":    self.about_tab' in gui
     assert tui.index('id="tab-logs"') < tui.index('id="tab-about"')
+    assert tui.index('id="tab-xinput-mapping"') < tui.index('id="tab-system"')
     assert tui.index('id="tab-system"') < tui.index('id="tab-fh6-utilities"')
     assert tui.index('id="tab-fh6-utilities"') < tui.index('id="tab-lang"')
 
@@ -99,17 +105,19 @@ def test_tui_about_page_mounts_with_both_required_links():
         async with app.run_test():
             assert app.query_one("#about-source", Button)
             assert app.query_one("#about-sponsor", Button)
+            assert app.query_one("#about-project", Button)
             assert app.query_one("#about-controller-icons", Button)
 
     asyncio.run(check())
 
 
-def test_every_non_english_catalog_translates_about_heading():
+def test_every_non_english_catalog_translates_about_surface():
     for path in sorted((ROOT / "src/lang").glob("*.py")):
         if path.name in {"__init__.py", "en.py"}:
             continue
         strings = runpy.run_path(str(path))["STRINGS"]
         assert "About and licenses" in strings, f"{path.name} is missing About and licenses"
+        assert "Project repository" in strings, f"{path.name} is missing Project repository"
 
 
 def test_windows_packaging_ships_both_license_notice_files():

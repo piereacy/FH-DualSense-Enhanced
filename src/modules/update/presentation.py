@@ -18,6 +18,7 @@ class UpdateStatusPresentation:
     progress: float
     action: UpdateAction | None
     release_visible: bool
+    manual_download_url: str
 
 
 def has_update_notice(snapshot: UpdateSnapshot) -> bool:
@@ -69,4 +70,9 @@ def update_status_presentation(
         progress=snapshot.progress,
         action=action,
         release_visible=snapshot.release is not None,
+        manual_download_url=(
+            snapshot.release.asset_url
+            if has_update_notice(snapshot) and snapshot.release is not None
+            else ""
+        ),
     )

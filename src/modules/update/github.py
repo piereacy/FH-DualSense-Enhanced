@@ -107,20 +107,24 @@ class GitHubReleaseClient:
         assets = item.get("assets")
         if not isinstance(assets, list):
             return None
-        by_name = {
-            str(asset.get("name", "")): asset
+        asset_matches = [
+            asset
             for asset in assets
-            if isinstance(asset, dict)
-        }
-        asset = by_name.get(expected)
-        checksum = by_name.get(expected + ".sha256")
-        if asset is None or checksum is None:
+            if isinstance(asset, dict) and asset.get("name") == expected
+        ]
+        checksum_matches = [
+            asset
+            for asset in assets
+            if isinstance(asset, dict) and asset.get("name") == expected + ".sha256"
+        ]
+        if len(asset_matches) != 1 or len(checksum_matches) != 1:
             return None
+        asset = asset_matches[0]
+        checksum = checksum_matches[0]
         url = str(asset.get("browser_download_url", ""))
         checksum_url = str(checksum.get("browser_download_url", ""))
-        try:
-            size = int(asset.get("size", 0) or 0)
-        except (TypeError, ValueError, OverflowError):
+        size = asset.get("size", 0)
+        if type(size) is not int:
             return None
         if not url.startswith("https://") or not checksum_url.startswith("https://"):
             return None
@@ -200,7 +204,13 @@ class GitHubReleaseClient:
         if len(raw) > MAX_CHECKSUM_BYTES:
             raise UpdateError("checksum response exceeded the allowed limit")
         text = raw.decode("ascii", errors="strict").strip()
-        match = re.search(r"(?i)\b([0-9a-f]{64})\b", text)
+        match = re.fullmatch(
+            r"(?i)([0-9a-f]{64})(?:[ \t]+\*?([^\r\n]+))?",
+            text,
+        )
         if not match:
-            raise UpdateError("checksum file does not contain SHA-256")
+            raise UpdateError("checksum file is not a single valid SHA-256 entry")
+        sidecar_name = match.group(2)
+        if sidecar_name is not None and sidecar_name != release.asset_name:
+            raise UpdateError("checksum file names a different update asset")
         return match.group(1).lower()

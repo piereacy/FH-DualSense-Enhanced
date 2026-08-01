@@ -11,11 +11,20 @@ from modules.dualsense.input_state import (
     DualSenseButton,
     InputReportError,
     InputTransport,
+    TouchpadRegion,
     parse_input_report,
 )
 
 
-def _report(transport, *, dpad=DPad.NEUTRAL, buttons0=0, buttons1=0, buttons2=0):
+def _report(
+    transport,
+    *,
+    dpad=DPad.NEUTRAL,
+    buttons0=0,
+    buttons1=0,
+    buttons2=0,
+    touch_xs=(),
+):
     bluetooth = transport is InputTransport.BLUETOOTH
     report = bytearray(
         BLUETOOTH_INPUT_REPORT_MIN_SIZE if bluetooth else USB_INPUT_REPORT_MIN_SIZE
@@ -26,6 +35,13 @@ def _report(transport, *, dpad=DPad.NEUTRAL, buttons0=0, buttons1=0, buttons2=0)
     report[base + 7] = int(dpad) | buttons0
     report[base + 8] = buttons1
     report[base + 9] = buttons2
+    for offset in (32, 36):
+        report[base + offset] = 0x80
+    for index, x in enumerate(touch_xs):
+        point = base + (32, 36)[index]
+        report[point] = index
+        report[point + 1] = x & 0xFF
+        report[point + 2] = (x >> 8) & 0x0F
     if bluetooth:
         crc = zlib.crc32(memoryview(report)[:74], zlib.crc32(b"\xA1"))
         struct.pack_into("<I", report, 74, crc)
@@ -62,6 +78,51 @@ def test_parses_all_supported_digital_buttons(transport):
     )
 
     assert state.buttons == frozenset(DualSenseButton)
+
+
+@pytest.mark.parametrize("transport", list(InputTransport))
+@pytest.mark.parametrize(
+    ("x", "expected_region"),
+    (
+        (0, TouchpadRegion.LEFT),
+        (959, TouchpadRegion.LEFT),
+        (960, TouchpadRegion.RIGHT),
+        (1919, TouchpadRegion.RIGHT),
+    ),
+)
+def test_parses_touchpad_click_region_from_the_common_touch_point_block(
+    transport, x, expected_region
+):
+    state = parse_input_report(
+        _report(transport, buttons2=0x02, touch_xs=(x,)), transport
+    )
+
+    assert state.buttons == frozenset({DualSenseButton.TOUCHPAD})
+    assert state.touchpad_regions == frozenset({expected_region})
+
+
+@pytest.mark.parametrize("transport", list(InputTransport))
+def test_touchpad_click_without_an_active_contact_falls_back_to_left(transport):
+    state = parse_input_report(_report(transport, buttons2=0x02), transport)
+
+    assert state.touchpad_regions == frozenset({TouchpadRegion.LEFT})
+
+
+@pytest.mark.parametrize("transport", list(InputTransport))
+def test_touchpad_click_can_report_both_steam_regions(transport):
+    state = parse_input_report(
+        _report(transport, buttons2=0x02, touch_xs=(200, 1700)), transport
+    )
+
+    assert state.touchpad_regions == frozenset(TouchpadRegion)
+
+
+@pytest.mark.parametrize("transport", list(InputTransport))
+def test_touch_contact_without_click_does_not_publish_a_touchpad_region(transport):
+    state = parse_input_report(_report(transport, touch_xs=(1700,)), transport)
+
+    assert DualSenseButton.TOUCHPAD not in state.buttons
+    assert state.touchpad_regions == frozenset()
 
 
 @pytest.mark.parametrize("transport", list(InputTransport))

@@ -54,6 +54,7 @@ from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
 from .system_tab import SystemTab
 from .tray import TrayController
+from .xinput_mapping_tab import XInputMappingTab
 
 log = logging.getLogger("fhds")
 
@@ -64,7 +65,7 @@ HAPTIC_DURATION_S = 0.10
 
 NAV_ITEMS = (
     "Overview", "Driving", "Haptics", "Lighting", "Profiles",
-    "System", "FH6Utilities", "Language", "Logs", "About",
+    "XboxMapping", "System", "FH6Utilities", "Language", "Logs", "About",
 )
 NAV_LABELS = {
     "Overview": "Overview",
@@ -72,6 +73,7 @@ NAV_LABELS = {
     "Haptics": "Grip haptics",
     "Lighting": "Controller lighting",
     "Profiles": "Profiles",
+    "XboxMapping": "Custom Xbox button mapping",
     "System": "System and updates",
     "FH6Utilities": "FH6 utilities",
     "Language": "Language",
@@ -357,6 +359,7 @@ class TriggerGUI:
         self.profiles_tab = ProfilesTab(self._content, self)
         self.settings_tab = SettingsTab(self._content, self)
         self.lighting_tab = LightingTab(self._content, self)
+        self.xinput_mapping_tab = XInputMappingTab(self._content, self)
         self.system_tab = SystemTab(self._content, self)
         self.fh6_utilities_tab = FH6UtilitiesTab(self._content, self)
         self.lang_tab = LangTab(self._content, self)
@@ -368,6 +371,7 @@ class TriggerGUI:
             "Haptics": self.settings_tab,
             "Lighting": self.lighting_tab,
             "Profiles": self.profiles_tab,
+            "XboxMapping": self.xinput_mapping_tab,
             "System":   self.system_tab,
             "FH6Utilities": self.fh6_utilities_tab,
             "Language": self.lang_tab,
@@ -646,6 +650,15 @@ class TriggerGUI:
             log.exception("UDP bind failed on %s:%d", s.udp_host, s.udp_port)
             self._refresh_status()
             self.overview_tab.refresh()
+            # A port conflict is an environment condition, not evidence that
+            # the newly installed binary is broken. The GUI is interactive and
+            # exposes the error plus the setting needed to resolve it.
+            try:
+                self._notify_ready()
+            except Exception:
+                self._backend_error = "Update startup health confirmation failed"
+                log.exception(self._backend_error)
+                self._perform_quit()
         except Exception as exc:
             self._udp_error = str(exc) or type(exc).__name__
             log.exception("Telemetry listener startup failed")

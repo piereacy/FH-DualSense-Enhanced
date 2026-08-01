@@ -1,18 +1,31 @@
 from modules.config.settings import Settings
 from modules.xinput.bridge import BridgeSnapshot, BridgeStatus
 from modules.xinput.driver import InstallResult, InstallStatus
+from modules.xinput.mapping import DEFAULT_BUTTON_MAPPING
 from modules.xinput.service import (
     STEAM_PLATFORM,
     XBOX_APP_PLATFORM,
     XInputBridgeService,
+    custom_xinput_mapping_available,
     normalize_forza_platform,
 )
+
+
+def test_custom_mapping_is_available_only_for_the_xbox_app_platform():
+    assert custom_xinput_mapping_available(XBOX_APP_PLATFORM) is True
+    assert custom_xinput_mapping_available(" XBOX_APP ") is True
+    assert custom_xinput_mapping_available(STEAM_PLATFORM) is False
+    assert custom_xinput_mapping_available("future-platform") is False
 
 
 class _Bridge:
     def __init__(self):
         self.calls = []
+        self.mappings = []
         self._snapshot = BridgeSnapshot(status=BridgeStatus.WAITING_CONTROLLER)
+
+    def set_button_mapping(self, mapping):
+        self.mappings.append(mapping)
 
     def start(self):
         self.calls.append("start")
@@ -71,6 +84,28 @@ def test_xbox_app_mode_starts_bridge_and_attaches_latest_publisher():
 
     assert bridge.calls == ["stop", "start"]
     assert backend.consumers == [bridge.publish_latest]
+    assert bridge.mappings[-1] == DEFAULT_BUTTON_MAPPING
+
+
+def test_custom_mapping_refresh_does_not_restart_the_bridge():
+    settings = Settings(preferred_forza_platform=XBOX_APP_PLATFORM)
+    bridge = _Bridge()
+    backend = _Backend()
+    service = XInputBridgeService(
+        settings,
+        bridge=bridge,
+        platform_supported=lambda: True,
+    )
+    service.sync(backend)
+    calls_before = list(bridge.calls)
+
+    settings.enable_custom_xinput_mapping = True
+    settings.xinput_mapping_cross = "y"
+    mapping = service.refresh_button_mapping()
+
+    assert bridge.calls == calls_before
+    assert mapping.target_for("cross") == "y"
+    assert bridge.mappings[-1] == mapping
 
 
 def test_switching_back_to_steam_detaches_before_bridge_stops():

@@ -4,7 +4,13 @@ from __future__ import annotations
 import ctypes
 from enum import IntFlag
 
-from ..dualsense.input_state import DPad, DualSenseButton, DualSenseInputState
+from ..dualsense.input_state import (
+    DPad,
+    DualSenseButton,
+    DualSenseInputState,
+    TouchpadRegion,
+)
+from .mapping import DEFAULT_BUTTON_MAPPING, XInputButtonMapping
 
 
 class XUSBButton(IntFlag):
@@ -40,30 +46,49 @@ class XUSBReport(ctypes.LittleEndianStructure):
     )
 
 
-_BUTTON_MAP = {
-    DualSenseButton.CROSS: XUSBButton.A,
-    DualSenseButton.CIRCLE: XUSBButton.B,
-    DualSenseButton.SQUARE: XUSBButton.X,
-    DualSenseButton.TRIANGLE: XUSBButton.Y,
-    DualSenseButton.L1: XUSBButton.LEFT_SHOULDER,
-    DualSenseButton.R1: XUSBButton.RIGHT_SHOULDER,
-    DualSenseButton.CREATE: XUSBButton.BACK,
-    DualSenseButton.OPTIONS: XUSBButton.START,
-    DualSenseButton.L3: XUSBButton.LEFT_THUMB,
-    DualSenseButton.R3: XUSBButton.RIGHT_THUMB,
-    DualSenseButton.PS: XUSBButton.GUIDE,
+_BUTTON_SOURCES = {
+    DualSenseButton.CROSS: "cross",
+    DualSenseButton.CIRCLE: "circle",
+    DualSenseButton.SQUARE: "square",
+    DualSenseButton.TRIANGLE: "triangle",
+    DualSenseButton.L1: "l1",
+    DualSenseButton.R1: "r1",
+    DualSenseButton.CREATE: "create",
+    DualSenseButton.OPTIONS: "options",
+    DualSenseButton.L3: "l3",
+    DualSenseButton.R3: "r3",
+    DualSenseButton.PS: "ps",
 }
 
-_DPAD_MAP = {
-    DPad.NORTH: XUSBButton.DPAD_UP,
-    DPad.NORTH_EAST: XUSBButton.DPAD_UP | XUSBButton.DPAD_RIGHT,
-    DPad.EAST: XUSBButton.DPAD_RIGHT,
-    DPad.SOUTH_EAST: XUSBButton.DPAD_DOWN | XUSBButton.DPAD_RIGHT,
-    DPad.SOUTH: XUSBButton.DPAD_DOWN,
-    DPad.SOUTH_WEST: XUSBButton.DPAD_DOWN | XUSBButton.DPAD_LEFT,
-    DPad.WEST: XUSBButton.DPAD_LEFT,
-    DPad.NORTH_WEST: XUSBButton.DPAD_UP | XUSBButton.DPAD_LEFT,
-    DPad.NEUTRAL: XUSBButton(0),
+_DPAD_SOURCES = {
+    DPad.NORTH: ("dpad_up",),
+    DPad.NORTH_EAST: ("dpad_up", "dpad_right"),
+    DPad.EAST: ("dpad_right",),
+    DPad.SOUTH_EAST: ("dpad_down", "dpad_right"),
+    DPad.SOUTH: ("dpad_down",),
+    DPad.SOUTH_WEST: ("dpad_down", "dpad_left"),
+    DPad.WEST: ("dpad_left",),
+    DPad.NORTH_WEST: ("dpad_up", "dpad_left"),
+    DPad.NEUTRAL: (),
+}
+
+_TARGET_BUTTONS = {
+    "off": XUSBButton(0),
+    "a": XUSBButton.A,
+    "b": XUSBButton.B,
+    "x": XUSBButton.X,
+    "y": XUSBButton.Y,
+    "left_shoulder": XUSBButton.LEFT_SHOULDER,
+    "right_shoulder": XUSBButton.RIGHT_SHOULDER,
+    "back": XUSBButton.BACK,
+    "start": XUSBButton.START,
+    "left_thumb": XUSBButton.LEFT_THUMB,
+    "right_thumb": XUSBButton.RIGHT_THUMB,
+    "guide": XUSBButton.GUIDE,
+    "dpad_up": XUSBButton.DPAD_UP,
+    "dpad_down": XUSBButton.DPAD_DOWN,
+    "dpad_left": XUSBButton.DPAD_LEFT,
+    "dpad_right": XUSBButton.DPAD_RIGHT,
 }
 
 
@@ -81,10 +106,23 @@ def _axis_y(raw: int) -> int:
     return round((128 - raw) * 32768 / 127)
 
 
-def map_dualsense_to_xusb(state: DualSenseInputState) -> XUSBReport:
-    buttons = _DPAD_MAP[state.dpad]
+def map_dualsense_to_xusb(
+    state: DualSenseInputState,
+    mapping: XInputButtonMapping = DEFAULT_BUTTON_MAPPING,
+) -> XUSBReport:
+    buttons = XUSBButton(0)
+    for source in _DPAD_SOURCES[state.dpad]:
+        buttons |= _TARGET_BUTTONS[mapping.target_for(source)]
     for button in state.buttons:
-        buttons |= _BUTTON_MAP[button]
+        if button is DualSenseButton.TOUCHPAD:
+            continue
+        buttons |= _TARGET_BUTTONS[mapping.target_for(_BUTTON_SOURCES[button])]
+    if DualSenseButton.TOUCHPAD in state.buttons:
+        regions = state.touchpad_regions or frozenset({TouchpadRegion.LEFT})
+        if TouchpadRegion.LEFT in regions:
+            buttons |= _TARGET_BUTTONS[mapping.target_for("touchpad_left")]
+        if TouchpadRegion.RIGHT in regions:
+            buttons |= _TARGET_BUTTONS[mapping.target_for("touchpad_right")]
     return XUSBReport(
         wButtons=int(buttons),
         bLeftTrigger=state.left_trigger,

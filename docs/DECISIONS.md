@@ -2,6 +2,36 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-08-01：自动更新终态必须由文件所有权、进程树和跨进程锁共同证明
+
+- 状态：生产代码、故障注入回归、隔离 one-file R9 → R10 事务矩阵、R9 版本递增和本地审阅构建已完成；真实用户目录验收与发布尚未完成。
+- 问题：父进程豁免只解决了安装入口误报，继续审计还发现四个独立缺口：apply 在真正接管新版前失败也会无条件删除同名目标；删除失败仍可能写 `rolled_back`；主程序与多个恢复 Helper 可并发改写同一 journal；恢复提交见到有效 ACK 后没有重新观察进程存活。PyInstaller 回滚若只终止外层 bootloader，还可能遗留 inner 进程继续锁住新版。安装调度失败后 UpdateService 也会停在 `installing`，用户无法直接重试。
+- 决定：Helper 对每个 transaction 持有 crash-safe 跨进程锁；apply 只删除本次明确接管且哈希未变的新版，停止完整后代进程树并验证旧 EXE 后才提交回滚。任一步失败保留 `new_installed`/`waiting_health` 等非终态供后续恢复。主程序不再直接替 Helper 写 pre-install 终态；恢复 ACK 必须绑定仍存活的新版 PID/路径并重新观察约 3 秒。移动与 journal 写之间的中断按 staged/new/old 哈希恢复，legacy 提交前先恢复真实旧路径以保护尚未迁移的快捷方式。Helper 调度异常把 UI 状态还原为 `ready`。
+- 验证后果：隔离冻结矩阵必须至少覆盖单实例成功、真正双实例拒绝、启动即退回滚、inner 挂死超时后的进程树清零，以及无主动 Helper 时由新版接管 journal；成功后只留规范新版并保留任意其他 EXE/`.old`，失败后保留旧版且不得留下新版进程。单元测试不能替代这组矩阵。
+- 发布后果：已发布 R7/R8 的入口代码无法被未来资产反向修复，因此它们仍不能通过自身失败的按钮取得本修复；首次获得修复必须手动放置并启动递增版本。只有该修复版以后的下一次内置更新才能验证真实用户目录的自动清旧闭环，不能宣称 R8 → R9 会自行修好。
+
+## 2026-08-01：Xbox App bridge 提供独立页面中的自定义数字按键映射
+
+- 状态：共享映射 schema、global 持久化、GUI/TUI 独立顶层页面、运行时热更新和自动回归已实现；真实 Xbox App 游戏内验收尚未执行。
+- 背景：固定 Steam 风格布局解决了触摸板左右点击，但不同游戏和用户仍可能需要交换面板键、系统键或触摸板输出。把摇杆、扳机曲线和数字键同时开放会混淆输入语义，也会放大错误配置和卡键风险。
+- 决定：只为 Xbox App 的虚拟 Xbox 360 report 增加显式 opt-in 的数字来源映射。所有来源与目标由 `src/modules/xinput/mapping.py` 白名单声明，非法持久化值逐来源回退 Steam 默认；允许多个来源指向同一目标或把单一来源设为 Disabled。摇杆轴和 L2/R2 模拟值保持原样，不加入曲线、deadzone 或交换层。设置属于 global，不进入车辆 Profile 或分享码；恢复 Steam 默认只重置映射值，不替用户关闭自定义开关。只有游戏平台选择 Xbox App 时允许启用、编辑或恢复映射；Steam 模式锁定编辑控件但不清空已保存的 opt-in 与映射值，并明确引导 Steam 用户在 Steam 内自行修改映射。
+- 运行时后果：service 原子替换不可变映射；bridge 用 mapping revision 把仍新鲜的 latest input 立即重发，同一个 ViGEm target/player slot 保持不变。关闭自定义开关时保存的映射值休眠，输出立刻恢复 Steam 默认。GUI 左侧导航与 TUI 顶层标签各自提供“自定义 XBOX 按键映射”独立页面，直接展示全部映射项；System 页不得再承载映射折叠入口。两套前端必须共同消费该 schema、完整翻译，并在平台改变或页面重新显示时同步编辑权限。
+- 替代关系：本决定只替代下方 2026-08-01 触摸板决定中“不增加可配置重映射层”这一句；触摸板横坐标分区、无触点回退、无滑动/手势和 USB/BT 共用解析等边界继续有效。
+
+## 2026-08-01：Xbox 360 bridge 按 Steam 模板拆分触摸板左右点击
+
+- 状态：USB/BT 输入解析、XUSB 映射与自动回归已实现；真实手柄和 Xbox App 游戏内验收尚未执行。
+- 背景：ViGEm 当前创建的是 Xbox 360 target，没有触摸表面、滑动手势或专用触摸板键。本机 Steam 安装中的 `controller_ps5_gamepad_joystick.vdf` 和 FH6 派生配置均把 PlayStation 触摸板拆成 Left/Right Trackpad，左 click 绑定 Select、右 click 绑定 Start；Create/Options 仍分别绑定 Select/Start。Valve 文档也把单块 PlayStation 触摸板拆分左右列为正式输入模型。
+- 决定：物理 click 有效时读取最多两个活动触点的横坐标，以 DualSense `1920` 宽度中线拆分区域；左半输出 Xbox Back/View，右半输出 Start/Menu，两侧都有触点时输出两键。没有活动触点的异常 click 帧回退 Back/View，保留可用输入。Create、Options 和 PS 的既有映射不变；不增加滑动、多点手势状态机或可配置重映射层。
+- 后果：常规单指点击与 Steam PS5 Gamepad 模板一致，且不会破坏 Create/Options；新增字节解析必须同时覆盖 USB、带 CRC 的 Bluetooth、边界 `959/960`、无触点和双触点。真实 Steam 行为只用于配置证据，最终 Xbox App/ViGEm 游戏内结果仍需实机验收。
+
+## 2026-07-30：one-file bootloader 父进程不算第二个应用实例
+
+- 状态：生产修复、自动回归和当前桌面进程拓扑探针已完成；已发布 R8 不包含该修复，后续修复版发布方式尚待确认。
+- 根因：同目录实例保护由 commit `7ce4479` 首次加入 R7；R5/R6 没有 `_other_install_instances()` 或对应报错，R8 又原样继承了 R7 的实现。安装 R7 时实际执行更新入口的是当时仍在运行的 R5/R6 旧代码，所以那次不会触发新检查；R7 字节安装完成后，R7 → R8 才是该检查第一次参与真实桌面升级。PyInstaller one-file 正常启动会保留同路径的外层 bootloader，并由其创建实际运行 Python 代码的内层子进程；新检查只用内层 `os.getpid()` 排除自身，却把直接父进程误报成“同目录另一个实例”。桌面现场进一步确认文件名仍为 `R5.exe` 的运行 PE 实际是 R7，紧邻 `.old` 的 PE 是 R6；内层 PID `24424` 与父 PID `45212` 指向同一文件，此前日志中的 `44148`、`44584` 也是同类外层 PID。R7 当时的回归只通过 mock 验证“发现其他实例就拒绝”，没有覆盖冻结 one-file 的真实父子拓扑。
+- 决定：实例保护先记录 PID、PPID 与已解析 EXE 路径，只把当前 PID 和“路径与当前进程完全相同”的直接父 PID 视为同一实例。豁免不递归到祖先进程，也不合并同目录或同名的其他 PID；另一次独立启动形成的 one-file 外层/内层进程对仍然阻止更新。
+- 发布后果：已发布的 R7/R8 二进制无法在运行时获得这项入口修复，受影响用户至少需要手动安装一次包含修复的新 EXE。默认选择应是保持 R8 tag 和资产不可变，另发递增版本热修复；移动 R8 tag 或替换既有资产必须由用户明确决定。
+
 ## 2026-07-30：Release 正文只保留用户可感知的版本增量
 
 - 状态：Enhanced R8 中英双语 Release 正文和发行契约测试已按该边界收敛；尚未创建 R8 tag 或 GitHub Release。
@@ -146,7 +176,7 @@
 - 自动 handover 改为非破坏性预验证：候选 handle 必须先打开并读到有效输入，成功后才静音旧输出并原子替换；失败时当前 BT/USB handle、状态和 pending output 保持不变。稳定失败候选与未知身份读取按 1、2、5 秒退避，候选消失即清除；切换不播放启动 R2 扳机键脉冲。这样保留 USB 优先与自动恢复，同时不再用“先断旧连接、再试新连接”的方式制造往返和脉冲。
 - 前端输出类型按用户心智模型完全分离：`Trigger feedback` 与 `Grip haptics` 各自拥有开关、常用调节和实验区域；字段分组集中在 `src/modules/feedback_schema.py`，GUI/Console 只负责渲染，不再各自复制反馈分组。实验性扳机功能仍默认折叠且默认关闭。
 - 顶部 Profile/控制器控件不再追求全胶囊外形，改为 28 logical px 高、8 logical px 圆角的小型状态框；所有关键尺寸为 4 的倍数，并缓存相同 presentation，目标是在 100%、125%、150%、175%、200% 下保持整数 device pixel。
-- 页面仍然只 `grid()` 一次并用 `tkraise()` 切换；最大化/拖拽时只有可见页的 `FastScroll` 接受尺寸回流，40 ms debounce 只应用最新尺寸，反馈卡片另以 80 ms 合并列数变化且不先 `grid_forget()`。系统更新卡片把 snapshot 转为稳定 presentation，仅在文本、进度、动作或 Release 可见性改变时修改控件。不能为了性能退回销毁/重建页面或周期性无条件重排。
+- 页面仍然只 `grid()` 一次并用 `tkraise()` 切换；最大化/拖拽时只有可见页的 `FastScroll` 接受尺寸回流，40 ms debounce 只应用最新尺寸，反馈卡片另以 80 ms 合并列数变化且不先 `grid_forget()`。系统更新卡片把 snapshot 转为稳定 presentation，仅在文本、进度、动作、Release 可见性或手动下载 URL 改变时修改控件；检测到新版本时显示规范 EXE 直链，不能只给自动安装按钮。不能为了性能退回销毁/重建页面或周期性无条件重排。
 - 自动测试和真实 USB 静音四声道开流只能证明恢复路径可以启动，不能替代 BT 到 USB、USB 到 BT、Forza 手感和各缩放率目测；这些结果必须在 `PROJECT_STATE.md` 单独标注。
 
 ## 2026-07-20：全项目审计把外部输入、运行健康和双界面退出纳入统一边界
@@ -311,7 +341,7 @@
 ## 2026-07-17：GitHub 仓库脱离 fork network，许可归属保持不变
 
 - 状态：GitHub API 已确认 `piereacy/FH-DualSense-Enhanced` 为 `isFork=false`、`parent=null`；R1-R4 Release、Git 历史和既有 Star 保留。
-- 决定：项目作为独立仓库继续发布，不重写 Git 历史，也不移除原项目归属。`LICENSE`、独立“关于与许可证”页面和第三方声明继续保留作者署名、原项目链接、Sponsor 链接及 HorizonHaptics 等参考来源。
+- 决定：项目作为独立仓库继续发布，不重写 Git 历史，也不移除原项目归属。`LICENSE`、独立“关于与许可证”页面和第三方声明继续保留作者署名、原项目链接、Sponsor 链接及 HorizonHaptics 等参考来源；关于页另列出当前项目仓库 `piereacy/FH-DualSense-Enhanced`，不以它替换上游链接。
 - 后果：后续自动更新、README、脚本和 Release 只指向 `piereacy/FH-DualSense-Enhanced`；独立仓库身份不改变许可证义务，也不能把上游或参考项目的工作声称为本项目原创。
 
 ## 2026-07-17：许可证信息独立成页，界面代号退回内部设计记录

@@ -225,6 +225,27 @@ class Settings:
     # Xbox App installs are user-selected for the explicit FH6 icon MOD tool.
     fh6_xbox_install_path: str = ""
 
+    # MARK: System - experimental Xbox App digital-button mapping
+    # This only changes the virtual Xbox 360 report. Sticks and L2/R2 stay fixed.
+    enable_custom_xinput_mapping: bool = False
+    xinput_mapping_cross: str = "a"
+    xinput_mapping_circle: str = "b"
+    xinput_mapping_square: str = "x"
+    xinput_mapping_triangle: str = "y"
+    xinput_mapping_l1: str = "left_shoulder"
+    xinput_mapping_r1: str = "right_shoulder"
+    xinput_mapping_create: str = "back"
+    xinput_mapping_options: str = "start"
+    xinput_mapping_l3: str = "left_thumb"
+    xinput_mapping_r3: str = "right_thumb"
+    xinput_mapping_ps: str = "guide"
+    xinput_mapping_dpad_up: str = "dpad_up"
+    xinput_mapping_dpad_down: str = "dpad_down"
+    xinput_mapping_dpad_left: str = "dpad_left"
+    xinput_mapping_dpad_right: str = "dpad_right"
+    xinput_mapping_touchpad_left: str = "back"
+    xinput_mapping_touchpad_right: str = "start"
+
     # MARK: System - DSX
     # When on, triggers go to DualSenseX over UDP instead of HID. Lets DSX (Steam)
     # own the controller without HID fighting it. Toggling restarts the backend.

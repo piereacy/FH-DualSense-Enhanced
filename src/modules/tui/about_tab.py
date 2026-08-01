@@ -3,11 +3,13 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Button, Label
 
+from lang import t
 from modules.about import (
     APP_NAME,
     ATTRIBUTION,
     CONTROLLER_ICON_MOD_ATTRIBUTION,
     CONTROLLER_ICON_MOD_URL,
+    PROJECT_URL,
     SOURCE_URL,
     SPONSOR_URL,
     THIRD_PARTY_LINKS,
@@ -29,6 +31,11 @@ class AboutTab(VerticalScroll):
             classes="about-title",
         )
         yield Label(ATTRIBUTION, classes="about-copy")
+        yield Button(
+            f"{t('Project repository')}: {PROJECT_URL}",
+            id="about-project",
+            classes="about-link",
+        )
         yield Button(f"Source: {SOURCE_URL}", id="about-source", classes="about-link")
         yield Button(f"Sponsor: {SPONSOR_URL}", id="about-sponsor", classes="about-link")
         yield Button(
@@ -45,7 +52,9 @@ class AboutTab(VerticalScroll):
             )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "about-source":
+        if event.button.id == "about-project":
+            self.app._open_url(PROJECT_URL)
+        elif event.button.id == "about-source":
             self.app._open_url(SOURCE_URL)
         elif event.button.id == "about-sponsor":
             self.app._open_url(SPONSOR_URL)

@@ -19,7 +19,6 @@ from .transaction import (
     create_transaction,
     load_transaction,
     release_version,
-    set_phase,
     sha256_file,
     TransactionPhase,
     write_health_ack,
@@ -68,7 +67,10 @@ def _helper_prefix(update_dir: Path) -> list[str]:
                     raise TransactionError("copied update helper checksum changed")
                 temporary.replace(helper)
             finally:
-                temporary.unlink(missing_ok=True)
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
         return [str(helper)]
     helper = Path(__file__).resolve().parents[3] / "packaging" / "windows" / "update_helper.py"
     if not helper.is_file():
@@ -94,7 +96,10 @@ def _ensure_install_directory_writable(directory: Path) -> None:
     except OSError as exc:
         raise PermissionError(f"application directory is not writable: {directory}") from exc
     finally:
-        probe.unlink(missing_ok=True)
+        try:
+            probe.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _other_install_instances(directory: Path, *, current_pid: int) -> tuple[tuple[int, str], ...]:
@@ -105,22 +110,43 @@ def _other_install_instances(directory: Path, *, current_pid: int) -> tuple[tupl
     except ImportError:
         return ()
     expected = Path(directory).resolve()
-    matches: list[tuple[int, str]] = []
-    for process in psutil.process_iter(("pid", "exe")):
+    observed: list[tuple[int, int, Path]] = []
+    for process in psutil.process_iter(("pid", "ppid", "exe")):
         try:
             pid = int(process.info.get("pid") or 0)
+            parent_pid = int(process.info.get("ppid") or 0)
             executable = process.info.get("exe") or ""
             path = Path(executable).resolve() if executable else None
         except (OSError, ValueError, psutil.Error):
             continue
-        if pid <= 0 or pid == int(current_pid) or path is None or path.parent != expected:
+        if pid <= 0 or path is None or path.parent != expected:
             continue
         try:
             release_version(path.name)
         except TransactionError:
             continue
-        matches.append((pid, str(path)))
-    return tuple(matches)
+        observed.append((pid, parent_pid, path))
+
+    # A PyInstaller one-file executable normally runs as two processes: the
+    # outer bootloader stays alive while its child executes Python.  Both PIDs
+    # report the same EXE path, so treating the bootloader parent as another
+    # installation instance makes every in-app update fail.  Ignore only the
+    # direct same-executable parent of the current process; a separately
+    # launched one-file pair remains visible and still blocks replacement.
+    current_pid = int(current_pid)
+    same_instance_pids = {current_pid}
+    current = next((entry for entry in observed if entry[0] == current_pid), None)
+    if current is not None:
+        parent_pid = current[1]
+        parent = next((entry for entry in observed if entry[0] == parent_pid), None)
+        if parent is not None and parent[2] == current[2]:
+            same_instance_pids.add(parent_pid)
+
+    return tuple(
+        (pid, str(path))
+        for pid, _parent_pid, path in observed
+        if pid not in same_instance_pids
+    )
 
 
 def _health_file_matches(transaction, plan_path: Path) -> bool:
@@ -130,6 +156,9 @@ def _health_file_matches(transaction, plan_path: Path) -> bool:
         return False
     return bool(
         isinstance(payload, dict)
+        and type(payload.get("schema")) is int
+        and type(payload.get("version")) is int
+        and type(payload.get("pid")) is int
         and payload.get("schema") == transaction.schema
         and payload.get("transaction_id") == transaction.transaction_id
         and payload.get("token") == transaction.token
@@ -262,7 +291,11 @@ def recover_incomplete_updates(
             and not transaction.legacy_r6_bootstrap
             and transaction.phase in {TransactionPhase.PREPARED, TransactionPhase.WAITING_OLD_EXIT}
         ):
-            set_phase(plan_path, TransactionPhase.ROLLED_BACK)
+            # Do not mutate the journal in the application process. The
+            # original Helper may still own WAITING_OLD_EXIT; a recovery Helper
+            # uses the per-transaction OS lock to serialize that race and only
+            # then decides whether the plan can be rolled back.
+            should_launch = True
 
         if should_launch:
             prefix = _helper_prefix(update_dir)
@@ -283,6 +316,10 @@ def _restart_args(argv: list[str] | None = None) -> tuple[str, ...]:
             continue
         if item in ("--fhds-update-transaction", "--fhds-update-token"):
             skip_next = True
+            continue
+        if item.startswith("--fhds-update-transaction=") or item.startswith(
+            "--fhds-update-token="
+        ):
             continue
         result.append(item)
     return tuple(result)
@@ -413,6 +450,20 @@ def launch_legacy_bootstrap(
     )
     if candidate is None:
         return None
+    current_pid = int(os.getpid() if pid is None else pid)
+    _ensure_install_directory_writable(candidate.executable.parent)
+    other_instances = _other_install_instances(
+        candidate.executable.parent,
+        current_pid=current_pid,
+    )
+    if other_instances:
+        details = ", ".join(
+            f"PID {other_pid}: {path}" for other_pid, path in other_instances
+        )
+        raise RuntimeError(
+            "close other FH-DualSense-Enhanced instances in this application directory "
+            f"before updating ({details})"
+        )
     update_dir = (paths.DATA / "updates").resolve()
     update_dir.mkdir(parents=True, exist_ok=True)
     staged = update_dir / f"FH-DualSense-Enhanced-R{candidate.new_version}.exe"
@@ -423,7 +474,10 @@ def launch_legacy_bootstrap(
             raise TransactionError("legacy staged copy checksum changed")
         temporary.replace(staged)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     prefix = _helper_prefix(update_dir)
 
@@ -433,7 +487,7 @@ def launch_legacy_bootstrap(
         wrong_named_executable=candidate.executable,
         backup=candidate.backup,
         new_version=candidate.new_version,
-        pid=int(os.getpid() if pid is None else pid),
+        pid=current_pid,
         args=_restart_args(argv),
     )
     _spawn_helper([*prefix, str(plan)], update_dir)
