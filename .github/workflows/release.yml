@@ -221,66 +221,60 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: false
           body: |
-            ## Enhanced R8 中文说明
+            ## Enhanced R9 中文说明
 
-            Enhanced R8 重点修复扳机无法完全释放、红线提示偏早、界面文字裁切和旧版更新残留。
+            Enhanced R9 新增自定义 XBOX 按键映射，并解决长期影响自动更新的可靠性问题。
 
             ### 更新内容
 
-            - **扳机可以真正关闭**：关闭 `Brake stiffness` 或 `Throttle stiffness` 后，对应扳机不再在约 89% 行程留下硬阻力。新增 `启用自适应扳机输出` 总开关，可以立即释放 L2/R2，并保留已有子设置。
-            - **红线反馈更自然**：燃油车会学习实际断油转速，默认提醒由 `93%` 后移到 `95%`；已自定义的时机和命名 Profile 不会被覆盖。R2 扳机键、握把和转速灯条保持同步。全部电动车不再输出红线震动，灯条仍会在接近极限时稳定变红。
-            - **界面排版修正**：扳机与握把页面重新排布，说明文字在双列、窗口缩放和高 DPI 环境下不再被截断。
-            - **自动更新修正**：连续从旧版升级时会恢复正确的 `FH-DualSense-Enhanced-R8.exe` 文件名，并清理确认属于旧版本的 EXE、`.old` 和校验文件；无关文件不会被删除。
+            - **自定义 XBOX 按键映射**：新增独立页面，可以修改 DualSense 数字按键到虚拟 Xbox 360 手柄的对应关系，包括触摸板左右点击。只有在“游戏平台”选择 `XBOX 版` 时可以编辑；Steam 版请直接在 Steam 内修改映射。可以随时关闭自定义映射或一键恢复 Steam 默认映射。
+            - **从 R9 开始，自动更新更可靠**：修复更新时误报“存在其他实例”、升级后文件名不正确、旧 EXE 或 `.old` 遗留，以及失败后无法原地重试等问题。更新失败会尽量恢复原版本；检测到新版本时也会显示手动下载链接。
+            - **项目入口补全**：`关于与许可证` 页面新增当前项目仓库链接。
+
+            ### R8 用户请先手动更新
+
+            R8 自带的旧更新程序无法在升级过程中使用 R9 的修复，因此 R8 → R9 仍可能更新失败。请从本发布页手动下载并启动一次 `FH-DualSense-Enhanced-R9.exe`；从 R9 开始，后续版本将使用新的更新流程。现有设置会继续保留。
 
             ### Windows 独立 EXE（推荐）
 
-            下载 `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`。EXE 已包含 Python 和全部运行依赖。配套 `.sha256` 由内置更新器使用，手动启动 EXE 时不需要另外下载。
+            下载 `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`。EXE 已包含 Python 和全部运行依赖。
 
             ### ZUV / Linux 备用方式
 
             Windows 可使用 `win_start.bat`，Linux 可使用 `linux_start.sh`，也可以手动下载 `FH-DualSense-Enhanced.zuv.py`。Linux 独立文件为 `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`；内置 EXE 更新只支持 Windows 独立版。
+            Linux 上若遇到 HID 权限不足，请按仓库中的 [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules) 配置 udev 权限。
 
-            ### 必要设置
+            ### 基本设置
 
-            - Steam 版保持 Steam Input 与 DualSense vibration 开启；Xbox App 版在软件内选择 Xbox App，不要同时让 Steam Input 或 DS4Windows 接管手柄。
             - 在 Forza Horizon 中开启 Data Out，设置为 `127.0.0.1:5300`，并关闭游戏内振动。
-            - 若要完全释放 L2/R2，请关闭 `启用自适应扳机输出`；握把触觉需要在 `Grip haptics` 页面单独关闭。
-            - 收不到遥测时，请在防火墙中允许本程序和 UDP 5300。
+            - Xbox App 版请在软件内选择 `XBOX 版`，并避免同时让 Steam Input 或 DS4Windows 接管手柄。
 
-            ---
-            > - 设置保存在程序旁边的 `data/user_preferences.json`，更新后继续保留。
-            > - Linux 启动器不会安装 udev 规则。HID 权限不足时，请下载 [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules)，复制到 `/etc/udev/rules.d/`，重新载入规则后连接手柄。
-            > - 预发布频道仍可通过 `uv run FH-DualSense-Enhanced.zuv.py --prerelease` 跟踪。
+            ## Enhanced R9 English notes
 
-            ## Enhanced R8 English notes
-
-            Enhanced R8 focuses on triggers that would not fully release, early redline warnings, clipped interface text, and leftovers from legacy updates.
+            Enhanced R9 adds custom Xbox button mapping and resolves long-running automatic update reliability problems.
 
             ### What's new
 
-            - **Trigger feedback can be fully disabled**: after turning off `Brake stiffness` or `Throttle stiffness`, the corresponding trigger no longer keeps hard resistance around 89% travel. The new `Enable adaptive trigger output` master switch releases L2/R2 immediately while preserving existing child settings.
-            - **More natural redline feedback**: combustion cars learn their actual fuel-cut RPM, and the default warning moves later from `93%` to `95%`. Custom timing and named profiles are preserved. R2, grip haptics, and the tachometer lightbar stay synchronized. Electric vehicles no longer produce redline vibration, while the lightbar still turns steadily red near the limit.
-            - **Layout fixes**: the Trigger feedback and Grip haptics pages have been rearranged, and helper text no longer clips in two-column, resized, or high-DPI layouts.
-            - **Updater fixes**: repeated upgrades from older versions restore the correct `FH-DualSense-Enhanced-R8.exe` filename and remove confirmed old-version EXEs, `.old` files, and checksum files. Unrelated files are not deleted.
+            - **Custom Xbox button mapping**: a new standalone page lets you remap DualSense digital buttons to the virtual Xbox 360 controller, including left and right touchpad clicks. Editing is available only when `Xbox App` is selected as the game platform; Steam users should change their mapping in Steam. Custom mapping can be disabled at any time or reset to the Steam defaults.
+            - **More reliable updates from R9 onward**: fixes false “another instance is running” errors, incorrect filenames after upgrading, leftover old EXEs or `.old` files, and failures that could not be retried in place. Failed updates try to restore the previous version, and the update page now also shows a manual download link.
+            - **Project link**: About & Licenses now links to the current project repository.
+
+            ### Important for R8 users
+
+            R8 ships with the older updater and cannot use the R9 fixes during the R8 → R9 handoff, so that automatic update may still fail. Manually download and launch `FH-DualSense-Enhanced-R9.exe` once from this release page. Future updates starting from R9 will use the corrected update flow. Existing settings remain in place.
 
             ### Windows standalone EXE (recommended)
 
-            Download `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`. It includes Python and all runtime dependencies. The matching `.sha256` is used by the built-in updater and is not required for manual launches.
+            Download `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`. It includes Python and all runtime dependencies.
 
             ### ZUV / Linux fallback
 
             Windows users may use `win_start.bat`, Linux users may use `linux_start.sh`, or either platform may download `FH-DualSense-Enhanced.zuv.py` manually. The standalone Linux asset is `${{ format('FH-DualSense-Enhanced-{0}', needs.prepare.outputs.tag) }}`. Built-in EXE replacement is available only in the Windows standalone build.
+            On Linux, if HID access is denied, configure udev permissions with [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules).
 
-            ### Required settings
+            ### Basic setup
 
-            - On Steam, keep Steam Input and DualSense vibration enabled. For Xbox App, select Xbox App inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the controller at the same time.
             - Enable Forza Data Out at `127.0.0.1:5300` and disable in-game vibration.
-            - To release L2/R2 completely, disable `Enable adaptive trigger output`; Grip haptics must be disabled separately.
-            - If telemetry does not arrive, allow the app and UDP 5300 through Windows Firewall.
-
-            ---
-            > - Settings are stored in `data/user_preferences.json` beside the executable and remain across updates.
-            > - The Linux launcher does not install udev rules. If HID access is denied, download [`70-dualsense.rules`](https://github.com/piereacy/FH-DualSense-Enhanced/blob/main/packaging/linux/70-dualsense.rules), copy it to `/etc/udev/rules.d/`, reload the rules, and reconnect the controller.
-            > - The preview channel remains available through `uv run FH-DualSense-Enhanced.zuv.py --prerelease`.
+            - For Xbox App, select `Xbox App` inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the controller at the same time.
           files: release/*
 

@@ -117,7 +117,7 @@ wheels = [
 
 [[package]]
 name = "fh-dualsense-enhanced"
-version = "8"
+version = "9"
 source = { virtual = "." }
 dependencies = [
     { name = "customtkinter" },

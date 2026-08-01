@@ -6,6 +6,11 @@ from typing import Callable
 
 from .bridge import BridgeSnapshot, BridgeStatus, XInputBridge
 from .driver import InstallResult, InstallStatus, install_and_probe
+from .mapping import (
+    XInputButtonMapping,
+    active_mapping_from_settings,
+    normalize_mapping_settings,
+)
 from .vigem_client import is_supported_platform
 
 
@@ -17,6 +22,11 @@ FORZA_PLATFORMS = (STEAM_PLATFORM, XBOX_APP_PLATFORM)
 def normalize_forza_platform(value: object) -> str:
     normalized = str(value).strip().casefold()
     return normalized if normalized in FORZA_PLATFORMS else STEAM_PLATFORM
+
+
+def custom_xinput_mapping_available(value: object) -> bool:
+    """Custom mapping is meaningful only while the Xbox App bridge is selected."""
+    return normalize_forza_platform(value) == XBOX_APP_PLATFORM
 
 
 class XInputBridgeService:
@@ -43,6 +53,7 @@ class XInputBridgeService:
         )
 
     def sync(self, backend) -> None:
+        self.refresh_button_mapping()
         self._detach_consumer()
         self._bridge.stop()
         with self._lock:
@@ -71,6 +82,15 @@ class XInputBridgeService:
             return
         self._bridge.start()
         setter(self._bridge.publish_latest)
+
+    def refresh_button_mapping(self) -> XInputButtonMapping:
+        """Apply global mapping settings without recreating the virtual target."""
+        normalize_mapping_settings(self.settings)
+        mapping = active_mapping_from_settings(self.settings)
+        setter = getattr(self._bridge, "set_button_mapping", None)
+        if callable(setter):
+            setter(mapping)
+        return mapping
 
     def retry(self) -> None:
         with self._lock:

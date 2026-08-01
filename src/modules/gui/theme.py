@@ -74,6 +74,7 @@ ICON = {
     "Lighting": "\u2726",
     "Controls": "\U0001F3AE",  # gamepad
     "Profiles": "\U0001F4CB",  # clipboard
+    "XboxMapping": "\u21C4",  # remapping
     "Settings": "\u2699",        # gear
     "System":   "\U0001F5A5",  # computer
     "FH6Utilities": "\U0001F3AE",  # gamepad

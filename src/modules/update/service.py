@@ -6,6 +6,7 @@ import json
 import re
 import threading
 import time
+import urllib.parse
 import uuid
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -17,6 +18,7 @@ from .install import launch_update_helper
 from .model import UpdatePhase, UpdateRelease, UpdateSnapshot
 
 log = logging.getLogger("fhds.update")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _current_version() -> int:
@@ -193,18 +195,57 @@ class UpdateService:
             return
         try:
             payload = json.loads(meta.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or not isinstance(payload.get("release"), dict):
+                raise ValueError("pending update metadata is malformed")
             release = UpdateRelease(**payload["release"])
             staged = Path(payload["staged_path"]).resolve()
-            digest = str(payload["sha256"]).lower()
+            digest_value = payload["sha256"]
+            if not isinstance(digest_value, str):
+                raise ValueError("pending update checksum is invalid")
+            digest = digest_value.lower()
+            if not _SHA256_RE.fullmatch(digest):
+                raise ValueError("pending update checksum is invalid")
+            if type(release.version) is not int or release.version <= 0:
+                raise ValueError("pending update version is invalid")
+            if type(release.asset_size) is not int or release.asset_size <= 0:
+                raise ValueError("pending update size is invalid")
+            string_fields = (
+                release.tag,
+                release.body,
+                release.html_url,
+                release.asset_name,
+                release.asset_url,
+                release.checksum_url,
+            )
+            if any(not isinstance(value, str) for value in string_fields):
+                raise ValueError("pending update release metadata is malformed")
+            for url in (release.asset_url, release.checksum_url):
+                parsed = urllib.parse.urlsplit(url)
+                if (
+                    parsed.scheme.casefold() != "https"
+                    or not parsed.hostname
+                    or parsed.username is not None
+                    or parsed.password is not None
+                ):
+                    raise ValueError("pending update URL is invalid")
             update_root = (paths.DATA / "updates").resolve()
             if staged.parent != update_root or not staged.is_file():
                 raise ValueError("pending update path is invalid")
+            if staged.stat().st_size != release.asset_size:
+                raise ValueError("pending update size is invalid")
+            with staged.open("rb") as stream:
+                if stream.read(2) != b"MZ":
+                    raise ValueError("pending update is not a Windows executable")
             if self._hash_file(staged).lower() != digest:
                 raise ValueError("pending update checksum is invalid")
             if release.version <= _current_version():
                 raise ValueError("pending update is stale")
             expected_name = f"FH-DualSense-Enhanced-R{release.version}.exe"
-            if release.asset_name != expected_name or staged.name != expected_name:
+            if (
+                release.tag.casefold() != f"r{release.version}"
+                or release.asset_name != expected_name
+                or staged.name != expected_name
+            ):
                 raise ValueError("pending update does not use the canonical asset name")
             self._last_sha256 = digest
             self._snapshot = UpdateSnapshot(
@@ -231,6 +272,13 @@ class UpdateService:
         if not self._last_sha256:
             raise RuntimeError("verified update digest is missing")
         self._set(phase=UpdatePhase.INSTALLING, message="Restarting to install")
-        return launch_update_helper(
-            Path(snapshot.staged_path), expected_sha256=self._last_sha256
-        )
+        try:
+            return launch_update_helper(
+                Path(snapshot.staged_path), expected_sha256=self._last_sha256
+            )
+        except Exception:
+            # The GUI/TUI deliberately stays open when the helper cannot be
+            # scheduled. Restore the actionable state so the user can close a
+            # conflicting instance and retry without restarting this process.
+            self._set(phase=UpdatePhase.READY, message="Update ready to install")
+            raise

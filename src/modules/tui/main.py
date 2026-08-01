@@ -34,6 +34,7 @@ from .profiles_tab import ProfilesTab
 from .settings_tab import SettingsTab
 from .system_tab import SystemTab
 from .widgets import RangeSlider
+from .xinput_mapping_tab import XInputMappingTab
 
 log = logging.getLogger("fhds")
 
@@ -132,6 +133,8 @@ class TriggerTUI(App):
                 yield SettingsTab(self.settings)
             with TabPane(t("Controller lighting"), id="tab-lighting"):
                 yield LightingTab(self.settings)
+            with TabPane(t("Custom Xbox button mapping"), id="tab-xinput-mapping"):
+                yield XInputMappingTab(self.settings)
             with TabPane(t("System"), id="tab-system"):
                 yield SystemTab(self.settings)
             with TabPane(t("FH6 utilities"), id="tab-fh6-utilities"):
@@ -202,10 +205,18 @@ class TriggerTUI(App):
             )
             self._ds.open()
             self._xinput_service.sync(self._ds)
+            self._backend_error = ""
+        except Exception as exc:
+            self._backend_error = str(exc) or type(exc).__name__
+            log.exception("Backend startup failed")
+            self.query_one("#status", Static).update(
+                t("Backend failed: {error}").format(error=escape(str(exc)))
+            )
+            return
+        try:
             self._listener_cm = forzahorizon.UDPListener(
                 s.udp_host, s.udp_port, s.udp_timeout, s.udp_forward_to, s.udp_forward)
             self._listener = self._listener_cm.__enter__()
-            self._backend_error = ""
             self._udp_error = ""
             log.info("Listening on %s:%d", s.udp_host, s.udp_port)
             log.info("In game: HUD & Gameplay -> Data Out: ON, IP %s, Port %d", s.udp_host, s.udp_port)
@@ -219,9 +230,15 @@ class TriggerTUI(App):
             log.exception("UDP bind failed on %s:%d", s.udp_host, s.udp_port)
             msg = t("UDP port {port} is in use. Close the other listener or change the port in the System tab.").format(port=s.udp_port)
             self.query_one("#status", Static).update(msg)
+            try:
+                self._notify_ready()
+            except Exception:
+                self._backend_error = "Update startup health confirmation failed"
+                log.exception(self._backend_error)
+                self.exit(return_code=1)
         except Exception as exc:
-            self._backend_error = str(exc) or type(exc).__name__
-            log.exception("Backend startup failed")
+            self._udp_error = str(exc) or type(exc).__name__
+            log.exception("Telemetry listener startup failed")
             self.query_one("#status", Static).update(
                 t("Backend failed: {error}").format(error=escape(str(exc)))
             )
@@ -447,6 +464,13 @@ class TriggerTUI(App):
             for select in self.query(Select):
                 if select.id and hasattr(self.settings, select.id):
                     select.value = getattr(self.settings, select.id)
+            refresh_mapping = getattr(
+                self._xinput_service,
+                "refresh_button_mapping",
+                None,
+            )
+            if callable(refresh_mapping):
+                refresh_mapping()
         finally:
             self._refreshing = False
 

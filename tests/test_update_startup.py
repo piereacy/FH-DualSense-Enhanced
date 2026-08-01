@@ -161,7 +161,7 @@ def test_orphaned_new_version_does_not_trust_stale_health_before_ready(tmp_path,
     assert launched == [(["helper.exe", "--recover", str(plan)], data / "updates")]
 
 
-def test_old_version_marks_pre_install_transaction_rolled_back(tmp_path, monkeypatch):
+def test_old_version_delegates_pre_install_recovery_to_locked_helper(tmp_path, monkeypatch):
     data = tmp_path / "data"
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = data / "updates" / "FH-DualSense-Enhanced-R7.exe"
@@ -178,10 +178,18 @@ def test_old_version_marks_pre_install_transaction_rolled_back(tmp_path, monkeyp
         token="prepared-recovery-token-24-bytes",
     )
     monkeypatch.setattr(install.paths, "DATA", data)
+    monkeypatch.setattr(install, "_helper_prefix", lambda _root: ["helper.exe"])
+    launched = []
+    monkeypatch.setattr(
+        install,
+        "_spawn_helper",
+        lambda command, root: launched.append((command, root)),
+    )
     install._recovery_launched.clear()
 
-    assert install.recover_incomplete_updates(executable=old, ready=False) == ()
-    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+    assert install.recover_incomplete_updates(executable=old, ready=False) == (plan,)
+    assert load_transaction(plan).phase is TransactionPhase.PREPARED
+    assert launched == [(["helper.exe", "--recover", str(plan)], data / "updates")]
 
 
 def test_old_version_discards_stale_health_before_recovery(tmp_path, monkeypatch):

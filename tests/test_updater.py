@@ -91,6 +91,10 @@ def test_release_parser_selects_canonical_asset_and_requires_checksum():
     malformed_size["assets"][0]["size"] = "not-a-number"
     assert GitHubReleaseClient._parse_release(malformed_size) is None
 
+    duplicate = release_payload()
+    duplicate["assets"].append(dict(duplicate["assets"][0]))
+    assert GitHubReleaseClient._parse_release(duplicate) is None
+
 
 def test_update_request_rejects_non_https_before_opening_network(monkeypatch):
     monkeypatch.setattr(
@@ -170,7 +174,11 @@ def test_download_verifies_sha256_and_pe_header(monkeypatch, tmp_path):
     )
 
     def fake_request(url, **_kwargs):
-        return FakeResponse((digest + "  app.exe\n").encode() if url.endswith("sha256") else exe)
+        return FakeResponse(
+            (digest + f"  {release.asset_name}\n").encode()
+            if url.endswith("sha256")
+            else exe
+        )
 
     monkeypatch.setattr(github, "_request", fake_request)
     output = tmp_path / release.asset_name
@@ -203,6 +211,37 @@ def test_download_removes_partial_file_on_bad_checksum(monkeypatch, tmp_path):
     assert not output.with_suffix(".exe.part").exists()
 
 
+@pytest.mark.parametrize(
+    "sidecar",
+    [
+        "{digest}  FH-DualSense-Enhanced-R99.exe\n",
+        "{digest}\n{digest}\n",
+        "prefix {digest} suffix\n",
+    ],
+)
+def test_download_rejects_ambiguous_or_wrong_asset_checksum(sidecar, monkeypatch, tmp_path):
+    exe = b"MZ-checksum-contract"
+    digest = hashlib.sha256(exe).hexdigest()
+    release = UpdateRelease(
+        version=4,
+        tag="R4",
+        body="",
+        html_url="https://example.test/R4",
+        asset_name="FH-DualSense-Enhanced-R4.exe",
+        asset_url="https://example.test/app.exe",
+        asset_size=len(exe),
+        checksum_url="https://example.test/app.exe.sha256",
+    )
+
+    def fake_request(url, **_kwargs):
+        payload = sidecar.format(digest=digest).encode() if url.endswith("sha256") else exe
+        return FakeResponse(payload)
+
+    monkeypatch.setattr(github, "_request", fake_request)
+    with pytest.raises(UpdateError, match="checksum"):
+        GitHubReleaseClient().download(release, tmp_path / release.asset_name)
+
+
 class FakeClient:
     def __init__(self, release=None):
         self.release = release
@@ -230,6 +269,66 @@ def test_update_service_reports_up_to_date(monkeypatch, tmp_path):
     updater = UpdateService(Settings(), client=FakeClient())
     updater._check_impl(background=False)
     assert updater.snapshot().phase is UpdatePhase.UP_TO_DATE
+
+
+def test_verified_pending_update_round_trips_across_restart(monkeypatch, tmp_path):
+    from modules.update import service
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir()
+    staged = update_dir / "FH-DualSense-Enhanced-R10.exe"
+    staged.write_bytes(b"MZ-persisted-update")
+    release = UpdateRelease(
+        version=10,
+        tag="R10",
+        body="release",
+        html_url="https://example.test/R10",
+        asset_name=staged.name,
+        asset_url="https://example.test/R10.exe",
+        asset_size=staged.stat().st_size,
+        checksum_url="https://example.test/R10.exe.sha256",
+    )
+    monkeypatch.setattr(service.paths, "DATA", tmp_path)
+    writer = UpdateService(Settings(), client=FakeClient())
+    digest = hashlib.sha256(staged.read_bytes()).hexdigest()
+    writer._save_pending(release, staged, digest)
+
+    reader = UpdateService(Settings(), client=FakeClient())
+
+    assert reader.snapshot().phase is UpdatePhase.READY
+    assert reader.snapshot().release == release
+    assert reader.snapshot().staged_path == str(staged.resolve())
+
+
+def test_corrupt_pending_update_is_discarded_without_deleting_the_candidate(
+    monkeypatch,
+    tmp_path,
+):
+    from modules.update import service
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir()
+    staged = update_dir / "FH-DualSense-Enhanced-R9.exe"
+    staged.write_bytes(b"not-an-executable")
+    release = UpdateRelease(
+        version=9,
+        tag="R9",
+        body="release",
+        html_url="https://example.test/R9",
+        asset_name=staged.name,
+        asset_url="https://example.test/R9.exe",
+        asset_size=staged.stat().st_size,
+        checksum_url="https://example.test/R9.exe.sha256",
+    )
+    monkeypatch.setattr(service.paths, "DATA", tmp_path)
+    writer = UpdateService(Settings(), client=FakeClient())
+    writer._save_pending(release, staged, hashlib.sha256(staged.read_bytes()).hexdigest())
+
+    reader = UpdateService(Settings(), client=FakeClient())
+
+    assert reader.snapshot().phase is UpdatePhase.IDLE
+    assert not (update_dir / "pending.json").exists()
+    assert staged.read_bytes() == b"not-an-executable"
 
 
 def test_update_status_presentation_localizes_phase_and_release_tag():
@@ -269,6 +368,30 @@ def test_unsupported_runtime_cannot_start_or_install_updates(tmp_path, monkeypat
         updater.install_on_exit()
 
 
+def test_failed_helper_launch_restores_ready_state_for_retry(tmp_path, monkeypatch):
+    from modules.update import service
+
+    staged = tmp_path / "FH-DualSense-Enhanced-R9.exe"
+    updater = UpdateService(Settings(), client=FakeClient())
+    updater._last_sha256 = "a" * 64
+    updater._set(
+        phase=UpdatePhase.READY,
+        message="Update ready to install",
+        staged_path=str(staged),
+    )
+    monkeypatch.setattr(
+        service,
+        "launch_update_helper",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("instance conflict")),
+    )
+
+    with pytest.raises(RuntimeError, match="instance conflict"):
+        updater.install_on_exit()
+
+    assert updater.snapshot().phase is UpdatePhase.READY
+    assert updater.snapshot().staged_path == str(staged)
+
+
 def test_self_update_support_requires_frozen_windows(monkeypatch):
     monkeypatch.setattr(install.sys, "platform", "win32")
     monkeypatch.delattr(install.sys, "frozen", raising=False)
@@ -284,9 +407,22 @@ def test_self_update_support_requires_frozen_windows(monkeypatch):
 class FakeRunningProcess:
     def __init__(self, pid=456):
         self.pid = pid
+        self.running = True
 
     def poll(self):
-        return None
+        return None if self.running else 0
+
+    def terminate(self):
+        self.running = False
+
+    def kill(self):
+        self.running = False
+
+    def wait(self, timeout=None):
+        del timeout
+        if self.running:
+            raise subprocess.TimeoutExpired("fake", 0)
+        return 0
 
 
 def test_update_helper_commits_side_by_side_without_old_file(tmp_path, monkeypatch):
@@ -355,8 +491,12 @@ def test_update_helper_commits_side_by_side_without_old_file(tmp_path, monkeypat
     ("field", "value", "message"),
     [
         ("created_at", float("nan"), "timestamp"),
+        ("created_at", True, "timestamp"),
         ("pid", 0, "pid"),
+        ("pid", "123", "pid"),
+        ("new_version", 7.0, "new_version"),
         ("new_sha256", "not-a-sha256", "checksum"),
+        ("legacy_backup_path", {"path": "bad"}, "backup path"),
     ],
 )
 def test_update_helper_rejects_malformed_transaction_fields(tmp_path, field, value, message):
@@ -625,6 +765,135 @@ def test_recovery_rolls_back_unconfirmed_side_by_side_update(tmp_path):
     assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
 
 
+def test_recovery_refuses_to_delete_changed_unconfirmed_target(tmp_path):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="9" * 32,
+        token="changed-target-token-with-24-bytes",
+    )
+    staged.replace(transaction.new)
+    transaction.new.write_bytes(b"MZ-someone-else")
+    set_phase(plan, TransactionPhase.WAITING_HEALTH)
+
+    with pytest.raises(ValueError, match="refusing to delete"):
+        helper["recover"](plan)
+
+    assert transaction.new.read_bytes() == b"MZ-someone-else"
+    assert load_transaction(plan).phase is TransactionPhase.WAITING_HEALTH
+
+
+def test_recovery_closes_move_to_journal_crash_gap(tmp_path):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="0" * 32,
+        token="move-journal-gap-token-with-24-bytes",
+    )
+    set_phase(plan, TransactionPhase.WAITING_OLD_EXIT)
+    staged.replace(transaction.new)
+
+    helper["recover"](plan)
+
+    assert old.read_bytes() == b"MZ-old"
+    assert not transaction.new.exists()
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+
+
+def test_preexisting_matching_target_is_preserved_before_adoption(tmp_path):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    new = tmp_path / staged.name
+    new.write_bytes(b"MZ-new")
+    _transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="a0" * 16,
+        token="preexisting-target-token-24-bytes",
+    )
+    helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: (_ for _ in ()).throw(
+        TimeoutError("old still running")
+    )
+
+    with pytest.raises(TimeoutError, match="old still running"):
+        helper["apply"](plan)
+
+    assert new.read_bytes() == b"MZ-new"
+    assert staged.read_bytes() == b"MZ-new"
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+
+
+def test_failed_rollback_stays_recoverable_instead_of_claiming_success(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="b0" * 16,
+        token="rollback-pending-token-24-bytes",
+    )
+    helper["wait_for_pid"].__globals__["wait_for_pid"] = lambda *_args: None
+    monkeypatch.setattr(helper["subprocess"], "Popen", lambda *_args, **_kwargs: FakeRunningProcess())
+    monkeypatch.setitem(
+        helper["apply"].__globals__,
+        "wait_for_health",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("not healthy")),
+    )
+    real_unlink = helper["_unlink_with_retry"]
+    monkeypatch.setitem(
+        helper["apply"].__globals__,
+        "_unlink_with_retry",
+        lambda path, **kwargs: False if Path(path) == transaction.new else real_unlink(path, **kwargs),
+    )
+
+    with pytest.raises(RuntimeError, match="rollback remains pending"):
+        helper["apply"](plan)
+
+    assert transaction.new.is_file()
+    assert old.is_file()
+    assert load_transaction(plan).phase is TransactionPhase.WAITING_HEALTH
+
+
 def test_recovery_finishes_shortcuts_and_cleanup_after_valid_health(tmp_path, monkeypatch):
     helper = runpy.run_path(
         str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
@@ -658,14 +927,61 @@ def test_recovery_finishes_shortcuts_and_cleanup_after_valid_health(tmp_path, mo
         "migrate_shortcuts",
         lambda *_args: (["Desktop/FHDS.lnk"], []),
     )
+    monkeypatch.setitem(
+        helper["recover"].__globals__,
+        "_health_process_is_running",
+        lambda *_args, **_kwargs: True,
+    )
 
-    helper["recover"](plan)
+    helper["recover"](plan, health_survival_seconds=0)
 
     recovered = load_transaction(plan)
     assert recovered.phase is TransactionPhase.COMMITTED
     assert recovered.migrated_shortcuts == ("Desktop/FHDS.lnk",)
     assert not old.exists()
     assert transaction.new.is_file()
+
+
+def test_recovery_rolls_back_a_valid_ack_from_a_dead_process(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="1b" * 16,
+        token="dead-health-process-token-24-bytes",
+    )
+    staged.replace(transaction.new)
+    set_phase(plan, TransactionPhase.WAITING_HEALTH)
+    health = write_health_ack(
+        root=plan.parent.parent,
+        transaction_id=transaction.transaction_id,
+        token=transaction.token,
+        executable=transaction.new,
+        version=7,
+        pid=999_999,
+    )
+    monkeypatch.setitem(
+        helper["recover"].__globals__,
+        "_health_process_is_running",
+        lambda *_args, **_kwargs: False,
+    )
+
+    helper["recover"](plan, health_survival_seconds=0)
+
+    assert not health.exists()
+    assert not transaction.new.exists()
+    assert old.read_bytes() == b"MZ-old"
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
 
 
 def test_recovery_keeps_old_executable_when_shortcut_retry_still_fails(tmp_path, monkeypatch):
@@ -767,6 +1083,70 @@ def test_launch_update_helper_refuses_another_instance_in_same_directory(tmp_pat
         )
 
 
+def test_instance_guard_ignores_current_pyinstaller_onefile_parent(tmp_path, monkeypatch):
+    executable = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+    processes = [
+        type("Process", (), {"info": {"pid": 100, "ppid": 1, "exe": str(executable)}})(),
+        type("Process", (), {"info": {"pid": 200, "ppid": 100, "exe": str(executable)}})(),
+    ]
+    monkeypatch.setattr(install.sys, "platform", "win32")
+    monkeypatch.setattr(install.psutil, "process_iter", lambda _fields: processes)
+
+    assert install._other_install_instances(tmp_path, current_pid=200) == ()
+
+
+def test_instance_guard_still_reports_a_separate_onefile_pair(tmp_path, monkeypatch):
+    executable = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+    processes = [
+        type("Process", (), {"info": {"pid": 100, "ppid": 1, "exe": str(executable)}})(),
+        type("Process", (), {"info": {"pid": 200, "ppid": 100, "exe": str(executable)}})(),
+        type("Process", (), {"info": {"pid": 300, "ppid": 1, "exe": str(executable)}})(),
+        type("Process", (), {"info": {"pid": 400, "ppid": 300, "exe": str(executable)}})(),
+    ]
+    monkeypatch.setattr(install.sys, "platform", "win32")
+    monkeypatch.setattr(install.psutil, "process_iter", lambda _fields: processes)
+
+    assert install._other_install_instances(tmp_path, current_pid=200) == (
+        (300, str(executable.resolve())),
+        (400, str(executable.resolve())),
+    )
+
+
+def test_restart_arguments_strip_both_internal_argument_forms():
+    assert install._restart_args(
+        [
+            "--gui",
+            "--fhds-update-transaction",
+            "a" * 32,
+            "--port=5300",
+            "--fhds-update-token=secret-token",
+            "--fhds-update-transaction=" + "b" * 32,
+            "--tui",
+        ]
+    ) == ("--gui", "--port=5300", "--tui")
+
+
+def test_legacy_bootstrap_refuses_a_separate_instance_before_copying(tmp_path, monkeypatch):
+    running = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+    backup = Path(str(running) + ".old")
+    running.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    versions = {running.resolve(): 7, backup.resolve(): 6}
+    monkeypatch.setattr(
+        install,
+        "_other_install_instances",
+        lambda *_args, **_kwargs: ((999, str(running)),),
+    )
+
+    with pytest.raises(RuntimeError, match="close other"):
+        install.launch_legacy_bootstrap(
+            executable=running,
+            current_version=7,
+            pid=321,
+            version_reader=lambda path: versions.get(Path(path).resolve()),
+        )
+
+
 def test_update_helper_consumes_r6_old_during_legacy_bootstrap(tmp_path, monkeypatch):
     helper = runpy.run_path(
         str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
@@ -863,6 +1243,91 @@ def test_update_helper_legacy_health_failure_restores_real_r6(tmp_path, monkeypa
     assert not backup.exists()
     assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
     assert launched[-1] == [str(running)]
+
+
+def test_legacy_recovery_restores_backup_after_move_to_journal_crash(tmp_path):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    backup = Path(str(running) + ".old")
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    running.write_bytes(b"MZ-r7")
+    staged.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    transaction, plan = create_legacy_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        wrong_named_executable=running,
+        backup=backup,
+        new_version=7,
+        pid=123,
+        transaction_id="e0" * 16,
+        token="legacy-gap-token-with-24-bytes",
+    )
+    set_phase(plan, TransactionPhase.WAITING_OLD_EXIT)
+    running.replace(transaction.new)
+
+    helper["recover"](plan)
+
+    assert running.read_bytes() == b"MZ-r6"
+    assert not transaction.new.exists()
+    assert not backup.exists()
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+
+
+def test_healthy_legacy_gap_restores_old_before_shortcut_migration(tmp_path, monkeypatch):
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    backup = Path(str(running) + ".old")
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    running.write_bytes(b"MZ-r7")
+    staged.write_bytes(b"MZ-r7")
+    backup.write_bytes(b"MZ-r6")
+    transaction, plan = create_legacy_transaction(
+        root=tmp_path / "data" / "updates" / "transactions",
+        staged=staged,
+        wrong_named_executable=running,
+        backup=backup,
+        new_version=7,
+        pid=123,
+        transaction_id="f0" * 16,
+        token="legacy-healthy-gap-token-24-bytes",
+    )
+    set_phase(plan, TransactionPhase.WAITING_OLD_EXIT)
+    running.replace(transaction.new)
+    write_health_ack(
+        root=plan.parent.parent,
+        transaction_id=transaction.transaction_id,
+        token=transaction.token,
+        executable=transaction.new,
+        version=7,
+        pid=456,
+    )
+    migrated_from = []
+
+    def migrate(old, _new):
+        migrated_from.append((Path(old), Path(old).read_bytes()))
+        return [], []
+
+    monkeypatch.setitem(helper["recover"].__globals__, "migrate_shortcuts", migrate)
+    monkeypatch.setitem(
+        helper["recover"].__globals__,
+        "_health_process_is_running",
+        lambda *_args, **_kwargs: True,
+    )
+
+    helper["recover"](plan, health_survival_seconds=0)
+
+    assert migrated_from == [(running, b"MZ-r6")]
+    assert transaction.new.read_bytes() == b"MZ-r7"
+    assert not running.exists()
+    assert not backup.exists()
+    assert load_transaction(plan).phase is TransactionPhase.COMMITTED
 
 
 def test_legacy_bootstrap_detection_requires_matching_embedded_versions(tmp_path):
@@ -969,3 +1434,36 @@ def test_update_helper_waits_for_windows_process_without_signalling_it():
 
     assert time.monotonic() - started >= 0.10
     assert child.wait(timeout=1.0) == 0
+
+
+def test_update_helper_transaction_lock_is_cross_process(tmp_path):
+    helper_path = Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py"
+    plan = tmp_path / "transactions" / ("1a" * 16) / "transaction.json"
+    plan.parent.mkdir(parents=True)
+    ready = tmp_path / "lock-ready.txt"
+    release = tmp_path / "lock-release.txt"
+    script = f"""
+import runpy
+import time
+from pathlib import Path
+h = runpy.run_path({str(helper_path)!r})
+with h['_transaction_lock'](Path({str(plan)!r})) as acquired:
+    Path({str(ready)!r}).write_text(str(acquired), encoding='utf-8')
+    deadline = time.monotonic() + 10.0
+    while not Path({str(release)!r}).exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+"""
+    child = subprocess.Popen([sys.executable, "-c", script])
+    try:
+        deadline = time.monotonic() + 5.0
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert ready.read_text(encoding="utf-8") == "True"
+        helper = runpy.run_path(str(helper_path))
+        with helper["_transaction_lock"](plan) as acquired:
+            assert acquired is False
+    finally:
+        release.write_text("release", encoding="utf-8")
+        child.wait(timeout=5.0)
+
+    assert child.returncode == 0

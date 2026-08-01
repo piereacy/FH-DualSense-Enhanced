@@ -2,7 +2,14 @@ import ctypes
 
 import pytest
 
-from modules.dualsense.input_state import DPad, DualSenseButton, DualSenseInputState
+from modules.dualsense.input_state import (
+    DPad,
+    DualSenseButton,
+    DualSenseInputState,
+    TouchpadRegion,
+)
+from modules.config.settings import Settings
+from modules.xinput.mapping import active_mapping_from_settings
 from modules.xinput.report import XUSBButton, XUSBReport, map_dualsense_to_xusb
 
 
@@ -56,6 +63,67 @@ def test_maps_each_digital_button(button, expected):
     report = map_dualsense_to_xusb(_state(buttons=frozenset({button})))
 
     assert report.wButtons == expected
+
+
+@pytest.mark.parametrize(
+    ("regions", "expected"),
+    (
+        (frozenset(), XUSBButton.BACK),
+        (frozenset({TouchpadRegion.LEFT}), XUSBButton.BACK),
+        (frozenset({TouchpadRegion.RIGHT}), XUSBButton.START),
+        (
+            frozenset({TouchpadRegion.LEFT, TouchpadRegion.RIGHT}),
+            XUSBButton.BACK | XUSBButton.START,
+        ),
+    ),
+)
+def test_maps_touchpad_click_like_the_steam_ps5_gamepad_template(regions, expected):
+    report = map_dualsense_to_xusb(
+        _state(buttons=frozenset({DualSenseButton.TOUCHPAD}), touchpad_regions=regions)
+    )
+
+    assert report.wButtons == expected
+
+
+def test_steam_touchpad_regions_share_the_existing_create_and_options_outputs():
+    report = map_dualsense_to_xusb(
+        _state(
+            buttons=frozenset(
+                {
+                    DualSenseButton.CREATE,
+                    DualSenseButton.OPTIONS,
+                    DualSenseButton.TOUCHPAD,
+                }
+            ),
+            touchpad_regions=frozenset(TouchpadRegion),
+        )
+    )
+
+    assert report.wButtons == XUSBButton.BACK | XUSBButton.START
+
+
+def test_experimental_map_can_reassign_or_disable_each_digital_source():
+    settings = Settings(
+        enable_custom_xinput_mapping=True,
+        xinput_mapping_cross="y",
+        xinput_mapping_dpad_up="b",
+        xinput_mapping_touchpad_left="a",
+        xinput_mapping_touchpad_right="off",
+    )
+    mapping = active_mapping_from_settings(settings)
+
+    report = map_dualsense_to_xusb(
+        _state(
+            dpad=DPad.NORTH,
+            buttons=frozenset(
+                {DualSenseButton.CROSS, DualSenseButton.TOUCHPAD}
+            ),
+            touchpad_regions=frozenset(TouchpadRegion),
+        ),
+        mapping,
+    )
+
+    assert report.wButtons == XUSBButton.Y | XUSBButton.B | XUSBButton.A
 
 
 @pytest.mark.parametrize(

@@ -10,8 +10,11 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+import psutil
 
 
 SCHEMA_VERSION = 1
@@ -34,6 +37,7 @@ _STALE_RELEASE_FILE_RE = re.compile(
     re.IGNORECASE,
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_POPEN_CLASS = subprocess.Popen
 
 
 def sha256(path: Path) -> str:
@@ -42,6 +46,72 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 256), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _file_matches(path: Path, expected_sha256: str) -> bool:
+    try:
+        return path.is_file() and sha256(path).lower() == expected_sha256
+    except OSError:
+        return False
+
+
+@contextmanager
+def _transaction_lock(plan_path: Path):
+    """Hold one crash-safe, cross-process lock for a transaction journal."""
+    resolved = Path(plan_path).resolve()
+    lock_key = hashlib.sha256(
+        os.path.normcase(str(resolved)).encode("utf-8")
+    ).hexdigest()
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_mutex = kernel32.CreateMutexW
+        create_mutex.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+        create_mutex.restype = wintypes.HANDLE
+        wait_for_single_object = kernel32.WaitForSingleObject
+        wait_for_single_object.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        wait_for_single_object.restype = wintypes.DWORD
+        release_mutex = kernel32.ReleaseMutex
+        release_mutex.argtypes = (wintypes.HANDLE,)
+        release_mutex.restype = wintypes.BOOL
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = (wintypes.HANDLE,)
+        close_handle.restype = wintypes.BOOL
+
+        handle = create_mutex(None, False, f"Local\\FHDS-Update-{lock_key}")
+        if not handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        acquired = False
+        try:
+            result = wait_for_single_object(handle, 0)
+            if result == 0x00000102:  # WAIT_TIMEOUT
+                yield False
+                return
+            if result not in (0x00000000, 0x00000080):  # WAIT_OBJECT_0 / WAIT_ABANDONED
+                raise OSError(f"WaitForSingleObject failed with result 0x{result:08x}")
+            acquired = True
+            yield True
+        finally:
+            if acquired:
+                release_mutex(handle)
+            close_handle(handle)
+        return
+
+    import fcntl
+
+    lock_path = resolved.with_name("transaction.lock")
+    with lock_path.open("a+b") as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -53,7 +123,10 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
         )
         temporary.replace(path)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _load_plan(plan_path: Path) -> dict[str, Any]:
@@ -120,13 +193,16 @@ def _load_plan(plan_path: Path) -> dict[str, Any]:
         raise ValueError("staged update is stored outside the update directory")
 
     for field in ("pid", "old_version", "new_version"):
-        if isinstance(plan[field], bool):
+        if type(plan[field]) is not int:
             raise ValueError(f"update transaction {field} is invalid")
+    created_value = plan["created_at"]
+    if isinstance(created_value, bool) or not isinstance(created_value, (int, float)):
+        raise ValueError("update transaction timestamp is invalid")
     try:
-        pid = int(plan["pid"])
-        old_version = int(plan["old_version"])
-        new_version = int(plan["new_version"])
-        created_at = float(plan["created_at"])
+        pid = plan["pid"]
+        old_version = plan["old_version"]
+        new_version = plan["new_version"]
+        created_at = float(created_value)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError("update transaction numeric fields are invalid") from exc
     if pid <= 0 or old_version <= 0 or new_version <= old_version:
@@ -152,7 +228,10 @@ def _load_plan(plan_path: Path) -> dict[str, Any]:
     if not isinstance(legacy_value, bool) or not isinstance(warning_value, bool):
         raise ValueError("update transaction boolean fields are invalid")
     legacy = legacy_value
-    legacy_backup = str(plan.get("legacy_backup_path", ""))
+    legacy_backup_value = plan.get("legacy_backup_path", "")
+    if not isinstance(legacy_backup_value, str):
+        raise ValueError("legacy update backup path is invalid")
+    legacy_backup = legacy_backup_value
     if legacy:
         backup = Path(legacy_backup).resolve()
         if backup != Path(str(old) + ".old").resolve():
@@ -267,12 +346,65 @@ def _read_valid_health(
         expected["pid"] = int(expected_pid)
     if not all(health.get(key) == value for key, value in expected.items()):
         return None
-    if not isinstance(health.get("pid"), int) or int(health["pid"]) <= 0:
+    if type(health.get("schema")) is not int or type(health.get("version")) is not int:
+        return None
+    if type(health.get("pid")) is not int or int(health["pid"]) <= 0:
+        return None
+    initialized_at = health.get("initialized_at")
+    if (
+        isinstance(initialized_at, bool)
+        or not isinstance(initialized_at, (int, float))
+        or not math.isfinite(float(initialized_at))
+        or float(initialized_at) <= 0.0
+    ):
         return None
     new = Path(plan["new_path"])
     if not new.is_file() or sha256(new).lower() != plan["new_sha256"]:
         return None
     return health
+
+
+def _health_process_is_running(
+    plan_path: Path,
+    plan: dict[str, Any],
+    *,
+    health: dict[str, Any] | None = None,
+) -> bool:
+    health = _read_valid_health(plan_path, plan) if health is None else health
+    if health is None:
+        return False
+    try:
+        process = psutil.Process(int(health["pid"]))
+        if not process.is_running():
+            return False
+        running_path = Path(process.exe()).resolve()
+        expected_path = Path(plan["new_path"]).resolve()
+        return os.path.normcase(str(running_path)) == os.path.normcase(str(expected_path))
+    except psutil.AccessDenied:
+        # Access denied is not evidence that the ACK process died. Preserving
+        # the healthy candidate is safer than rolling it back underneath a
+        # protected process.
+        return True
+    except (KeyError, TypeError, ValueError, OSError, psutil.Error):
+        return False
+
+
+def _observe_recovery_health(
+    plan_path: Path,
+    plan: dict[str, Any],
+    *,
+    survival_seconds: float,
+) -> bool:
+    health = _read_valid_health(plan_path, plan)
+    if health is None:
+        return False
+    deadline = time.monotonic() + max(0.0, survival_seconds)
+    while True:
+        if not _health_process_is_running(plan_path, plan, health=health):
+            return False
+        if time.monotonic() >= deadline:
+            return _read_valid_health(plan_path, plan) is not None
+        time.sleep(0.05)
 
 
 def wait_for_health(
@@ -365,9 +497,43 @@ def _stale_release_candidates(
     return [path for _version, path in canonical], [path for _version, path in sidecars]
 
 
-def _stop_process(process) -> None:
+def _stop_process(process) -> bool:
+    """Stop the launched process tree and report whether it is gone."""
     if process is None or not _process_running(process):
-        return
+        return True
+
+    # A PyInstaller one-file launch has an outer bootloader plus an inner
+    # application process. Terminating only the outer process can orphan the
+    # inner process and leave the just-installed EXE locked. psutil is already
+    # a pinned application dependency and lets the frozen helper stop the exact
+    # descendant tree that it launched before attempting rollback.
+    if isinstance(process, _POPEN_CLASS):
+        try:
+            root = psutil.Process(int(process.pid))
+            descendants = root.children(recursive=True)
+            process_tree = [*reversed(descendants), root]
+            for child in process_tree:
+                try:
+                    child.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            _gone, alive = psutil.wait_procs(process_tree, timeout=5.0)
+            for child in alive:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            _gone, alive = psutil.wait_procs(alive, timeout=3.0)
+            try:
+                process.wait(timeout=0.5)
+            except Exception:
+                pass
+            return not alive and not _process_running(process)
+        except Exception:
+            # Fall through to the Popen-compatible termination path. A failed
+            # stop is handled conservatively by leaving the journal recoverable.
+            pass
+
     terminate = getattr(process, "terminate", None)
     if callable(terminate):
         try:
@@ -379,7 +545,38 @@ def _stop_process(process) -> None:
         try:
             wait(timeout=5.0)
         except Exception:
-            pass
+            kill = getattr(process, "kill", None)
+            if callable(kill):
+                try:
+                    kill()
+                    wait(timeout=3.0)
+                except Exception:
+                    pass
+    return not _process_running(process)
+
+
+def _restore_legacy_old(
+    plan: dict[str, Any],
+    *,
+    remove_wrong_named_new: bool,
+) -> None:
+    """Restore and verify the legacy rollback EXE before commit or rollback."""
+    old = Path(plan["old_path"])
+    backup = Path(plan["legacy_backup_path"])
+    expected_old = plan["old_sha256"]
+    expected_new = plan["new_sha256"]
+    if _file_matches(old, expected_old):
+        return
+    if old.exists():
+        if not remove_wrong_named_new or not _file_matches(old, expected_new):
+            raise ValueError("legacy rollback target contains unexpected bytes")
+        if not _unlink_with_retry(old):
+            raise OSError(f"could not remove wrong-named update executable: {old}")
+    if not _file_matches(backup, expected_old):
+        raise ValueError("legacy rollback version is missing or changed")
+    backup.replace(old)
+    if not _file_matches(old, expected_old):
+        raise ValueError("legacy rollback version could not be restored")
 
 
 def _continue_commit(plan_path: Path, plan: dict[str, Any]) -> None:
@@ -423,7 +620,7 @@ def _continue_commit(plan_path: Path, plan: dict[str, Any]) -> None:
     )
 
 
-def recover(plan_path: Path) -> None:
+def recover(plan_path: Path, *, health_survival_seconds: float = 3.0) -> None:
     """Conservatively resume an interrupted transaction on a later launch."""
     plan_path = Path(plan_path).resolve()
     plan = _load_plan(plan_path)
@@ -433,35 +630,131 @@ def recover(plan_path: Path) -> None:
 
     old = Path(plan["old_path"])
     new = Path(plan["new_path"])
-    old_ok = old.is_file() and sha256(old).lower() == plan["old_sha256"]
-    new_ok = new.is_file() and sha256(new).lower() == plan["new_sha256"]
-    healthy = _read_valid_health(plan_path, plan) is not None
+    staged = Path(plan["staged_path"])
+    legacy = bool(plan.get("legacy_r6_bootstrap", False))
+    old_ok = _file_matches(old, plan["old_sha256"])
+    new_ok = _file_matches(new, plan["new_sha256"])
+    post_health_phase = phase in {"shortcuts_migrating", "cleanup_pending"}
+    healthy = False
+    if not post_health_phase and _read_valid_health(plan_path, plan) is not None:
+        healthy = _observe_recovery_health(
+            plan_path,
+            plan,
+            survival_seconds=health_survival_seconds,
+        )
+        if not healthy:
+            try:
+                plan_path.with_name("health.json").unlink(missing_ok=True)
+            except OSError:
+                pass
 
-    if phase in {"shortcuts_migrating", "cleanup_pending"} or healthy:
+    if post_health_phase or healthy:
         if not new_ok:
             raise ValueError("cannot resume commit because the new executable is invalid")
+        if legacy:
+            # A crash can occur after moving the wrong-named new bytes but
+            # before restoring the legacy rollback EXE. Restore it before
+            # shortcut migration so links to the old canonical path remain
+            # valid until they have been migrated.
+            _restore_legacy_old(plan, remove_wrong_named_new=True)
         _continue_commit(plan_path, plan)
         return
 
     if phase in {"new_installed", "waiting_health"}:
+        if legacy:
+            _restore_legacy_old(plan, remove_wrong_named_new=True)
+            old_ok = _file_matches(old, plan["old_sha256"])
         if not old_ok:
             raise ValueError("cannot roll back because the old executable is invalid")
-        if new.exists() and not _unlink_with_retry(new):
-            raise OSError(f"could not remove unconfirmed update executable: {new}")
+        if new.exists():
+            if not new_ok:
+                raise ValueError("unconfirmed update executable changed; refusing to delete it")
+            if not _unlink_with_retry(new):
+                raise OSError(f"could not remove unconfirmed update executable: {new}")
         _set_phase(plan_path, plan, "rolled_back")
         return
 
     if phase in {"prepared", "waiting_old_exit"}:
-        if bool(plan.get("legacy_r6_bootstrap", False)):
+        if legacy:
             # The wrong-named R7 process may still be running from the R6
             # helper. Its startup bootstrap will create a fresh, bounded plan.
+            # If file movement already started before a crash, however, finish
+            # restoring the real old version and remove only the hash-matching
+            # unconfirmed new target.
+            if _file_matches(old, plan["new_sha256"]):
+                return
+            _restore_legacy_old(plan, remove_wrong_named_new=True)
+            if new.exists():
+                if not new_ok:
+                    raise ValueError("legacy update target changed; refusing to delete it")
+                if not _unlink_with_retry(new):
+                    raise OSError(f"could not remove unconfirmed update executable: {new}")
+            _set_phase(plan_path, plan, "rolled_back")
             return
         if not old_ok:
             raise ValueError("prepared transaction no longer has a valid old executable")
+        # If the staged file has already been consumed, the helper crashed in
+        # the narrow move -> journal-write gap. The matching canonical target
+        # is owned by this attempt and can be rolled back safely. A preexisting
+        # matching target is preserved while the staged file still exists.
+        if not staged.exists() and new.exists():
+            if not new_ok:
+                raise ValueError("update target changed; refusing to delete it")
+            if not _unlink_with_retry(new):
+                raise OSError(f"could not remove unconfirmed update executable: {new}")
         _set_phase(plan_path, plan, "rolled_back")
         return
 
     raise ValueError(f"unsupported recovery phase: {phase}")
+
+
+def _rollback_failed_apply(
+    plan_path: Path,
+    plan: dict[str, Any],
+    *,
+    process,
+    new_owned: bool,
+    old_exited: bool,
+) -> None:
+    """Roll back only files this apply attempt proved it owned."""
+    old = Path(plan["old_path"])
+    new = Path(plan["new_path"])
+    expected_old = plan["old_sha256"]
+    expected_new = plan["new_sha256"]
+    legacy = bool(plan.get("legacy_r6_bootstrap", False))
+    problems: list[str] = []
+
+    if not _stop_process(process):
+        problems.append("the launched update process tree is still running")
+
+    if new_owned and new.exists():
+        if not _file_matches(new, expected_new):
+            problems.append("the unconfirmed update executable changed and was preserved")
+        elif not _unlink_with_retry(new):
+            problems.append("the unconfirmed update executable could not be removed")
+
+    if legacy:
+        try:
+            _restore_legacy_old(plan, remove_wrong_named_new=old_exited or new_owned)
+        except (OSError, ValueError) as exc:
+            problems.append(str(exc))
+
+    if not _file_matches(old, expected_old):
+        problems.append("the previous executable is not available with its expected checksum")
+
+    if problems:
+        # Do not write a false terminal state. A later startup can retry the
+        # same hash-bound journal after process/file locks have cleared.
+        raise RuntimeError("; ".join(dict.fromkeys(problems)))
+
+    _set_phase(plan_path, plan, "rolled_back")
+    if old_exited:
+        try:
+            subprocess.Popen([str(old), *plan.get("args", [])], cwd=str(old.parent))
+        except OSError:
+            # The verified old EXE and terminal journal are intact; a failed
+            # convenience restart does not make the rollback destructive.
+            pass
 
 
 def apply(
@@ -481,42 +774,51 @@ def apply(
     backup = Path(plan["legacy_backup_path"]) if legacy else None
     process = None
     health_confirmed = False
+    new_owned = False
+    old_exited = False
 
-    if not staged.is_file() or sha256(staged).lower() != expected_new:
+    if plan["phase"] != "prepared":
+        raise ValueError(f"update transaction cannot be applied from phase {plan['phase']}")
+    if not _file_matches(staged, expected_new):
         raise ValueError("staged update failed checksum validation")
     if legacy:
-        if not old.is_file() or sha256(old).lower() != expected_new:
+        if not _file_matches(old, expected_new):
             raise ValueError("legacy running version does not contain the new bytes")
-        if backup is None or not backup.is_file() or sha256(backup).lower() != expected_old:
+        if backup is None or not _file_matches(backup, expected_old):
             raise ValueError("legacy rollback version failed checksum validation")
-    elif not old.is_file() or sha256(old).lower() != expected_old:
+    elif not _file_matches(old, expected_old):
         raise ValueError("running version failed checksum validation")
 
     try:
         _set_phase(plan_path, plan, "waiting_old_exit")
         wait_for_pid(int(plan["pid"]))
+        old_exited = True
         if legacy:
-            if not old.is_file() or sha256(old).lower() != expected_new:
+            if not _file_matches(old, expected_new):
                 raise ValueError("legacy running version changed before installation")
-            if backup is None or not backup.is_file() or sha256(backup).lower() != expected_old:
+            if backup is None or not _file_matches(backup, expected_old):
                 raise ValueError("legacy rollback version changed before installation")
             if new.exists():
-                if not new.is_file() or sha256(new).lower() != expected_new:
+                if not _file_matches(new, expected_new):
                     raise FileExistsError(f"unexpected canonical update target: {new}")
                 old.unlink()
+                new_owned = True
             else:
                 old.replace(new)
+                new_owned = True
             backup.replace(old)
             staged.unlink(missing_ok=True)
         else:
-            if not old.is_file() or sha256(old).lower() != expected_old:
+            if not _file_matches(old, expected_old):
                 raise ValueError("running version changed before installation")
             if new.exists():
-                if not new.is_file() or sha256(new).lower() != expected_new:
+                if not _file_matches(new, expected_new):
                     raise FileExistsError(f"unexpected canonical update target: {new}")
                 staged.unlink(missing_ok=True)
+                new_owned = True
             else:
                 staged.replace(new)
+                new_owned = True
         _set_phase(plan_path, plan, "new_installed")
         _set_phase(plan_path, plan, "waiting_health")
         command = [
@@ -537,31 +839,25 @@ def apply(
         )
         health_confirmed = True
         _continue_commit(plan_path, plan)
-    except Exception:
+    except Exception as update_error:
         if health_confirmed:
             try:
                 _set_phase(plan_path, plan, "cleanup_pending")
             except Exception:
                 pass
             raise
-        _stop_process(process)
-        _unlink_with_retry(new)
-        if legacy and backup is not None:
-            try:
-                if old.is_file() and sha256(old).lower() != expected_old:
-                    _unlink_with_retry(old)
-                if not old.exists() and backup.is_file() and sha256(backup).lower() == expected_old:
-                    backup.replace(old)
-            except OSError:
-                pass
         try:
-            _set_phase(plan_path, plan, "rolled_back")
-        finally:
-            if old.is_file() and sha256(old).lower() == expected_old:
-                try:
-                    subprocess.Popen([str(old), *plan.get("args", [])], cwd=str(old.parent))
-                except OSError:
-                    pass
+            _rollback_failed_apply(
+                plan_path,
+                plan,
+                process=process,
+                new_owned=new_owned,
+                old_exited=old_exited,
+            )
+        except Exception as rollback_error:
+            raise RuntimeError(
+                f"update failed and rollback remains pending: {rollback_error}"
+            ) from update_error
         raise
 
 
@@ -621,11 +917,17 @@ def main() -> int:
         return 2
     plan_path = Path(sys.argv[-1]).resolve()
     try:
-        if recovery:
-            recover(plan_path)
-        else:
-            apply(plan_path)
-        _warn_shortcut_failures_once(plan_path)
+        with _transaction_lock(plan_path) as acquired:
+            if not acquired:
+                # The original apply/recovery helper still owns this exact
+                # transaction. It is safer for a duplicate startup recovery to
+                # stand down than to mutate the same journal concurrently.
+                return 0
+            if recovery:
+                recover(plan_path)
+            else:
+                apply(plan_path)
+            _warn_shortcut_failures_once(plan_path)
     except Exception as exc:
         log = plan_path.parent.parent.parent / "update-helper-error.log"
         try:

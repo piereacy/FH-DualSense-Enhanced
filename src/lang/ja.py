@@ -303,6 +303,46 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Custom Xbox button mapping": "Xbox ボタンのカスタム割り当て",
+    "Customize the digital buttons sent by the Xbox App bridge. Sticks and L2/R2 remain unchanged.": "Xbox App ブリッジが送信するデジタルボタンを変更します。スティックと L2/R2 は変更されません。",
+    "Enable custom Xbox mapping": "カスタム Xbox マッピングを有効化",
+    "Restore Steam defaults": "Steam の既定値に戻す",
+    "Face buttons": "フェイスボタン",
+    "Shoulder and system buttons": "ショルダー／システムボタン",
+    "D-pad": "方向パッド",
+    "Touchpad": "タッチパッド",
+    "Cross": "×ボタン",
+    "Circle": "○ボタン",
+    "Square": "□ボタン",
+    "Triangle": "△ボタン",
+    "D-pad up": "方向パッド上",
+    "D-pad down": "方向パッド下",
+    "D-pad left": "方向パッド左",
+    "D-pad right": "方向パッド右",
+    "Touchpad left click": "タッチパッド左クリック",
+    "Touchpad right click": "タッチパッド右クリック",
+    "Disabled": "無効",
+    "Left shoulder": "左ショルダー",
+    "Right shoulder": "右ショルダー",
+    "View / Back": "ビュー／戻る",
+    "Menu / Start": "メニュー／スタート",
+    "Left stick click": "左スティック押し込み",
+    "Right stick click": "右スティック押し込み",
+    "Guide": "ガイド",
+    "A": "A",
+    "B": "B",
+    "X": "X",
+    "Y": "Y",
+    "L1": "L1",
+    "R1": "R1",
+    "Create": "Create",
+    "Options": "Options",
+    "L3": "L3",
+    "R3": "R3",
+    "PS": "PS",
+})
+
+STRINGS.update({
     "L2 - Brake": "L2 - ブレーキ",
     "R2 - Throttle": "R2 - アクセル",
 })
@@ -518,4 +558,10 @@ STRINGS.update({
     "File contents are swapped. Game updates may restore the original files.": "ファイル内容は入れ替わっています。ゲーム更新で元のファイルに戻る場合があります。",
     "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Game updates or file verification may restore the original files.": "FHDS は CHS.zip と EN.zip の名前を入れ替えます。先に FH6 を終了してください。ゲーム更新やファイル検証で元に戻る場合があります。",
     "FH6 game language could not be verified as English. Continue only if the game is configured for English.": "FH6 の現在のゲーム言語が英語であることを確認できませんでした。ゲームが英語に設定されている場合のみ続行してください。",
+})
+
+STRINGS.update({
+    "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "ここでボタンを変更するには、Forza プラットフォームで「Xbox App」を選択してください。Steam 版を使用している場合は、Steam 内でコントローラーの割り当てを変更してください。",
+    "Or download manually: {url}": "または手動でダウンロード: {url}",
+    "Project repository": "プロジェクトリポジトリ",
 })

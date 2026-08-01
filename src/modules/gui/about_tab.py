@@ -9,6 +9,7 @@ from modules.about import (
     ATTRIBUTION,
     CONTROLLER_ICON_MOD_ATTRIBUTION,
     CONTROLLER_ICON_MOD_URL,
+    PROJECT_URL,
     SOURCE_URL,
     SPONSOR_URL,
     THIRD_PARTY_LINKS,
@@ -41,6 +42,12 @@ class AboutTab(ctk.CTkFrame):
         W.Body(card, ATTRIBUTION, wraplength=self.app.px(620)).pack(
             anchor="w", fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD)
         )
+        W.GhostButton(
+            card,
+            text=f"{t('Project repository')}: {PROJECT_URL}",
+            command=lambda: self.app._open_url(PROJECT_URL),
+            anchor="w",
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
         W.GhostButton(
             card,
             text=f"Source: {SOURCE_URL}",

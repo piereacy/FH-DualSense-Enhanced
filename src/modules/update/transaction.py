@@ -237,7 +237,10 @@ def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
         )
         temporary.replace(path)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def transaction_path(root: Path, transaction_id: str) -> Path:

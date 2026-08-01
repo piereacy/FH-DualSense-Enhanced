@@ -314,6 +314,46 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Custom Xbox button mapping": "Пользовательская раскладка кнопок Xbox",
+    "Customize the digital buttons sent by the Xbox App bridge. Sticks and L2/R2 remain unchanged.": "Настройте цифровые кнопки моста Xbox App. Стики и L2/R2 не изменяются.",
+    "Enable custom Xbox mapping": "Включить пользовательскую раскладку Xbox",
+    "Restore Steam defaults": "Восстановить раскладку Steam",
+    "Face buttons": "Лицевые кнопки",
+    "Shoulder and system buttons": "Бамперы и системные кнопки",
+    "D-pad": "Крестовина",
+    "Touchpad": "Сенсорная панель",
+    "Cross": "Крест",
+    "Circle": "Круг",
+    "Square": "Квадрат",
+    "Triangle": "Треугольник",
+    "D-pad up": "Крестовина вверх",
+    "D-pad down": "Крестовина вниз",
+    "D-pad left": "Крестовина влево",
+    "D-pad right": "Крестовина вправо",
+    "Touchpad left click": "Левое нажатие сенсорной панели",
+    "Touchpad right click": "Правое нажатие сенсорной панели",
+    "Disabled": "Отключено",
+    "Left shoulder": "Левый бампер",
+    "Right shoulder": "Правый бампер",
+    "View / Back": "Просмотр / Назад",
+    "Menu / Start": "Меню / Старт",
+    "Left stick click": "Нажатие левого стика",
+    "Right stick click": "Нажатие правого стика",
+    "Guide": "Guide",
+    "A": "A",
+    "B": "B",
+    "X": "X",
+    "Y": "Y",
+    "L1": "L1",
+    "R1": "R1",
+    "Create": "Create",
+    "Options": "Options",
+    "L3": "L3",
+    "R3": "R3",
+    "PS": "PS",
+})
+
+STRINGS.update({
     "L2 - Brake": "L2 - тормоз",
     "R2 - Throttle": "R2 - газ",
 })
@@ -522,4 +562,10 @@ STRINGS.update({
     "File contents are swapped. Game updates may restore the original files.": "Содержимое файлов переставлено. Обновление игры может восстановить оригинальные файлы.",
     "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Game updates or file verification may restore the original files.": "FHDS поменяет местами имена CHS.zip и EN.zip. Сначала закройте FH6. Обновление или проверка файлов игры может восстановить оригиналы.",
     "FH6 game language could not be verified as English. Continue only if the game is configured for English.": "Не удалось подтвердить английский как текущий язык FH6. Продолжайте только если игра настроена на английский язык.",
+})
+
+STRINGS.update({
+    "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "Чтобы настроить кнопки здесь, выберите Xbox App в качестве платформы Forza. Для версии Steam изменяйте раскладку контроллера в Steam.",
+    "Or download manually: {url}": "Или скачать вручную: {url}",
+    "Project repository": "Репозиторий проекта",
 })

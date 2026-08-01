@@ -12,7 +12,6 @@ from modules.update.presentation import (
     UpdateStatusPresentation,
     update_status_presentation,
 )
-
 from . import theme as T
 from . import widgets as W
 from .settings_tab import SYSTEM_SECTIONS, SettingsTab
@@ -39,6 +38,8 @@ class SystemTab(SettingsTab):
         self._update_progress: ctk.CTkProgressBar | None = None
         self._update_action: ctk.CTkButton | None = None
         self._release_button: ctk.CTkButton | None = None
+        self._manual_download_link: "W.Hint | None" = None
+        self._update_actions: ctk.CTkFrame | None = None
         self._update_presentation: UpdateStatusPresentation | None = None
         self._controller_card: "W.Card | None" = None
         self._dsx_note: "W.Hint | None" = None
@@ -157,7 +158,17 @@ class SystemTab(SettingsTab):
         self._update_progress.set(0)
         self._update_progress.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
 
-        actions = ctk.CTkFrame(card, fg_color="transparent")
+        self._manual_download_link = W.Hint(card, "", wrap=self.app.px(640))
+        self._manual_download_link.configure(
+            cursor="hand2",
+            text_color=T.ACCENT_SOFT,
+        )
+        self._manual_download_link.bind(
+            "<Button-1>",
+            lambda _event: self._open_manual_download(),
+        )
+
+        actions = self._update_actions = ctk.CTkFrame(card, fg_color="transparent")
         actions.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
         check_button = W.SecondaryButton(
             actions, t("Check now"), self._on_check_update, width=120
@@ -329,6 +340,11 @@ class SystemTab(SettingsTab):
         if release is not None and release.html_url:
             self.app._open_url(release.html_url)
 
+    def _open_manual_download(self):
+        release = self.app._update_service.snapshot().release
+        if release is not None and release.asset_url:
+            self.app._open_url(release.asset_url)
+
     def _refresh_update_status(self):
         if self.app._tearing_down:
             return
@@ -370,6 +386,26 @@ class SystemTab(SettingsTab):
                     self._release_button.pack(side="left")
                 elif previous is not None and previous.release_visible:
                     self._release_button.pack_forget()
+            if self._manual_download_link is not None and (
+                previous is None
+                or current.manual_download_url != previous.manual_download_url
+            ):
+                if current.manual_download_url:
+                    self._manual_download_link.configure(
+                        text=t("Or download manually: {url}").format(
+                            url=current.manual_download_url
+                        )
+                    )
+                    pack_options = {
+                        "fill": "x",
+                        "padx": T.PAD_MD,
+                        "pady": (0, T.PAD_SM),
+                    }
+                    if self._update_actions is not None:
+                        pack_options["before"] = self._update_actions
+                    self._manual_download_link.pack(**pack_options)
+                else:
+                    self._manual_download_link.pack_forget()
         self.app.root.after(250, self._refresh_update_status)
 
     def _refresh_widgets(self):

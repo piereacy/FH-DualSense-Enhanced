@@ -1,13 +1,13 @@
 # FH-DualSense-Enhanced 当前项目状态
 
-最后更新时间：2026-07-30
+最后更新时间：2026-08-02
 
 ## 当前阶段
 
-- 当前开发版本：`Enhanced R8`，`src/pyproject.toml` 版本为 `8`。
+- 当前开发版本：`Enhanced R9`，`src/pyproject.toml` 版本为 `9`。
 - 当前公开稳定版：GitHub Release `R8`，tag `R8` 指向 `d810c11`，发布于 2026-07-30。
-- 当前阶段：R8 源码、双语 Release、Windows EXE、Linux ELF 和 ZUV 已正式发布。R8 修复 L2/R2 基础阻力关闭后仍残留顶部双 zone firmware end wall、导致约 89% 行程被定住的问题；同时新增全部自适应扳机输出总开关，修复旧式多跳更新造成的文件名落后和 `.old` 未消费。扳机页整行布局与高 DPI 说明文字裁切已修正，电动车红线 gate 已收敛为全部电驱关闭触觉并保留极限灯效，燃油车默认提前提醒后移到学习红线的 95%。中英双语 Release 正文只保留四类用户可感知更新、安装与必需设置，内部链路已归档到老三样并关闭自动生成的 commit notes；Bluetooth 协议参考已从原始采用的 vDS `0.3.0-rc7` 复核到 `0.4.0-rc1`，封包代码无需变化。线上 Windows 资产已重新下载并完成独立字节、PE、manifest 与无界面启动校验。
-- 当前开发重心：用实际 R7 内置更新按钮完成线上 R7 → R8 端到端验收，并继续真实 Forza/DualSense 行程测试，确认燃油车警告时机、单挡/多挡电动车触觉静默与灯条极限显示。不得为了后续修复改动已知可用的 R7 USB/BT 握把生命周期。
+- 当前阶段：R8 源码、双语 Release、Windows EXE、Linux ELF 和 ZUV 已正式发布且保持不可变。R9 实现已在 commit `2e9eb2a` 提交并推送到 `agent/r9-updater-xbox-mapping`，草稿 PR [#1](https://github.com/piereacy/FH-DualSense-Enhanced/pull/1) 面向 `main` 且当前可干净合并。R9 中英双语 Release 正文已完成并获用户确认，当前等待把发布准备提交到 PR、合并并触发正式 Release。
+- 当前开发重心：提交已确认的 R9 Release 正文与文档，合并 PR #1 并触发正式发布；发布后不再重复运行测试或下载线上资产，只确认 GitHub Release 元数据与工作流终态。隔离的合成 R9 → R10 one-file 矩阵已经证明后续内置更新可正确改名、清理旧版/`.old`、拒绝真多开并完成失败回滚；但已发布 R8 的旧入口不能自行取得这段新代码，Release 必须明确要求 R8 用户手动安装一次 R9。不得为了后续修复改动已知可用的 R7 USB/BT 握把生命周期。
 - R8 Release：<https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R8>。
 
 ## 代码中已经实现
@@ -20,8 +20,10 @@
 - 旧覆盖式 Helper 输出由一次性第二阶段处理：运行 PE 必须等于当前版本，紧邻 `.old` 的 PE 必须不低于文件名版本且低于当前版本。该顺序兼容 `R5.exe` 内置更高版本、`.old` 保存中间回滚版本的多跳形态；随后安装当前规范文件名并提交健康状态。快捷方式部分失败时保留真实回滚版本，而不是盲删 `.old`。
 - `packaging/windows/shortcut_links.py` 使用原生 Shell Link COM 扫描当前用户 Desktop、Programs 和已知 pinned 目录，只迁移绝对 target 精确匹配旧 EXE 的 `.lnk`，并保留参数、工作目录和 icon index。
 - 健康提交后会枚举同目录全部严格命名且低于新版的规范 EXE，逐个迁移快捷方式并静默删除；严格同名的旧 `.exe.old` 与 `.exe.sha256` 也会清理，包括 R5 更新遗留。其他 EXE、任意 `.old`、同版和更高版本不在清理范围；某一旧版快捷方式失败时只保留该规范 EXE。
-- 安装前验证应用目录可写并阻止同一目录内其他规范版本进程参与更新；Helper/主程序竞争、陈旧 ACK、启动恢复和有限重试均有测试。
+- 安装前验证应用目录可写并阻止同一目录内其他规范版本进程参与更新；当前 one-file 内层进程及其同路径直接 bootloader 父进程按一个实例处理，另一次独立启动的进程对仍会阻止更新。legacy bootstrap 使用同一实例保护。每个 transaction 由跨进程锁串行化，主程序不再直接竞争写 pre-install phase。
 - PyInstaller one-file 外层 bootloader 和内层应用 PID 不同的情况已处理：token 验证 ACK 身份，Helper 监视自己启动的外层进程存活。
+- apply 只回收本次已接管且哈希仍匹配的新版；健康失败会停止完整 one-file 后代树，删除/停止/legacy 恢复任一步失败都保持可恢复的非终态，不再虚假写 `rolled_back`。恢复提交重新验证 ACK PID/实际 EXE 并观察约 3 秒；移动完成但 journal 尚未进入下一 phase 的断电窗口也按三端哈希收口。
+- `.sha256` 只接受单个 digest 或明确指向当前规范资产的单行记录；pending 更新重载会复核严格字段、HTTPS、大小、MZ 和哈希。Helper 调度失败后 GUI/TUI 回到 `ready`，关闭冲突实例后可以原地重试。
 
 ### 2. DualSense 连接真值、电量和拓扑切换
 
@@ -47,13 +49,14 @@
 - 顶部 DualSense 状态框显示 phase、USB/BT、电量和充电状态。仅使用电池且为 10% 时电量细节为红色，连接点仍为绿色；断开后不保留旧电量。Profile/控制器控件已收敛为 28 logical px 高、8 logical px 圆角的小型状态框，并跳过相同状态的重复渲染。
 - UDP bind 错误只进入总览遥测状态与日志，不再覆盖顶部控制器 Pill。全部非英语 catalog 已补齐新字段。
 - `src/modules/feedback_schema.py` 统一声明扳机与握把字段归属。GUI/Console 的 `Trigger feedback` 顶部显示 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、调节和扳机实验项；`Grip haptics` 只显示独立握把开关、调节和握把实验项。两页字段互斥并由翻译覆盖测试约束。
+- GUI 左侧导航与 TUI 顶层标签新增独立的“自定义 XBOX 按键映射”页面，全部映射项直接展示，不再放在系统页或折叠子界面。开关和 17 个数字来源属于 global 设置，不进入车辆 Profile 或分享码；关闭开关立即恢复 Steam 默认输出但保留自定义值，一键恢复只重置映射。只有游戏平台选择 Xbox App 时才允许启用或编辑；Steam 模式锁定控件、保留已存值，并明确告知用户应在 Steam 内自行修改映射。全部非英语 catalog 已覆盖该界面。
 
 ### 4. Windows Per-Monitor v2 与可复现构建
 
 - `packaging/windows/fhds.manifest` 为主 EXE 与 Update Helper 声明 `PerMonitorV2, PerMonitor`、旧 fallback 和 `asInvoker`。
 - `packaging/windows/dpi_runtime_hook.py` 与 `src/main.py` 在任何 Tk/CustomTkinter 窗口前调用 `modules.dpi.bootstrap_windows_dpi()`；旧的 GUI 构造后 `SetProcessDpiAwareness(2)` 已删除。
 - `src/modules/dpi.py` 查询实际 thread/window awareness、窗口 DPI 与缩放率。GUI 系统页显示该诊断，不是 PMv2 时提示检查 Windows 兼容性覆盖，不修改注册表。
-- `src/modules/gui/widgets.py` 让隐藏页暂停 `FastScroll` canvas 尺寸回流，可见页以 40 ms debounce 合并 resize；反馈开关卡片以 80 ms debounce 处理列数变化并复用既有 grid item。卡片说明按实际内宽换行：Tk configure 事件的物理像素先换回 CustomTkinter logical px，`W.Hint` 再根据文本请求高度增长，避免双列、窗口缩放和 125% DPI 下裁切后半句。`src/modules/gui/main.py` 在 `tkraise()` 导航边界切换活跃页，避免最大化时所有常驻长页同时重新布局；系统更新卡片只在稳定 presentation 变化时重绘，不再每 250 ms 无条件显隐按钮。
+- `src/modules/gui/widgets.py` 让隐藏页暂停 `FastScroll` canvas 尺寸回流，可见页以 40 ms debounce 合并 resize；反馈开关卡片以 80 ms debounce 处理列数变化并复用既有 grid item。卡片说明按实际内宽换行：Tk configure 事件的物理像素先换回 CustomTkinter logical px，`W.Hint` 再根据文本请求高度增长，避免双列、窗口缩放和 125% DPI 下裁切后半句。`src/modules/gui/main.py` 在 `tkraise()` 导航边界切换活跃页，避免最大化时所有常驻长页同时重新布局；系统更新卡片只在稳定 presentation 变化时重绘，不再每 250 ms 无条件显隐按钮。新版本快照现在同时显示可点击的规范 EXE 手动下载直链，GUI 使用可换行标签避免长 URL 裁切，TUI 提供同一入口。
 - `src/pyproject.toml` 和 `src/uv.lock` 固定 PyInstaller `6.16.0`；`packaging/windows/build_exe.bat` 使用 `uv run --project src --frozen pyinstaller` 构建 Helper 和主 EXE，不再用任意最新 `uvx` 解析。
 - 审计后的 R7 候选已重新嵌入并验证 PMv2 manifest、R7 PE 版本资源和项目图标；精确产物信息见下方“已执行的测试和验证”。
 
@@ -79,9 +82,12 @@
 ### 7. Xbox bridge 长时间运行恢复与诊断
 
 - `src/modules/xinput/bridge.py` 在 100 ms 无新输入时只发送一次中立状态，bridge 模式仍启用期间保留同一个 X360 target/player slot；新物理报告直接复用 target，切回 Steam 或停止应用时才移除。
+- USB/BT 共用输入解析现识别触摸板 click 和活动触点横坐标，并按本机 Steam PS5 Gamepad 模板把左半区映射为 Back/View、右半区映射为 Start/Menu；Create/Options 保留相同的独立入口。坐标不用于滑动或多点手势，麦克风键仍不进入 XInput。
+- `src/modules/xinput/mapping.py` 统一声明 17 个数字来源、16 个 Xbox 目标（含 Disabled）和 Steam 默认值；非法偏好逐来源回退。自定义映射开启时可交换或合并数字键，摇杆轴与 L2/R2 模拟输入始终固定。GUI/TUI 独立页面只有在游戏平台选择 Xbox App 时才开放自定义开关、映射菜单和恢复动作；Steam 模式保留设置但锁定编辑。bridge 通过 mapping revision 重发仍新鲜的 latest state，热更新不会重建 X360 target/player slot。
+- “关于与许可证”现同时显示当前项目仓库 `https://github.com/piereacy/FH-DualSense-Enhanced`，并继续保留原作者、原项目、Sponsor、第三方组件和 Nexus MOD 链接。
 - ViGEm 非 driver-missing session 异常会清理旧 target/client，并按 0.25/1/5 秒上限自动重建。driver 缺失仍维持稳定状态等待用户安装或显式重试；旧输入不会跨 stop/restart 回放。
 - `src/modules/runtime_logging.py` 为 GUI、TUI 和 headless 安装 2 MiB、两个备份的轮转 `data/runtime.log`；UI 关闭日志 handler 后，backend teardown 仍可写入。该文件用于用户反馈“玩到后面不认手柄”时区分 HID CRC、worker、ViGEm 和 handover 故障。
-- 自动测试已覆盖 target 保留、stale 后复用、ViGEm update 异常重建、物理 worker 恢复、手动 reconnect 复活 dead worker、Bluetooth stall 静音/降级及日志 handler。真实 DualSense Edge、Xbox App 游戏和 30 至 60 分钟 Bluetooth 压力测试未执行。
+- 自动测试已覆盖 target 保留、stale 后复用、映射热更新时保持同一 target、非法 target 回退、global 持久化与恢复、GUI/TUI schema/翻译契约、ViGEm update 异常重建、物理 worker 恢复、手动 reconnect 复活 dead worker、Bluetooth stall 静音/降级及日志 handler。真实 DualSense Edge、Xbox App 游戏和 30 至 60 分钟 Bluetooth 压力测试未执行。
 
 ### 8. Xbox App flat-file 自动发现与 FH6 手动 fallback
 
@@ -122,6 +128,7 @@
 4. Xbox App Bluetooth 高延迟与长期掉线修复已进入 `src/modules/dualsense/main.py`、`src/modules/xinput/bridge.py` 和 `src/modules/runtime_logging.py`：包括 input-first/latest-only drain、重复 Bluetooth 写入合并、HID/ViGEm 自恢复、target 保留和持久日志。早期 350 ms `0x36` stall 永久降级已因无法从短暂弱信号自动恢复而撤销；真实 Bluetooth/XInput/DualSense Edge 手感与长时间稳定性尚待验证。
 5. 动态红线估计已经进入生产路径；宽范围燃油车冷启动已解除大红区无法进入预测窗口的循环依赖，合成测试覆盖 `11760 → 6200 RPM` 学习、第二次聚类才发布 limiter、第三次建立学习值、分散事件不合并和电驱排除。R2、握把与灯条共用学习值，Default 提前点为 95%，握把退出点为 92%。全部电动车 alert gate 已进入当前源码：一挡、二挡和更高挡都禁止握把/R2 红线触觉，灯条继续渐变并在极限稳定红色；真实燃油车与电动车验收仍未执行。
 6. Xbox App flat-file 自动发现已进入通用游戏模块与 FH6 语言/图标页面。代码和合成目录测试完成，本机 `.GamingRoot` 解析成功；真实 Xbox App 游戏目录仍待验收。
+7. 发布后从桌面 R7 实际点击更新复现了错误阻断：同目录实例保护由 commit `7ce4479` 首次加入 R7，R5/R6 没有该检查，R8 原样继承。此前 R5/R6 → R7 由旧版更新入口执行，所以可以成功；R7 → R8 才第一次在真实桌面升级中运行这条新检查。2026-07-30 现场内层 PID `24424` 与直接父 PID `45212` 指向同一 `FH-DualSense-Enhanced-R5.exe`，该文件真实 PE 为 R7，紧邻 `.old` 真实 PE 为 R6，并非用户启动了第二个实例。修复后隔离冻结 R9 单实例能提交到 R10，额外启动的一对 R9 PID 仍在创建 transaction 前被拒绝；发布版 R7/R8 仍需一次手动升级才能获得修复。
 
 ## 尚未完成
 
@@ -129,7 +136,7 @@
 2. 最终本地 R8 EXE 已从最新源码重建并通过无界面启动；仍需在 Bluetooth、Xbox App bridge 开启、Steam Input 关闭时做短时操控/握把/L2/R2 扳机键冒烟，并在可用的 DualSense Edge 上运行 30 至 60 分钟检查 `data/runtime.log`。用户当前无法执行长时间实机段，因此明确保留为未执行；`dist-usb-audio-gate-1` 仍是已知可用回退基线。
 3. Windows DPI：125% 隔离设置窗口已确认扳机/握把卡片不吞字；仍需在 100%、125%、150% 的冻结 EXE 中目测顶部两个状态框边缘，并检查窗口最大化/还原和页面切换。混合 DPI 还需验证显示器间往返、运行中 scale 变化和弹窗/原生 Tk 控件清晰度。
 4. Xbox App FH6 自动发现需要在真实安装上确认 `.GamingRoot`、wrapper/`Content` 布局、ACL、语言表和图标目标；当前机器只有库 marker，没有对应游戏。
-5. R8 tag、GitHub Release、线上 Windows/Linux/ZUV 构建与 Windows 资产重新下载验证已经完成；仍未从实际运行的 R7 界面点击内置更新并确认线上 R7 → R8 正常事务、快捷方式迁移和旧文件清理。
+5. R8 tag、GitHub Release、线上 Windows/Linux/ZUV 构建与 Windows 资产重新下载验证已经完成；已从实际运行的 R7 界面点击内置更新，但在 Helper 启动前因 one-file 外层父进程误判而失败。完整修复后的合成冻结 R9 → R10 成功、真多开拒绝、启动即退回滚、inner 挂死超时和 orphan journal 恢复均已验收；正式 R9 候选的一次手动安装、真实用户快捷方式迁移，以及修复版到下一次线上 Release 的按钮事务仍待执行。
 6. 真实只读/被占用快捷方式、任务栏 pin 缓存和快捷方式部分失败后的跨启动修复尚未在用户 shell 环境执行。
 7. GitHub runner 已成功构建 Linux ELF，但真实 Linux 主机上的 `/dev/hidraw` 权限、USB audio 与桌面托盘仍未执行；Windows 上的脚本语法和适配层测试不能替代它们。
 8. Xbox App/Bluetooth 延迟修复尚未用真实 Xbox App 游戏验收；可先用 Steam 版关闭 Steam Input、选择 Xbox App bridge 做输入链路 A/B，但该结果不能替代真实 Xbox App。
@@ -139,16 +146,17 @@
 
 1. 在 Steam 模式保持 Steam Input 开启、游戏内振动关闭；关闭 `Brake stiffness` 与 `Throttle stiffness`，分别把 L2/R2 压到全行程，确认不再约 89% 定住。随后逐项开启基础阻力和独立静态刹车 wall，确认各自所有权。
 2. 保留真实测试的连接方式、Steam Input 与游戏内振动状态；自动测试或 EXE 冒烟不能替代手感验收。
-3. 从实际 R7 界面执行一次线上更新，确认规范 R8 文件名、快捷方式、旧 EXE/`.old`/sidecar 清理和用户配置保留。
+3. 完成 R9 版本递增与正式候选后，关闭当前桌面程序并手动放入同一应用目录启动一次；不要覆盖或移动 R8 tag/资产。R9 首次手动启动不会凭文件名盲删旧文件；随后从修复版执行下一次线上更新，确认规范文件名、真实快捷方式、旧 EXE/`.old`/sidecar 清理和用户配置保留。
 4. 在真实 Linux 主机生成 ELF，并验证 hidraw 权限、USB audio 与托盘。
 
 ## 当前已知 Bug 和限制
 
+- 已发布 R7 与 R8 的实例保护会把当前 PyInstaller one-file 外层 bootloader 误判为同目录第二个实例，导致更新在 Helper 启动前失败；工作树源码与冻结矩阵已修复，但现有用户必须手动安装一次递增版本，不能靠已受影响的内置更新入口自我修复。手动放入 R9 只保证新文件名正确，不会在无 journal 的情况下主动删除 R7/R8/`.old`；这些严格旧文件会在 R9 之后第一次健康的内置更新中收口。
 - `dist-usb-audio-gate-1` 已实机恢复 BT → USB 后的 USB 握把，但代价是拔掉 USB 时手柄关机，需要用户重新开机；当前不尝试保持无线会话的替代方案。
 - Xbox App FH4/FH5/FH6 真实游戏仍未在当前电脑验收。自动发现只支持可访问的 GDK flat-file 游戏库，不扫描受保护 `WindowsApps`；未找到或布局不兼容时仍需手动选择 payload 根目录或其直接父目录。
 - Forza 游戏内振动必须关闭，否则 native rumble/Steam Input 可能掩盖本项目握把方向与细节；项目不接管游戏原生 rumble。
 - 动态红线没有 Forza 官方 limiter flag 或总挡位数字段，只能从功率、扭矩、RPM、挡位、油门、离合、滑移与 `NumCylinders` 推断。宽范围冷启动用重复同 RPM 聚类降低一次功率波动误报，但真实牵引力控制、特殊限速、改装传动与游戏字段异常尚未验证；全部电动车 gate 目前仍只有合成回归。若游戏把改装或混合动力错误报告为 `NumCylinders == 0`，它也会关闭红线触觉，因此不能写成已经解决全部车型差异。
-- XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板或陀螺仪映射。
+- XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板滑动/手势、陀螺仪或模拟轴自定义映射；当前只读取点击时的横坐标，把左右半区作为两个可配置数字来源，默认仍为 Back/View 与 Start/Menu。
 - Bluetooth 弱信号下仍可能出现短时输入延迟或最终触发约 3 秒物理连接 watchdog；撤销 350 ms 永久降级避免了靠近主机后仍停留在 compatible rumble，但真实 Xbox App、不同蓝牙适配器和 DualSense Edge 的长期稳定性仍待实机验证。
 - ViGEm 上游 EOL；固定哈希不能替代未来安全维护。
 - 更新检查仍在每次启动约 10 秒后执行，没有跨启动 24 小时节流，也没有代码签名信任链。
@@ -187,7 +195,7 @@
 
 - 启动与 DPI：`src/main.py`、`src/modules/dpi.py`、`packaging/windows/dpi_runtime_hook.py`、`packaging/windows/fhds.manifest`、`packaging/windows/fhds.spec`。
 - 更新：`src/modules/update/install.py`、`src/modules/update/transaction.py`、`packaging/windows/update_helper.py`、`packaging/windows/shortcut_links.py`。
-- 控制器与输入桥：`src/modules/dualsense/main.py`、`src/modules/dualsense/input_state.py`、`src/modules/dualsense/controller_state.py`、`src/modules/dualsense/topology.py`、`src/modules/dualsense/presentation.py`、`src/modules/xinput/bridge.py`、`src/modules/xinput/service.py`、`src/modules/runtime_logging.py`。
+- 控制器与输入桥：`src/modules/dualsense/main.py`、`src/modules/dualsense/input_state.py`、`src/modules/dualsense/controller_state.py`、`src/modules/dualsense/topology.py`、`src/modules/dualsense/presentation.py`、`src/modules/xinput/mapping.py`、`src/modules/xinput/report.py`、`src/modules/xinput/bridge.py`、`src/modules/xinput/service.py`、`src/modules/runtime_logging.py`。
 - 配置与界面：`src/modules/config/settings.py`、`src/modules/config/preferences.py`、`src/modules/config/profiles.py`、`src/modules/feedback_schema.py`、`src/modules/gui/controls_tab.py`、`src/modules/gui/settings_tab.py`、`src/modules/gui/system_tab.py`、`src/modules/gui/widgets.py`、`src/modules/tui/controls_tab.py`、`src/modules/tui/settings_tab.py`、`src/modules/tui/system_tab.py`、`src/lang/`。
 - 触觉与平台：`src/modules/haptics/audio.py`、`src/modules/haptics/windows_endpoint.py`、`src/modules/haptics/manager.py`、`src/modules/haptics/lifecycle.py`、`src/modules/dualsense/bt_haptics.py`、`src/modules/dualsense/main.py`、`src/modules/dualsense/_hidraw.py`、`src/modules/__init__.py`、`packaging/linux/build_elf.sh`。
 - 红线：`src/modules/forzahorizon/redline.py`、`src/modules/loop.py`、`src/modules/forzahorizon/effects.py`、`src/modules/haptics/mixer.py`、`tests/forzahorizon/test_redline.py`。
@@ -197,13 +205,21 @@
 
 ## 当前 Git 工作区状态
 
-- 分支：`main`。R8 生产源码、测试、老三样、发布契约和构建配置以 commit `d810c11` 发布，tag `R8` 指向该提交；精确 HEAD 与远端同步状态以 `git status -sb` 和 `git log -1` 为准。
-- R8 构建开始前已 fetch 并确认 `HEAD`、`origin/main` 与 R7 tag 同指向 `4e70265`，远端没有新增 README 改动或冲突；当前改动只保留扳机/updater 修复、动态红线与灯效同步、反馈页排版、版本、发布契约和项目文档，不纳入本地隔离产物。
+- 分支：`agent/r9-updater-xbox-mapping`，跟踪同名 `origin` 分支。R8 生产源码、测试、老三样、发布契约和构建配置以 commit `d810c11` 发布，tag `R8` 指向该提交；发布记录 commit `6180e89` 已与 `origin/main` 同步。R9 源码、回归测试和文档已由 commit `2e9eb2a` 推送到草稿 PR #1；R9 Release 正文、发布契约和老三样更新已在当前工作树完成并获用户确认，尚待提交。R9 tag 与 GitHub Release 尚不存在。
+- R8 构建开始前已 fetch 并确认远端没有新增 README 改动或冲突；本轮不修改 README，也不纳入本地隔离产物。
 - `packaging/windows/build-*`、`dist-*`、`diagnostics-*` 和 `helper_work-*` 是本地隔离构建或诊断产物，不随源码提交；已知可用的 `dist-usb-audio-gate-1` 基线没有被覆盖。
 - R8 tag 与 GitHub Release 已于 2026-07-30 发布；发布流水线和线上资产复核结果见下方。`packaging/windows/dist/` 的本地候选及其他隔离构建目录均被忽略，不进入提交；线上资产由干净 GitHub runner 独立构建。
 
 ## 已执行的测试和验证
 
+- 2026-08-01 当前 R9 自定义 XBOX 按键映射审阅构建：最终完整 `uv run --project src --frozen pytest -q -W error` 为 `801 passed in 12.34s`；Ruff 全仓库通过，Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`，限定源码 `compileall`、`uv lock --check --project src` 与 `git diff --check` 均通过。GUI 隐藏挂载和 Textual 实际挂载均确认独立页面直接包含 17 个来源，Steam 模式锁定、Xbox App 加自定义开关后恢复编辑，并显示 Steam 用户应在 Steam 内修改映射的完整说明；最终审阅还清除了 TUI System 页对已迁出映射同步方法的残留调用，并用结构契约禁止映射逻辑回流 System 页。使用锁定 PyInstaller `6.16.0` 在全新隔离目录 `packaging/windows/dist-r9-custom-xbox-mapping-review-1` / `build-r9-custom-xbox-mapping-review-1` 重新构建，未覆盖标准 `dist`，也未停止桌面正在运行的旧实例。最终 `FH-DualSense-Enhanced-R9.exe` 为 `52,203,303` 字节（`49.785 MiB`），SHA-256 `056fed44a34c868c489f184e4d10a60b21217a7fd2c5384072db82be1eea959e`；相对线上 R8 增加 `412,876` 字节（约 `0.394 MiB`、`0.7972%`），低于体积确认门槛。MZ、`FileVersion/ProductVersion=R9`、`OriginalFilename=FH-DualSense-Enhanced-R9.exe`、sidecar `--check`、嵌入 `PerMonitorV2, PerMonitor` / `true/pm` / `asInvoker`、隐藏窗口 `--help` 退出码 `0` 和退出后零残留进程均通过。归档确认携带新 GUI/TUI 映射模块、映射 schema、`8,880,264` 字节的 Update Helper、ViGEmClient、ViGEmBus、ControllerIcons、LICENSE 与第三方声明。真实 Xbox App 游戏内映射和物理 DualSense 验收尚未执行；候选源码已提交到草稿 PR #1，本地 EXE 与正式 R9 Release 资产尚未发布。
+- 2026-08-01 当前 R8 源码审阅构建：使用锁定的 PyInstaller `6.16.0` 和新隔离目录 `packaging/windows/dist-r8-xbox-mapping-review-1` / `build-r8-xbox-mapping-review-1` 构建，未覆盖标准 `dist`，也未停止桌面正在运行的旧实例。`FH-DualSense-Enhanced-R8.exe` 为 `52,199,009` 字节（`49.781 MiB`），SHA-256 `d452d41b759a90b67bc414753f4d34b799ce092b928bd82a8891b0b612544076`；相对线上 R8 增加 `408,582` 字节（约 `0.390 MiB`、`0.7889%`），低于体积确认门槛。MZ、`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、sidecar `--check`、嵌入 `PerMonitorV2, PerMonitor` / `true/pm` / `asInvoker` 和隐藏窗口 `--help` 退出码 `0` 均通过。归档内的 Update Helper 为本轮重建的 `8,881,321` 字节文件，并确认同时携带 ViGEmClient、ViGEmBus、ControllerIcons、LICENSE 与第三方声明。该产物仅供当前界面和功能审阅；因为项目版本尚未递增，它不是可发布的 R9 候选，也未执行真实 DualSense/Forza 验收。
+- 2026-08-01 实验性 Xbox 数字按键映射与用户入口收口：共享 schema、XUSB 映射、bridge 热更新、service、global 持久化、恢复出厂、Xbox App 编辑 gate、更新 EXE 手动下载直链、关于页项目仓库入口、GUI/TUI 接线和六种非英语 catalog 契约均已回归；保持按键时切换映射会重发 latest state 且不重建 target。最终完整 `uv run --project src --frozen pytest -q -W error` 为 `799 passed in 15.62s`。隐藏 GUI 与 Textual 实际挂载确认 Steam 锁定、Xbox App 恢复编辑、活动 Release 显示完整 EXE URL 且无活动更新后隐藏。Ruff 全仓库、Pyrefly（`0 errors`、`2 suppressed`、`101 warnings not shown`）、compileall、`uv lock --check --project src` 与 `git diff --check` 均通过；真实 Xbox App 游戏内映射尚未执行。
+- 2026-08-01 Steam 式触摸板左右点击映射：DualSense USB/BT 输入、XUSB report、bridge 与 service 定向回归为 `120 passed in 0.44s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `785 passed in 11.41s`。Ruff 全仓库、Pyrefly（`0 errors`、`2 suppressed`、`101 warnings not shown`）、compileall 与 `uv lock --check --project src` 均通过。测试固定 click 位、两种 transport、`959/960` 中线边界、无触点 Back/View 回退、双触点双键、无 click 不发布区域，以及 Create/Options 既有输出保持；真实 DualSense 和 Xbox App 游戏内操作未执行。
+- 2026-08-01 自动更新完整复审：更新器、transaction、启动恢复、快捷方式与运行时定向套件为 `110 passed in 4.25s`，新增覆盖预存目标不误删、changed target fail-closed、move → journal 窄窗口、legacy 备份恢复、回滚删除失败保留非终态、跨进程锁、恢复 ACK 死进程、pending 重载、严格 sidecar、调度失败重试和 GUI/TUI UDP 健康边界。最终完整 `uv run --project src --frozen pytest -q -W error` 为 `766 passed in 11.36s`；Ruff 全仓库、Pyrefly（`0 errors`、`2 suppressed`、`101 warnings not shown`）、compileall、`uv lock --check --project src` 与 `git diff --check` 全部通过。
+- 2026-08-01 隔离冻结事务矩阵：从当前工作树复制 259 个 tracked 文件到 `%LOCALAPPDATA%\Temp\fhds-updater-e2e-20260801-1`，仅在隔离副本加入一次性测试入口并构建合成 R9/R10，未修改仓库版本号或桌面安装。单实例 R9 → R10 得到 `committed`，真实 R10 外层/内层 PID `8872/27420` 存活，R7/R8/R9 与严格 R8 `.old/.sha256` 被删除，`Other.exe`/`notes.old` 保留；另一个稳定 R9 进程对 `35372/46588` 存在时，第二次启动在创建 journal 前被拒绝（transaction 数 `0`）。R10 启动即退得到 `rolled_back`、新版删除、R9 重启且 R8/`.old` 保留。R10 inner 挂起不 ACK 时实际观测 PID `14404/51156`，30 秒超时后两者均被 Helper 终止，R10 文件删除并以 R9 PID `15288/46716` 重启。人为制造 `waiting_health` orphan journal 后，R10 无内部启动参数自行接管，ACK 到 `committed` 用时 `4.182s`，证明恢复路径重新观察约 3 秒。矩阵结束后隔离 case 下剩余 FHDS 进程数为 `0`。测试 Helper 为 `8,881,446` 字节，含一次性测试入口的 R9 probe 为 `52,052,832` 字节；二者不是正式发布候选。
+- 2026-07-30 one-file 实例误判修复：现场确认桌面内层 PID `24424` 的直接父 PID 为 `45212`，二者指向完全相同的 `C:\Users\Administrator\Desktop\FH-DualSense-Enhanced-R5.exe`；此前失败日志中的 `44148`、`44584`、`45212` 都是同类外层 bootloader。修复后以当前活跃拓扑调用实例保护返回 `()`。updater 套件为 `38 passed in 3.74s`，父子实例/独立实例定向回归为 `3 passed`；完整 `uv run --project src --frozen pytest -q -W error` 为 `744 passed in 11.11s`。补写老三样与项目状态后，updater/发行契约联合回归为 `60 passed in 6.41s`。Ruff 全仓库、Pyrefly（`0 errors`、`2 suppressed`、`101 warnings not shown`）、`uv lock --check --project src` 和 `git diff --check` 均通过。
+- 2026-07-30 one-file 父进程修复候选：`packaging/windows/dist-r8-updater-parent-fix-1/FH-DualSense-Enhanced-R8.exe` 为 `52,036,443` 字节（`49.626 MiB`），SHA-256 `7848049978005eb8ce52c36acb5917ff5597c144c8cbd8bfb74dc838326a6122`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、sidecar `--check`、`PerMonitorV2, PerMonitor`、`true/pm`、`asInvoker` 和 `--help` 退出码 `0` 均通过。构建使用隔离 `dist-r8-updater-parent-fix-1` / `build-r8-updater-parent-fix-1`，没有覆盖标准 `dist`，也没有停止或修改桌面运行中的 R7；真实手动安装和后续在线更新仍未执行。
 - 2026-07-30 R8 正式发布与线上复核：commit/tag 为 `d810c11` / `R8`，GitHub Actions run [`30541439716`](https://github.com/piereacy/FH-DualSense-Enhanced/actions/runs/30541439716) 的 `prepare`、ZUV、Windows EXE、Linux ELF 与合并 Release 五个 job 全部成功；只有依赖 action 的 Node.js 20 弃用提示，没有构建错误。Release 为非 draft、非 prerelease，共 8 个资产。重新下载的线上 `FH-DualSense-Enhanced-R8.exe` 为 `51,790,427` 字节（`49.391 MiB`），SHA-256 `897b828a2be63775960941e8610f39733dfb186e021418461711843ac50378a9`，与 Release digest 和线上 `.sha256` 一致；MZ、`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、`PerMonitorV2, PerMonitor`、`true/pm`、`asInvoker` 与隐藏窗口 `--help` 退出码 `0` 均通过。线上 Linux ELF 为 `47,389,864` 字节，ZUV 为 `7,437,547` 字节。
 - 2026-07-30 R8 最终本地 Windows 候选：`packaging/windows/dist/FH-DualSense-Enhanced-R8.exe` 为 `52,035,627` 字节（`49.625 MiB`），SHA-256 `239660997abd709207895826e2c6cf16d3ebd6478eca69a2f34607642a330d12`。MZ 为 `4D 5A`，`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、sidecar `--check`、`PerMonitorV2, PerMonitor`、`true/pm`、`asInvoker` 和隐藏窗口 `--help` 退出码 `0` 均通过；相对当前线上 R7 增加 `253,594` 字节（约 `0.490%`），低于体积确认门槛。构建前保护的 `runtime.log`、`user_preferences.json` 与 `.bak` 已恢复并逐文件确认 SHA-256 未变化。
 - 2026-07-30 R8 用户侧 Release 与 vDS 复核基线回归：Release 正文收敛为扳机、红线、排版、自动更新四类用户可感知更新，关闭自动 commit notes；内部链路留在老三样，vDS 声明同时保留 `0.3.0-rc7` 原始采用提交与 `0.4.0-rc1` 当前复核提交。发行与第三方声明定向回归为 `28 passed in 3.96s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `742 passed in 8.51s`。Ruff 全仓库通过；Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`；一次性 PyYAML 解析、`uv lock --check --project src` 与 `git diff --check` 均通过，后者只有现有 LF/CRLF 转换提示。
@@ -258,7 +274,7 @@
 - 当前 125% 环境对隔离的当前源码设置窗口完成目测：扳机总开关与共享反馈各占整行、L2/R2 同行，握把 USB/蓝牙长说明会完整换成多行，两个红线开关下不再出现电动车说明。该 QA 未连接手柄、未启动 Forza，也未触碰用户此前运行的旧冻结 EXE。最终冻结 EXE 只完成 `--help` 无界面启动；100%、150%、最终冻结 GUI、最大化后的连续跨页操作、混合 DPI、多屏移动、动态缩放、睡眠/唤醒、扩展坞和远程桌面仍未执行。
 - GitHub runner 的 Linux ELF 构建已成功；真实 Linux 主机上的 hidraw 权限、USB audio、启动与托盘验证仍未执行。
 - clean-machine Update Helper、杀毒软件锁文件、真实只读 shortcut 和部分迁移提示未执行；自动测试与隔离目录不能完全替代这些环境。当前线上 R7 到本地 R8 的真实隔离事务与多跳 legacy 引导已执行，但桌面现有安装未被原地改名或清理。
-- R8 已线上发布且资产已独立复核；R7 到 R8 的真实隔离更新已提交成功，但实际 R7 界面的线上按钮更新仍未执行。
+- R8 已线上发布且资产已独立复核；实际 R7 界面按钮更新已复现 one-file 父进程误判。完整修复已通过合成 R9 → R10 冻结事务矩阵，R9 本地正式版本候选也已构建并通过静态与启动冒烟；但 R9 尚未手动安装到真实用户目录，也未通过后续真实线上事务验收，旧 R8 入口无法借由这次源码修改自行更新。
 - Xbox App 自动发现和手动 fallback 已通过合成目录测试，本机 `.GamingRoot` 解析也成功；真实 Xbox App FH4/FH5/FH6 游戏、目录 ACL 与 FH6 文件工具仍未验证。
 
 ## 下一次 Codex 会话交接
@@ -283,4 +299,4 @@
 16. `src/modules/__init__.py`
 17. `src/modules/feedback_schema.py`
 
-建议首先处理的具体任务：从实际 R7 界面执行一次线上 R7 → R8 更新，记录规范文件名、快捷方式、旧文件清理和配置保留；随后完成燃油车与电动车的真实红线手感验收。
+建议首先处理的具体任务：保持 R8 不可变，确认 R9 双语 Release 正文并提交到草稿 PR #1，合并后发布 R9；让现有 R7/R8 用户手动安装一次最终 R9，再用修复版执行下一次线上更新并记录规范文件名、真实快捷方式、旧文件清理和配置保留。随后完成 Xbox App 自定义映射以及燃油车与电动车的真实手感验收。

@@ -20,10 +20,14 @@ from lang import t
 from modules.config import preferences
 from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
 from modules.update import UpdatePhase
-from modules.update.presentation import localized_status
+from modules.update.presentation import update_status_presentation
 from modules.xinput.bridge import BridgeStatus
 from modules.xinput.driver import InstallStatus
-from modules.xinput.service import STEAM_PLATFORM, XBOX_APP_PLATFORM, normalize_forza_platform
+from modules.xinput.service import (
+    STEAM_PLATFORM,
+    XBOX_APP_PLATFORM,
+    normalize_forza_platform,
+)
 
 from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 
@@ -40,6 +44,7 @@ class SystemTab(SettingsTab):
     SystemTab #controller-buttons { height: 3; padding: 0 1; }
     SystemTab #controller-buttons Button { margin-right: 2; }
     SystemTab #xinput-buttons { height: 3; padding: 0 1; }
+    SystemTab #update-manual-download { width: 1fr; margin: 0 1 1 1; }
     SystemTab #controller-radio { height: auto; padding: 0 1 1 1; }
     SystemTab #controller-hid-section { height: auto; }
     SystemTab #controller-hid-section > Label { padding: 0 1; }
@@ -110,17 +115,23 @@ class SystemTab(SettingsTab):
             )
             yield Button(t("Download update"), id="update-action", disabled=True)
             yield Button(t("View release"), id="update-release", disabled=True)
+        yield Button(
+            "",
+            id="update-manual-download",
+            disabled=True,
+        )
 
         yield from super().compose()
 
     def on_mount(self) -> None:
         self._sync_controller_visibility()
+        self._refresh_update_status()
         self._update_timer = self.set_interval(0.5, self._refresh_update_status)
-        self._refresh_xinput_status()
 
     def _refresh_update_status(self) -> None:
         snapshot = self.app._update_service.snapshot()
-        self.query_one("#update-status", Label).update(localized_status(snapshot, t))
+        presentation = update_status_presentation(snapshot, t)
+        self.query_one("#update-status", Label).update(presentation.status)
         self.query_one("#update-progress", ProgressBar).update(progress=snapshot.progress * 100)
         action = self.query_one("#update-action", Button)
         if snapshot.phase is UpdatePhase.AVAILABLE:
@@ -132,6 +143,13 @@ class SystemTab(SettingsTab):
         else:
             action.disabled = True
         self.query_one("#update-release", Button).disabled = snapshot.release is None
+        manual_download = self.query_one("#update-manual-download", Button)
+        manual_download.disabled = not bool(presentation.manual_download_url)
+        manual_download.display = bool(presentation.manual_download_url)
+        if presentation.manual_download_url:
+            manual_download.label = t("Or download manually: {url}").format(
+                url=presentation.manual_download_url
+            )
         self._refresh_xinput_status()
 
     def _refresh_xinput_status(self) -> None:
@@ -194,7 +212,8 @@ class SystemTab(SettingsTab):
         )
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id != "preferred_forza_platform":
+        select_id = event.select.id or ""
+        if select_id != "preferred_forza_platform":
             return
         platform = normalize_forza_platform(event.value)
         if platform == self.settings.preferred_forza_platform:
@@ -357,6 +376,10 @@ class SystemTab(SettingsTab):
             release = self.app._update_service.snapshot().release
             if release is not None and release.html_url:
                 self.app._open_url(release.html_url)
+        elif event.button.id == "update-manual-download":
+            release = self.app._update_service.snapshot().release
+            if release is not None and release.asset_url:
+                self.app._open_url(release.asset_url)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         super().on_switch_changed(event)

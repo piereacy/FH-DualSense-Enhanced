@@ -339,6 +339,46 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Custom Xbox button mapping": "自訂 XBOX 按鍵對應",
+    "Customize the digital buttons sent by the Xbox App bridge. Sticks and L2/R2 remain unchanged.": "自訂 Xbox App 橋接輸出的數位按鍵；搖桿和 L2/R2 保持不變。",
+    "Enable custom Xbox mapping": "啟用自訂 Xbox 對應",
+    "Restore Steam defaults": "還原 Steam 預設對應",
+    "Face buttons": "正面按鍵",
+    "Shoulder and system buttons": "肩鍵與系統按鍵",
+    "D-pad": "方向鍵",
+    "Touchpad": "觸控板",
+    "Cross": "叉鍵",
+    "Circle": "圓鍵",
+    "Square": "方塊鍵",
+    "Triangle": "三角鍵",
+    "D-pad up": "方向鍵上",
+    "D-pad down": "方向鍵下",
+    "D-pad left": "方向鍵左",
+    "D-pad right": "方向鍵右",
+    "Touchpad left click": "觸控板左半區按下",
+    "Touchpad right click": "觸控板右半區按下",
+    "Disabled": "停用",
+    "Left shoulder": "左肩鍵",
+    "Right shoulder": "右肩鍵",
+    "View / Back": "檢視 / 返回",
+    "Menu / Start": "選單 / 開始",
+    "Left stick click": "按下左搖桿",
+    "Right stick click": "按下右搖桿",
+    "Guide": "Xbox 鍵",
+    "A": "A",
+    "B": "B",
+    "X": "X",
+    "Y": "Y",
+    "L1": "L1",
+    "R1": "R1",
+    "Create": "Create",
+    "Options": "Options",
+    "L3": "L3",
+    "R3": "R3",
+    "PS": "PS",
+})
+
+STRINGS.update({
     "L2 - Brake": "L2 - 煞車",
     "R2 - Throttle": "R2 - 油門",
 })
@@ -565,4 +605,10 @@ STRINGS.update({
     "File contents are swapped. Game updates may restore the original files.": "檔案內容已互換；遊戲更新可能還原原始檔案。",
     "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Game updates or file verification may restore the original files.": "FHDS 將互換 CHS.zip 與 EN.zip 的檔名。請先關閉 FH6；遊戲更新或檔案驗證可能還原原始檔案。",
     "FH6 game language could not be verified as English. Continue only if the game is configured for English.": "無法確認 FH6 目前遊戲語言為英文。只有在遊戲已設定為英文時才應繼續。",
+})
+
+STRINGS.update({
+    "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "請先在「Forza 平台」中選擇「XBOX 版」後再於此自訂。如果你是 Steam 版並需要更改對應，請在 Steam 內自行修改對應。",
+    "Or download manually: {url}": "或手動下載：{url}",
+    "Project repository": "專案儲存庫",
 })

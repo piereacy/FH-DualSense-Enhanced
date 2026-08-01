@@ -303,6 +303,46 @@ STRINGS.update({
 })
 
 STRINGS.update({
+    "Custom Xbox button mapping": "Özel Xbox düğme eşlemesi",
+    "Customize the digital buttons sent by the Xbox App bridge. Sticks and L2/R2 remain unchanged.": "Xbox App köprüsünün gönderdiği dijital düğmeleri özelleştirin. Çubuklar ve L2/R2 değişmez.",
+    "Enable custom Xbox mapping": "Özel Xbox eşlemesini etkinleştir",
+    "Restore Steam defaults": "Steam varsayılanlarını geri yükle",
+    "Face buttons": "Yüz düğmeleri",
+    "Shoulder and system buttons": "Omuz ve sistem düğmeleri",
+    "D-pad": "Yön tuşları",
+    "Touchpad": "Dokunmatik yüzey",
+    "Cross": "Çarpı",
+    "Circle": "Daire",
+    "Square": "Kare",
+    "Triangle": "Üçgen",
+    "D-pad up": "Yön tuşu yukarı",
+    "D-pad down": "Yön tuşu aşağı",
+    "D-pad left": "Yön tuşu sol",
+    "D-pad right": "Yön tuşu sağ",
+    "Touchpad left click": "Dokunmatik yüzey sol tıklama",
+    "Touchpad right click": "Dokunmatik yüzey sağ tıklama",
+    "Disabled": "Devre dışı",
+    "Left shoulder": "Sol omuz",
+    "Right shoulder": "Sağ omuz",
+    "View / Back": "Görünüm / Geri",
+    "Menu / Start": "Menü / Başlat",
+    "Left stick click": "Sol çubuk tıklama",
+    "Right stick click": "Sağ çubuk tıklama",
+    "Guide": "Kılavuz",
+    "A": "A",
+    "B": "B",
+    "X": "X",
+    "Y": "Y",
+    "L1": "L1",
+    "R1": "R1",
+    "Create": "Create",
+    "Options": "Options",
+    "L3": "L3",
+    "R3": "R3",
+    "PS": "PS",
+})
+
+STRINGS.update({
     "L2 - Brake": "L2 - Fren",
     "R2 - Throttle": "R2 - Gaz",
 })
@@ -512,4 +552,10 @@ STRINGS.update({
     "File contents are swapped. Game updates may restore the original files.": "Dosya içerikleri değiştirilmiş durumda. Oyun güncellemeleri özgün dosyaları geri yükleyebilir.",
     "FHDS will exchange the names of CHS.zip and EN.zip. Close FH6 first. Game updates or file verification may restore the original files.": "FHDS, CHS.zip ile EN.zip adlarını değiştirecek. Önce FH6'yı kapatın. Oyun güncellemesi veya dosya doğrulama özgün dosyaları geri yükleyebilir.",
     "FH6 game language could not be verified as English. Continue only if the game is configured for English.": "Geçerli FH6 oyun dilinin İngilizce olduğu doğrulanamadı. Yalnızca oyun İngilizceye ayarlıysa devam edin.",
+})
+
+STRINGS.update({
+    "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "Düğmeleri burada özelleştirmek için Forza platformu olarak Xbox App'i seçin. Steam sürümünü kullanıyorsanız denetleyici eşlemesini Steam içinde değiştirin.",
+    "Or download manually: {url}": "Veya elle indirin: {url}",
+    "Project repository": "Proje deposu",
 })
