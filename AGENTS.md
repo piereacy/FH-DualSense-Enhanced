@@ -165,7 +165,7 @@ bash packaging/linux/build_elf.sh
 - GitHub 根 `README.md` 固定为精简的英文用户指南，简体中文与日语分别位于 `docs/ReadmeZH.md`、`docs/ReadmeJA.md`；不要恢复三语同页或 `docs/ReadmeEN.md`。三份页面只保留核心功能、下载、必需游戏设置、连接说明、常见故障和许可证，不要加入小设置、内部算法或开发构建手册。README 不使用内部界面代号，但该限制不代表删除现有青绿色视觉设计。必需设置必须写明 Forza 游戏内振动关闭；Steam 模式写明 Steam Input 开启，Xbox App 模式写明使用内置 XInput bridge 且不需要 DS4Windows/Steam Input。
 - 提交或推送本地更新前必须先获取并审阅远端分支。若用户已直接在 GitHub 修改并提交任何 README，本地更新必须以远端改动为合并输入，逐段理解并保留用户修改，再把本地需要的内容语义合并进去；不得用本地旧版 README 整文件覆盖远端，不得无视远端差异，也不得在冲突处理中机械选择本地版本。
 - 三语 README 必须用四到六个用户可感知类别，明确说明当前 Enhanced 版本相比 `Forza-Horizon-DualSense-Python 1.6.2` 的累计核心增强。该清单只能依据当前生产代码、自动测试或已记录的真实硬件结果，不得混入内部参数、逐项开关、仅设计或推测能力。GitHub Release body 另行说明当前版本相比上一稳定 Enhanced 版本的增量，不能把两种比较口径混写。
-- GitHub Release body 是给最终用户阅读的增量更新日志，只保留用户能感知的修复、升级影响、兼容提醒、安装方式和必需设置。不得展开内部字段名、状态机、HID 字节、动态学习链路、PE 版本顺序、transaction 哈希或第三方实现架构；这些实现依据必须同步记录在老三样，第三方版本与许可证写入 `docs/THIRD_PARTY_NOTICES.md`。发布契约测试应同时约束必要用户事实存在和内部术语不回流。
+- GitHub Release body 是给最终用户阅读的增量更新日志，只保留用户能感知的修复、升级影响、兼容提醒、安装方式和必需设置。不得展开内部字段名、状态机、HID 字节、动态学习链路、PE 版本顺序、transaction 哈希或第三方实现架构；这些实现依据必须同步记录在老三样，第三方版本与许可证写入 `docs/THIRD_PARTY_NOTICES.md`。发布契约测试应同时约束必要用户事实存在和内部术语不回流。首次携带更新入口修复的版本必须明确告诉受影响旧版用户手动安装一次，并把自动改名、清理和恢复承诺限定为修复版之后的更新；不得把隔离的 R9 → R10 成功矩阵改写成 R8 → R9 可以自动成功。
 - GitHub 仓库当前是独立仓库，不再属于 fork network；保留完整 Git 历史，不要重新建立基于 fork 身份的发布假设。“关于与许可证”必须同时提供本项目仓库 `https://github.com/piereacy/FH-DualSense-Enhanced`、`LICENSE` 要求的署名、原项目链接和 Sponsor 链接；独立状态不改变 `docs/THIRD_PARTY_NOTICES.md` 中的 HorizonHaptics 归属。
 - 不要把尚未通过测试或实机验证的行为写成已验证或已发布。以生产代码、自动测试和硬件记录分别标注事实层级。
 - 术语必须消除歧义：版本阶段写 `Enhanced R<n>`，手柄右扳机写 `R2 扳机键`；不要单独写无法判断含义的 `R2`。

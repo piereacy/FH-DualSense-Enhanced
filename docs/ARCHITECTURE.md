@@ -111,6 +111,8 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 已经发布的旧覆盖式 Helper 无法并排安装，会把新版字节写回旧文件名并留下上一份真实字节的 `.old`。连续经过这种更新后，文件名可能落后多代，例如 `R5.exe` 的 PE 已是 R7，而 `R5.exe.old` 的 PE 是 R6。`launch_legacy_bootstrap()` 不把文件名当成真实字节版本：它要求文件名版本低于当前版本、运行 EXE 的 PE 版本等于当前版本、紧邻 `.old` 的 PE 版本不低于文件名版本且低于当前版本；备份 PE 是真实回滚版本，文件名只作为允许范围的下界。两份字节随后仍由 transaction SHA-256 严格绑定。第二阶段把运行中的新版字节安装到当前规范文件名、临时恢复备份，再走相同健康确认和严格目录收口。`packaging/windows/shortcut_links.py` 使用原生 Shell Link COM 精确迁移 Desktop、Programs 和已知 pinned 目录中目标绝对路径匹配旧 EXE 的 `.lnk`，保留参数、工作目录和图标索引；无匹配静默成功，某一旧版存在失败项时只保留该规范旧 EXE 并让 journal 停在 `cleanup_pending`，其他已成功迁移的旧版和遗留 sidecar 仍可清理。Helper 与构建均使用 `src/uv.lock` 中固定的 PyInstaller，不在构建时解析任意最新版本。
 
+更新入口始终由用户当前正在运行的旧版本执行，尚未安装的新资产不能反向改变这段入口代码。R7/R8 会在 Helper 启动前把自己的 PyInstaller one-file 外层父进程误判为另一个同目录实例，因此 R8 → R9 不能借助 R9 内部的修复自我完成。R9 Release 必须要求这些用户手动下载并启动一次规范 R9 EXE；只有从 R9 发起的后续更新才进入上面的修复链路。手动放入 R9 本身没有 transaction 所有权证明，不会为了“清理”而扫描或删除既有 R7/R8、`.old` 或其他文件；严格旧文件收口留给下一次成功且健康确认完成的内置更新。
+
 ### 3.4 Windows FH6 语言包按钮
 
 `src/modules/forzahorizon/fh6_language.py` 是独立于遥测与手柄后端的 Windows FH6 工具层。Steam 模式复用 `game_launch.py` 的 manifest 候选发现与精确进程检测。Xbox App 模式调用 `game_launch.discover_xbox_forza_install()`：`windows_local_drive_roots()` 通过 Win32 只枚举本地 fixed/removable drive；`xbox_library_roots()` 读取每盘最多 4096 字节、以 `RGBX` 开头的 `.GamingRoot` 相对目录，并兼容同盘默认 `XboxGames`。每个库只检查库根、标准完整名、短名和最多 512 个直属子目录，不访问网络盘、`WindowsApps`、全盘或递归子目录，也不接受解析后跳出库根的链接。候选必须同时存在精确 `ForzaHorizon6.exe` 与 `media/Stripped/StringTables`；成功根目录保存到 `fh6_xbox_install_path`。用户仍可选择 payload 根目录或其直接父目录 `Content` 作为 fallback。GUI 中显式选择用新 serial 取代仍在运行的自动扫描，旧 worker 因 serial 不匹配而丢弃；无效选择产生可见提示。语言工具仍只接受 FH6，通用启动模块不能导入语言交换逻辑。

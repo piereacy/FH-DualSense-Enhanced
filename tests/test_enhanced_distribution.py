@@ -166,31 +166,26 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R8 中文说明" in workflow
-    assert "Enhanced R8 English notes" in workflow
+    assert "Enhanced R9 中文说明" in workflow
+    assert "Enhanced R9 English notes" in workflow
     assert "generate_release_notes: false" in workflow
-    assert "扳机可以真正关闭" in workflow
-    assert "Trigger feedback can be fully disabled" in workflow
-    assert "Brake stiffness" in workflow
-    assert "Throttle stiffness" in workflow
-    assert "约 89%" in workflow
-    assert "around 89%" in workflow
-    assert "默认提醒由 `93%` 后移到 `95%`" in workflow
-    assert "default warning moves later from `93%` to `95%`" in workflow
-    assert "已自定义的时机和命名 Profile 不会被覆盖" in workflow
-    assert "Custom timing and named profiles are preserved" in workflow
-    assert "全部电动车不再输出红线震动" in workflow
-    assert "Electric vehicles no longer produce redline vibration" in workflow
-    assert "界面排版修正" in workflow
-    assert "Layout fixes" in workflow
-    assert "说明文字在双列、窗口缩放和高 DPI 环境下不再被截断" in workflow
-    assert "helper text no longer clips" in workflow
-    assert "启用自适应扳机输出" in workflow
-    assert "Enable adaptive trigger output" in workflow
-    assert "恢复正确的 `FH-DualSense-Enhanced-R8.exe` 文件名" in workflow
-    assert "restore the correct `FH-DualSense-Enhanced-R8.exe` filename" in workflow
-    assert "无关文件不会被删除" in workflow
-    assert "Unrelated files are not deleted" in workflow
+    assert "自定义 XBOX 按键映射" in workflow
+    assert "Custom Xbox button mapping" in workflow
+    assert "包括触摸板左右点击" in workflow
+    assert "including left and right touchpad clicks" in workflow
+    assert "Steam 版请直接在 Steam 内修改映射" in workflow
+    assert "Steam users should change their mapping in Steam" in workflow
+    assert "从 R9 开始，自动更新更可靠" in workflow
+    assert "More reliable updates from R9 onward" in workflow
+    assert "手动下载链接" in workflow
+    assert "manual download link" in workflow
+    assert "R8 用户请先手动更新" in workflow
+    assert "Important for R8 users" in workflow
+    assert "FH-DualSense-Enhanced-R9.exe" in workflow
+    assert "现有设置会继续保留" in workflow
+    assert "Existing settings remain in place" in workflow
+    assert "项目入口补全" in workflow
+    assert "Project link" in workflow
     for implementation_term in (
         "effective_redline_rpm",
         "redline_alert_allowed",
