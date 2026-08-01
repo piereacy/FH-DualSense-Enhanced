@@ -5,10 +5,10 @@
 ## 当前阶段
 
 - 当前开发版本：`Enhanced R9`，`src/pyproject.toml` 版本为 `9`。
-- 当前公开稳定版：GitHub Release `R8`，tag `R8` 指向 `d810c11`，发布于 2026-07-30。
-- 当前阶段：R8 源码、双语 Release、Windows EXE、Linux ELF 和 ZUV 已正式发布且保持不可变。R9 实现已在 commit `2e9eb2a` 提交并推送到 `agent/r9-updater-xbox-mapping`，草稿 PR [#1](https://github.com/piereacy/FH-DualSense-Enhanced/pull/1) 面向 `main` 且当前可干净合并。R9 中英双语 Release 正文已完成并获用户确认，当前等待把发布准备提交到 PR、合并并触发正式 Release。
-- 当前开发重心：提交已确认的 R9 Release 正文与文档，合并 PR #1 并触发正式发布；发布后不再重复运行测试或下载线上资产，只确认 GitHub Release 元数据与工作流终态。隔离的合成 R9 → R10 one-file 矩阵已经证明后续内置更新可正确改名、清理旧版/`.old`、拒绝真多开并完成失败回滚；但已发布 R8 的旧入口不能自行取得这段新代码，Release 必须明确要求 R8 用户手动安装一次 R9。不得为了后续修复改动已知可用的 R7 USB/BT 握把生命周期。
-- R8 Release：<https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R8>。
+- 当前公开稳定版：GitHub Release `R9`，tag `R9` 指向 merge commit `cba516b`，发布于 2026-08-02。
+- 当前阶段：R9 源码、双语 Release、Windows EXE、Linux ELF 和 ZUV 已通过 PR [#1](https://github.com/piereacy/FH-DualSense-Enhanced/pull/1) 合并并正式发布。发布工作流 [30709569218](https://github.com/piereacy/FH-DualSense-Enhanced/actions/runs/30709569218) 全部成功；本轮按用户要求只核对 GitHub 元数据，没有在发布后重复测试或下载资产。
+- 当前开发重心：保持 R9 tag 与资产不可变，等待用户手动安装和使用反馈。R7/R8 用户仍需手动启动一次 R9 才能取得更新入口修复；下一次内置更新的真实用户目录验收只在用户明确要求时执行，不主动下载线上资产或重复既有测试。不得为了后续修复改动已知可用的 R7 USB/BT 握把生命周期。
+- R9 Release：<https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R9>。
 
 ## 代码中已经实现
 
@@ -205,7 +205,7 @@
 
 ## 当前 Git 工作区状态
 
-- 分支：`agent/r9-updater-xbox-mapping`，跟踪同名 `origin` 分支。R8 生产源码、测试、老三样、发布契约和构建配置以 commit `d810c11` 发布，tag `R8` 指向该提交；发布记录 commit `6180e89` 已与 `origin/main` 同步。R9 源码、回归测试和文档已由 commit `2e9eb2a` 推送到草稿 PR #1；R9 Release 正文、发布契约和老三样更新已在当前工作树完成并获用户确认，尚待提交。R9 tag 与 GitHub Release 尚不存在。
+- 分支：`main` 的发布记录后续分支 `agent/record-r9-publication`。PR #1 已以 squash merge commit `cba516b` 合并到 `origin/main`，tag `R9` 与正式 GitHub Release 均已创建；此前的功能提交 `2e9eb2a` 和发布准备提交 `db9b422` 已包含在该 squash merge中。
 - R8 构建开始前已 fetch 并确认远端没有新增 README 改动或冲突；本轮不修改 README，也不纳入本地隔离产物。
 - `packaging/windows/build-*`、`dist-*`、`diagnostics-*` 和 `helper_work-*` 是本地隔离构建或诊断产物，不随源码提交；已知可用的 `dist-usb-audio-gate-1` 基线没有被覆盖。
 - R8 tag 与 GitHub Release 已于 2026-07-30 发布；发布流水线和线上资产复核结果见下方。`packaging/windows/dist/` 的本地候选及其他隔离构建目录均被忽略，不进入提交；线上资产由干净 GitHub runner 独立构建。
@@ -213,6 +213,7 @@
 ## 已执行的测试和验证
 
 - 2026-08-01 当前 R9 自定义 XBOX 按键映射审阅构建：最终完整 `uv run --project src --frozen pytest -q -W error` 为 `801 passed in 12.34s`；Ruff 全仓库通过，Pyrefly 为 `0 errors`、`2 suppressed`、`101 warnings not shown`，限定源码 `compileall`、`uv lock --check --project src` 与 `git diff --check` 均通过。GUI 隐藏挂载和 Textual 实际挂载均确认独立页面直接包含 17 个来源，Steam 模式锁定、Xbox App 加自定义开关后恢复编辑，并显示 Steam 用户应在 Steam 内修改映射的完整说明；最终审阅还清除了 TUI System 页对已迁出映射同步方法的残留调用，并用结构契约禁止映射逻辑回流 System 页。使用锁定 PyInstaller `6.16.0` 在全新隔离目录 `packaging/windows/dist-r9-custom-xbox-mapping-review-1` / `build-r9-custom-xbox-mapping-review-1` 重新构建，未覆盖标准 `dist`，也未停止桌面正在运行的旧实例。最终 `FH-DualSense-Enhanced-R9.exe` 为 `52,203,303` 字节（`49.785 MiB`），SHA-256 `056fed44a34c868c489f184e4d10a60b21217a7fd2c5384072db82be1eea959e`；相对线上 R8 增加 `412,876` 字节（约 `0.394 MiB`、`0.7972%`），低于体积确认门槛。MZ、`FileVersion/ProductVersion=R9`、`OriginalFilename=FH-DualSense-Enhanced-R9.exe`、sidecar `--check`、嵌入 `PerMonitorV2, PerMonitor` / `true/pm` / `asInvoker`、隐藏窗口 `--help` 退出码 `0` 和退出后零残留进程均通过。归档确认携带新 GUI/TUI 映射模块、映射 schema、`8,880,264` 字节的 Update Helper、ViGEmClient、ViGEmBus、ControllerIcons、LICENSE 与第三方声明。真实 Xbox App 游戏内映射和物理 DualSense 验收尚未执行；候选源码已提交到草稿 PR #1，本地 EXE 与正式 R9 Release 资产尚未发布。
+- 2026-08-02 R9 正式 Release：工作流 `30709569218` 的 prepare、Windows EXE、ZUV、Linux ELF 和 combined release 五个 job 全部成功。GitHub 元数据显示正式 Windows 资产 `FH-DualSense-Enhanced-R9.exe` 为 `51,956,390` 字节，Release 为非草稿、非预发布；本轮没有下载线上资产，也没有执行发布后测试。
 - 2026-08-01 当前 R8 源码审阅构建：使用锁定的 PyInstaller `6.16.0` 和新隔离目录 `packaging/windows/dist-r8-xbox-mapping-review-1` / `build-r8-xbox-mapping-review-1` 构建，未覆盖标准 `dist`，也未停止桌面正在运行的旧实例。`FH-DualSense-Enhanced-R8.exe` 为 `52,199,009` 字节（`49.781 MiB`），SHA-256 `d452d41b759a90b67bc414753f4d34b799ce092b928bd82a8891b0b612544076`；相对线上 R8 增加 `408,582` 字节（约 `0.390 MiB`、`0.7889%`），低于体积确认门槛。MZ、`FileVersion/ProductVersion=R8`、`OriginalFilename=FH-DualSense-Enhanced-R8.exe`、sidecar `--check`、嵌入 `PerMonitorV2, PerMonitor` / `true/pm` / `asInvoker` 和隐藏窗口 `--help` 退出码 `0` 均通过。归档内的 Update Helper 为本轮重建的 `8,881,321` 字节文件，并确认同时携带 ViGEmClient、ViGEmBus、ControllerIcons、LICENSE 与第三方声明。该产物仅供当前界面和功能审阅；因为项目版本尚未递增，它不是可发布的 R9 候选，也未执行真实 DualSense/Forza 验收。
 - 2026-08-01 实验性 Xbox 数字按键映射与用户入口收口：共享 schema、XUSB 映射、bridge 热更新、service、global 持久化、恢复出厂、Xbox App 编辑 gate、更新 EXE 手动下载直链、关于页项目仓库入口、GUI/TUI 接线和六种非英语 catalog 契约均已回归；保持按键时切换映射会重发 latest state 且不重建 target。最终完整 `uv run --project src --frozen pytest -q -W error` 为 `799 passed in 15.62s`。隐藏 GUI 与 Textual 实际挂载确认 Steam 锁定、Xbox App 恢复编辑、活动 Release 显示完整 EXE URL 且无活动更新后隐藏。Ruff 全仓库、Pyrefly（`0 errors`、`2 suppressed`、`101 warnings not shown`）、compileall、`uv lock --check --project src` 与 `git diff --check` 均通过；真实 Xbox App 游戏内映射尚未执行。
 - 2026-08-01 Steam 式触摸板左右点击映射：DualSense USB/BT 输入、XUSB report、bridge 与 service 定向回归为 `120 passed in 0.44s`；完整 `uv run --project src --frozen pytest -q -W error` 为 `785 passed in 11.41s`。Ruff 全仓库、Pyrefly（`0 errors`、`2 suppressed`、`101 warnings not shown`）、compileall 与 `uv lock --check --project src` 均通过。测试固定 click 位、两种 transport、`959/960` 中线边界、无触点 Back/View 回退、双触点双键、无 click 不发布区域，以及 Create/Options 既有输出保持；真实 DualSense 和 Xbox App 游戏内操作未执行。
@@ -299,4 +300,4 @@
 16. `src/modules/__init__.py`
 17. `src/modules/feedback_schema.py`
 
-建议首先处理的具体任务：保持 R8 不可变，确认 R9 双语 Release 正文并提交到草稿 PR #1，合并后发布 R9；让现有 R7/R8 用户手动安装一次最终 R9，再用修复版执行下一次线上更新并记录规范文件名、真实快捷方式、旧文件清理和配置保留。随后完成 Xbox App 自定义映射以及燃油车与电动车的真实手感验收。
+建议首先处理的具体任务：保持 R9 不可变，等待现有 R7/R8 用户手动安装一次 R9；只有用户明确要求时，才从修复版执行下一次线上更新并记录规范文件名、真实快捷方式、旧文件清理和配置保留。随后按用户反馈安排 Xbox App 自定义映射以及燃油车与电动车的真实手感验收，不主动重复发布后测试或资产下载。
