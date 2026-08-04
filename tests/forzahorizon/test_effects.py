@@ -348,8 +348,9 @@ def test_r2_trigger_traction_still_uses_low_speed_raw_rotation():
     assert frame[0] == M_VIBRATE
 
 
-def test_disabling_pedal_stiffness_clears_both_latched_firmware_end_walls():
+def test_disabling_each_end_wall_owner_clears_both_latched_firmware_end_walls():
     settings = Settings()
+    settings.enable_throttle_end_wall = True
     controller = Controller(settings)
     telemetry = _telemetry(brake=255, accel=255)
 
@@ -361,12 +362,54 @@ def test_disabling_pedal_stiffness_clears_both_latched_firmware_end_walls():
     assert controller._r2_in_wall is True
 
     settings.enable_brake_resistance = False
+    settings.enable_throttle_end_wall = False
     settings.enable_throttle_resistance = False
     l2, r2 = controller.update(telemetry, settings)
 
     assert l2[0] == M_OFF
     assert r2[0] == M_OFF
     assert controller._l2_in_wall is False
+    assert controller._r2_in_wall is False
+
+
+def test_throttle_end_wall_defaults_off_at_full_input():
+    settings = Settings()
+    settings.enable_throttle_resistance = False
+    controller = Controller(settings)
+
+    frame = controller.R2(_telemetry(accel=255), settings, 1.0)
+
+    assert frame[0] == M_OFF
+    assert controller._r2_in_wall is False
+
+
+def test_throttle_end_wall_is_independent_from_zero_stiffness_values():
+    settings = Settings()
+    settings.throttle_baseline_force = 0
+    settings.throttle_max_force = 0
+    settings.enable_throttle_end_wall = True
+    controller = Controller(settings)
+    telemetry = _telemetry(accel=255)
+
+    assert controller.R2(telemetry, settings, 1.0) == controller.wall
+    assert controller._r2_in_wall is True
+
+    settings.enable_throttle_end_wall = False
+    assert controller.R2(telemetry, settings, 1.1)[0] == M_OFF
+    assert controller._r2_in_wall is False
+
+
+def test_throttle_stiffness_and_end_wall_do_not_gate_traction_feedback():
+    settings = Settings()
+    settings.enable_throttle_resistance = False
+    settings.enable_throttle_end_wall = False
+    controller = Controller(settings)
+    telemetry = _telemetry(accel=255, tire_slip_ratio_rr=2.0)
+
+    controller.R2(telemetry, settings, 1.0)
+    frame = controller.R2(telemetry, settings, 1.04)
+
+    assert frame[0] == M_VIBRATE
     assert controller._r2_in_wall is False
 
 

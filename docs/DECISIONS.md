@@ -2,6 +2,15 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-08-02：R2 油门末端硬墙改为独立、默认关闭的显式选项
+
+- 状态：设置字段、运行时所有权、共享 GUI/TUI 排版、六种非英语翻译、旧 Profile 兼容与自动回归已实现；真实 DualSense/Forza 手感尚未验证。
+- 问题：R2 通用 firmware wall 原先由 `Throttle stiffness` 一并拥有，所以把“静止阻力”和“重压阻力”调成零仍会在行程末端出现满强度 `rigid_zones`。数值滑杆只改变连续 ramp，界面却没有说明或独立入口，用户会合理地把零阻力理解为全程自由。
+- 决定：新增 Profile 级 `enable_throttle_end_wall`，默认 `False`，并在共享设置 schema 中紧跟“重压阻力”显示。`Throttle stiffness` 只控制连续 ramp；新开关只控制 R2 end-wall latch。两项阻力为零不自动改写显式开关，因此用户仍可主动组合出“前段自由、只在末端限位”；关闭新开关则下一帧清除 latch。`enable_trigger_feedback` 总开关继续无条件释放全部扳机输出。
+- 配置边界：已有 Profile 缺少新字段时幂等补入 `False`，不使用版本 marker，也不根据旧阻力值猜测。这样旧配置升级后首先消除隐藏硬墙，用户之后的显式选择可跨启动和 Profile 切换保留。
+- 反馈边界：轮胎抓地力/TCR 反馈仍按遥测滑移独立输出，优先级和算法不变，不由连续油门阻力或末端硬墙开关代管。L2 的通用 end wall 继续归 `Brake stiffness` 所有；可选静态刹车 wall 继续独立。
+- 替代关系：本决定只替代下方 2026-07-30“基础扳机阻力开关必须同时释放 firmware end wall”中 R2 wall 归 `enable_throttle_resistance` 所有的部分；该决定对 L2、总开关和隐藏输出诊断的其余结论继续有效。
+
 ## 2026-08-01：自动更新终态必须由文件所有权、进程树和跨进程锁共同证明
 
 - 状态：生产代码、故障注入回归、隔离 one-file R9 → R10 事务矩阵、R9 版本递增、本地审阅构建和 R9 正式发布均已完成；真实用户目录中的首次手动安装与后续在线更新验收仍待完成。
@@ -101,6 +110,7 @@
 - 根因：L2/R2 的通用 end wall 由 `build_wall(wall_zones=2)` 生成顶部两个满强度 zone，但旧优先级在检查 `enable_brake_resistance` 和 `enable_throttle_resistance` 之前无条件锁存并返回该 frame。两个开关只关闭了后面的渐进 ramp，没有拥有并释放前面的 wall。
 - 决定：L2 通用 end wall 归 `enable_brake_resistance` 所有，R2 通用 end wall 归 `enable_throttle_resistance` 所有。对应开关关闭时立即清除 latch；开关开启时继续保留原 engage/release hysteresis。可选静态刹车 wall、手刹附加阻力、boost/G 力阻力、ABS、抓地力、红线和其他震动仍由各自开关独立控制。
 - 产品边界：Forza 游戏内振动、Steam Input 和本项目的自适应扳机效果是不同层。只关闭震动类开关但保留 `Brake stiffness` 或 `Throttle stiffness` 时，基础阻力和末端 wall 仍应存在；关闭这两个阻力开关后，通用 wall 不得继续成为隐藏输出。真实验收必须同时记录游戏内振动与 Steam Input 状态。
+- 替代关系：2026-08-02 的新决定已把 R2 wall 从 `Throttle stiffness` 拆为独立、默认关闭的显式选项；本节的 R2 所有权与产品边界按新决定执行，L2 结论不变。
 
 ## 2026-07-22：Xbox App 平面文件安装采用受限自动发现
 

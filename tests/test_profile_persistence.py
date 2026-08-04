@@ -100,6 +100,33 @@ def test_original_profile_is_seeded_from_upstream_v162_defaults(
     assert settings.brake_max_force == 80
 
 
+def test_existing_profiles_backfill_throttle_end_wall_off(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    preferences.PATH.write_text(json.dumps({
+        "version": "9",
+        "active_profile": "Default",
+        "profiles": {
+            "Default": {"throttle_max_force": 7},
+            "Legacy": {"throttle_max_force": 3},
+        },
+        "globals": {},
+    }), encoding="utf-8")
+
+    settings = Settings()
+    settings.enable_throttle_end_wall = True
+    preferences.load(settings)
+    saved = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+
+    assert settings.enable_throttle_end_wall is False
+    assert saved["profiles"]["Default"]["enable_throttle_end_wall"] is False
+    assert saved["profiles"]["Legacy"]["enable_throttle_end_wall"] is False
+
+    settings.enable_throttle_end_wall = True
+    assert profiles.apply_profile("Legacy", settings)
+    assert settings.enable_throttle_end_wall is False
+    assert settings.throttle_max_force == 3
+
+
 def test_first_run_detects_language_but_existing_config_keeps_user_choice(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     monkeypatch.setattr(preferences, "detect_system_language", lambda: "ja")

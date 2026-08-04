@@ -434,7 +434,7 @@ class Controller:
         2. Idle buzz           - stationary with light throttle
         3. Traction feedback   - accelerator/both-pedal longitudinal grip
         4. Rev limiter buzz    - high RPM while throttle remains active
-        5. Throttle end wall   - part of Throttle stiffness (hysteresis)
+        5. Throttle end wall   - independent opt-in stop (hysteresis)
         6. Throttle resistance - default rigid ramp 0..max_force
     """
 
@@ -527,7 +527,7 @@ class Controller:
             self._r2_in_wall = False
             return off()
         accel = t["accel"]
-        if not s.enable_throttle_resistance:
+        if not s.enable_throttle_end_wall:
             self._r2_in_wall = False
 
         if s.enable_collision_trigger_r2:
@@ -559,8 +559,8 @@ class Controller:
         if rev is not None:
             return rev
 
-        # 5. Throttle-stiffness end wall - latch only while that switch owns it.
-        if s.enable_throttle_resistance:
+        # 5. Optional throttle end wall - independent from the stiffness curve.
+        if s.enable_throttle_end_wall:
             self._r2_in_wall = _wall_state(
                 accel,
                 self._r2_in_wall,

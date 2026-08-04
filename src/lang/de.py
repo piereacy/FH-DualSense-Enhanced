@@ -60,6 +60,7 @@ STRINGS = {
     "Brake trigger dead zone": "Brems-Trigger-Totzone",
     "Resting stiffness": "Ruhewiderstand",
     "Hard-press stiffness": "Widerstand bei vollem Druck",
+    "Throttle end wall": "Gas-Endanschlag",
     "Stiffness curve shape": "Form der Widerstandskurve",
     "Handbrake extra stiffness": "Zusätzlicher Handbremswiderstand",
     "Wall position on the trigger": "Wandposition am Trigger",

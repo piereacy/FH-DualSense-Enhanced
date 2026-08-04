@@ -63,6 +63,7 @@ TRIGGER_SETTING_SECTIONS = (
     ("Right trigger - Gas force", (
         ("throttle_baseline_force", "Resting stiffness", 0, 255, ""),
         ("throttle_max_force", "Hard-press stiffness", 0, 255, ""),
+        ("enable_throttle_end_wall", "Throttle end wall", None, None, ""),
         ("throttle_curve", "Stiffness curve shape", 0.1, 20.0, ""),
     )),
     ("ABS (anti-lock brake) rumble", (
