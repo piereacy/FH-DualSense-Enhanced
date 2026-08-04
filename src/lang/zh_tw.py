@@ -59,6 +59,7 @@ STRINGS = {
     "Brake trigger dead zone": "煞車扳機死區",
     "Resting stiffness": "靜止阻力",
     "Hard-press stiffness": "深踩阻力",
+    "Throttle end wall": "油門末端硬牆",
     "Stiffness curve shape": "阻力曲線形狀",
     "Handbrake extra stiffness": "手煞車額外阻力",
     "Wall position on the trigger": "扳機上的阻力牆位置",

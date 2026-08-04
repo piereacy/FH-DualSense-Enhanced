@@ -276,17 +276,18 @@ def test_verified_pending_update_round_trips_across_restart(monkeypatch, tmp_pat
 
     update_dir = tmp_path / "updates"
     update_dir.mkdir()
-    staged = update_dir / "FH-DualSense-Enhanced-R10.exe"
+    future_version = service._current_version() + 1
+    staged = update_dir / f"FH-DualSense-Enhanced-R{future_version}.exe"
     staged.write_bytes(b"MZ-persisted-update")
     release = UpdateRelease(
-        version=10,
-        tag="R10",
+        version=future_version,
+        tag=f"R{future_version}",
         body="release",
-        html_url="https://example.test/R10",
+        html_url=f"https://example.test/R{future_version}",
         asset_name=staged.name,
-        asset_url="https://example.test/R10.exe",
+        asset_url=f"https://example.test/R{future_version}.exe",
         asset_size=staged.stat().st_size,
-        checksum_url="https://example.test/R10.exe.sha256",
+        checksum_url=f"https://example.test/R{future_version}.exe.sha256",
     )
     monkeypatch.setattr(service.paths, "DATA", tmp_path)
     writer = UpdateService(Settings(), client=FakeClient())

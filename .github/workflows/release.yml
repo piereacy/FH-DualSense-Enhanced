@@ -221,19 +221,14 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: false
           body: |
-            ## Enhanced R9 中文说明
+            ## Enhanced R10 中文说明
 
-            Enhanced R9 新增自定义 XBOX 按键映射，并解决长期影响自动更新的可靠性问题。
+            Enhanced R10 让油门阻力更容易完全关闭。
 
             ### 更新内容
 
-            - **自定义 XBOX 按键映射**：新增独立页面，可以修改 DualSense 数字按键到虚拟 Xbox 360 手柄的对应关系，包括触摸板左右点击。只有在“游戏平台”选择 `XBOX 版` 时可以编辑；Steam 版请直接在 Steam 内修改映射。可以随时关闭自定义映射或一键恢复 Steam 默认映射。
-            - **从 R9 开始，自动更新更可靠**：修复更新时误报“存在其他实例”、升级后文件名不正确、旧 EXE 或 `.old` 遗留，以及失败后无法原地重试等问题。更新失败会尽量恢复原版本；检测到新版本时也会显示手动下载链接。
-            - **项目入口补全**：`关于与许可证` 页面新增当前项目仓库链接。
-
-            ### R8 用户请先手动更新
-
-            R8 自带的旧更新程序无法在升级过程中使用 R9 的修复，因此 R8 → R9 仍可能更新失败。请从本发布页手动下载并启动一次 `FH-DualSense-Enhanced-R9.exe`；从 R9 开始，后续版本将使用新的更新流程。现有设置会继续保留。
+            - **油门末端硬墙独立控制**：在“重压阻力”下方新增“油门末端硬墙”开关，默认关闭。关闭后，末端硬墙不再顶手；连续阻力仍由静止阻力和重压阻力设置决定，需要末端限位时也可以单独开启。
+            - **旧配置安全升级**：现有 Profile 不会自动打开末端硬墙，原有油门阻力设置会继续保留。
 
             ### Windows 独立 EXE（推荐）
 
@@ -249,19 +244,14 @@ jobs:
             - 在 Forza Horizon 中开启 Data Out，设置为 `127.0.0.1:5300`，并关闭游戏内振动。
             - Xbox App 版请在软件内选择 `XBOX 版`，并避免同时让 Steam Input 或 DS4Windows 接管手柄。
 
-            ## Enhanced R9 English notes
+            ## Enhanced R10 English notes
 
-            Enhanced R9 adds custom Xbox button mapping and resolves long-running automatic update reliability problems.
+            Enhanced R10 makes throttle resistance easier to disable completely.
 
             ### What's new
 
-            - **Custom Xbox button mapping**: a new standalone page lets you remap DualSense digital buttons to the virtual Xbox 360 controller, including left and right touchpad clicks. Editing is available only when `Xbox App` is selected as the game platform; Steam users should change their mapping in Steam. Custom mapping can be disabled at any time or reset to the Steam defaults.
-            - **More reliable updates from R9 onward**: fixes false “another instance is running” errors, incorrect filenames after upgrading, leftover old EXEs or `.old` files, and failures that could not be retried in place. Failed updates try to restore the previous version, and the update page now also shows a manual download link.
-            - **Project link**: About & Licenses now links to the current project repository.
-
-            ### Important for R8 users
-
-            R8 ships with the older updater and cannot use the R9 fixes during the R8 → R9 handoff, so that automatic update may still fail. Manually download and launch `FH-DualSense-Enhanced-R9.exe` once from this release page. Future updates starting from R9 will use the corrected update flow. Existing settings remain in place.
+            - **Independent throttle end wall**: a new `Throttle end wall` switch appears below `Heavy press resistance` and is off by default. Turning it off removes the end-stop resistance; the stationary and heavy-press settings still control continuous resistance, and the end wall can be enabled on its own when wanted.
+            - **Safe profile upgrade**: existing profiles do not automatically enable the end wall, while their throttle-resistance settings remain in place.
 
             ### Windows standalone EXE (recommended)
 

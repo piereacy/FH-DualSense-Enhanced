@@ -389,6 +389,20 @@ def test_gui_and_tui_expose_identical_normal_r4_tuning_sections():
         assert sections[title] == expected
 
 
+def test_throttle_end_wall_is_below_hard_press_stiffness_in_both_frontends():
+    from modules.gui.controls_tab import ControlsTab as GuiTriggerTab
+    from modules.tui.controls_tab import ControlsTab as TuiTriggerTab
+
+    assert GuiTriggerTab.SECTIONS == TuiTriggerTab.SECTIONS == TRIGGER_SETTING_SECTIONS
+    sections = _schema_fields_by_section(TRIGGER_SETTING_SECTIONS)
+    gas_fields = sections["Right trigger - Gas force"]
+
+    assert gas_fields.index("enable_throttle_end_wall") == (
+        gas_fields.index("throttle_max_force") + 1
+    )
+    assert Settings().enable_throttle_end_wall is False
+
+
 def test_gui_and_tui_expose_identical_advanced_r4_fields():
     from modules.gui.controls_tab import ControlsTab as GuiTriggerTab
     from modules.gui.settings_tab import SettingsTab as GuiGripTab

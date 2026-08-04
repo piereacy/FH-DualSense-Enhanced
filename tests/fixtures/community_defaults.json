@@ -34,6 +34,7 @@
   "accel_deadzone": 0,
   "throttle_baseline_force": 0,
   "throttle_max_force": 1,
+  "enable_throttle_end_wall": false,
   "throttle_curve": 5.0,
   "throttle_wall_engage_at": 250,
   "throttle_wall_release_at": 200,

@@ -55,12 +55,13 @@ class Settings:
     abs_wall_zones: int = 3                   # top zones remain a maximum wall
 
     # MARK: R2 throttle resistance
-    # This switch owns both the light rigid curve and its firmware end wall.
-    # 0..wall_engage_at maps baseline..max_force, then the wall protects full travel.
+    # The light rigid curve and firmware end wall are independently selectable.
+    # 0..wall_engage_at maps baseline..max_force; the optional wall protects full travel.
     enable_throttle_resistance: bool = True
     accel_deadzone: int = 0                   # community-informed baseline
     throttle_baseline_force: int = 0          # force at deadzone exit
     throttle_max_force: int = 1               # peak force just before the wall (lighter than brake)
+    enable_throttle_end_wall: bool = False    # optional fixed wall near full travel
     throttle_curve: float = 5.0               # parabolic exponent; higher = softer early, firmer near wall
     throttle_wall_engage_at: int = 250        # byte that triggers firmware wall. DO NOT CHANGE
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE

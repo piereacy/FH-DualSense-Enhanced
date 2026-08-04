@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "9"
-CURRENT_RELEASE_VERSION = "R9"
+CURRENT_INTERNAL_VERSION = "10"
+CURRENT_RELEASE_VERSION = "R10"
 
 
 def _source(path: str) -> str:
@@ -166,26 +166,19 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R9 中文说明" in workflow
-    assert "Enhanced R9 English notes" in workflow
+    assert "Enhanced R10 中文说明" in workflow
+    assert "Enhanced R10 English notes" in workflow
     assert "generate_release_notes: false" in workflow
-    assert "自定义 XBOX 按键映射" in workflow
-    assert "Custom Xbox button mapping" in workflow
-    assert "包括触摸板左右点击" in workflow
-    assert "including left and right touchpad clicks" in workflow
-    assert "Steam 版请直接在 Steam 内修改映射" in workflow
-    assert "Steam users should change their mapping in Steam" in workflow
-    assert "从 R9 开始，自动更新更可靠" in workflow
-    assert "More reliable updates from R9 onward" in workflow
-    assert "手动下载链接" in workflow
-    assert "manual download link" in workflow
-    assert "R8 用户请先手动更新" in workflow
-    assert "Important for R8 users" in workflow
-    assert "FH-DualSense-Enhanced-R9.exe" in workflow
-    assert "现有设置会继续保留" in workflow
-    assert "Existing settings remain in place" in workflow
-    assert "项目入口补全" in workflow
-    assert "Project link" in workflow
+    assert "油门末端硬墙独立控制" in workflow
+    assert "Independent throttle end wall" in workflow
+    assert "默认关闭" in workflow
+    assert "off by default" in workflow
+    assert "旧配置安全升级" in workflow
+    assert "Safe profile upgrade" in workflow
+    assert "TCR / 抓地力反馈保持独立" not in workflow
+    assert "TCR / grip feedback remains independent" not in workflow
+    assert "R7/R8 用户" not in workflow
+    assert "R7/R8 users" not in workflow
     for implementation_term in (
         "effective_redline_rpm",
         "redline_alert_allowed",

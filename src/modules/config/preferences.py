@@ -281,6 +281,11 @@ def _ensure_active(raw: dict, s) -> dict:
     # Original is a built-in canonical preset, not a user-owned snapshot.
     # Refresh it so upgrades receive corrections to the bundled preset too.
     raw["profiles"][ORIGINAL_PROFILE_NAME] = original_profile_fields()
+    # Old profile snapshots predate the explicit R2 end-wall switch. Backfill
+    # the safe default instead of inheriting the value from whichever profile
+    # happened to be active before a switch.
+    for snapshot in raw["profiles"].values():
+        snapshot.setdefault("enable_throttle_end_wall", False)
     if raw["active_profile"] not in raw["profiles"]:
         raw["active_profile"] = sorted(raw["profiles"].keys(), key=str.lower)[0]
     # Migrate global fields out of per-profile snapshots (older versions stored

@@ -60,6 +60,7 @@ STRINGS = {
     "Brake trigger dead zone": "Fren tetiği ölü bölgesi",
     "Resting stiffness": "Bekleme sertliği",
     "Hard-press stiffness": "Tam basış sertliği",
+    "Throttle end wall": "Gaz sonu sert durdurucu",
     "Stiffness curve shape": "Sertlik eğrisi şekli",
     "Handbrake extra stiffness": "El freni ek sertliği",
     "Wall position on the trigger": "Tetik üzerindeki duvar konumu",

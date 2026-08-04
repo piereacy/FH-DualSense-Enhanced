@@ -201,11 +201,11 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 3. 原地轻踩油门 idle buzz。
 4. 踩油门或同时踩下两块踏板时的通用纵向抓地力反馈。
 5. 踩住油门时的红线震动。
-6. `Throttle stiffness` 所属的接近行程末端 firmware wall。
+6. 默认关闭、由 `enable_throttle_end_wall` 独立拥有的接近行程末端 firmware wall。
 7. 涡轮增压、G 力与普通油门阻力的合成 ramp；新增两层均默认关闭。
 8. R2 扳机键未踩下且以上均无输出时的可选路面/减速带纹理。
 
-两侧通用 firmware end wall 都使用顶部两个满强度 zone，但它不是独立的隐藏效果。L2 wall 归 `enable_brake_resistance` 所有，R2 wall 归 `enable_throttle_resistance` 所有；运行中关闭对应的 `Brake stiffness` 或 `Throttle stiffness` 时，`Controller` 必须先清除 latch，再继续判断其他独立效果。这样关闭两项基础阻力并关闭其余扳机反馈后，踏板遥测即使仍为 `255` 也会输出 `off()`，不会在约 80% 到 90% 物理行程留下 `rigid_zones` 硬墙。可选静态刹车 wall 继续由 `enable_brake_static_wall` 单独拥有，并在启用时保留自身 wall；手刹附加阻力、boost/G 力阻力和震动效果同样不被基础阻力开关代管。用户不需要逐项证明这些开关都已关闭时，可以直接关闭 `enable_trigger_feedback`，由总开关统一释放两侧执行器。
+两侧通用 firmware end wall 都使用顶部两个满强度 zone。L2 wall 继续归 `enable_brake_resistance` 所有；R2 wall 改由默认关闭的 `enable_throttle_end_wall` 独立拥有，`enable_throttle_resistance` 只控制连续 ramp。运行中关闭各自所有者时，`Controller` 必须先清除 latch，再继续判断其他独立效果。R2 两项阻力数值为零且 wall 关闭时全程自由；数值为零但用户显式开启 wall 时，允许前段自由、只在末端形成限位。可选静态刹车 wall 继续由 `enable_brake_static_wall` 单独拥有，并在启用时保留自身 wall；手刹附加阻力、boost/G 力阻力和震动效果同样不被基础阻力或 R2 wall 开关代管。用户不需要逐项证明这些开关都已关闭时，可以直接关闭 `enable_trigger_feedback`，由总开关统一释放两侧执行器。
 
 第 7 层由 `TriggerAnimations.throttle_ramp()` 加法合成，而不是在基础油门阻力与实验层之间二选一。基础项在 `enable_throttle_resistance=True` 时使用 `_ramp(accel, accel_deadzone, throttle_baseline_force, throttle_max_force, throttle_curve, throttle_wall_engage_at)`；Enhanced R3 与 Enhanced R4 的默认值均为 `baseline=0`、`max_force=1`、`curve=5.0`。可选 boost 项和 G 力项只在各自开关开启时增加 force，最终统一交给 `rigid()`。
 
@@ -315,7 +315,7 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 
 所有默认值位于 `src/modules/config/settings.py`。运行中的 GUI/TUI slider 直接修改同一个 `Settings` 实例，热循环下一帧即可读取多数变化。
 
-`src/modules/feedback_schema.py` 是扳机与握把界面字段归属的唯一声明。GUI 与 TUI 的 `ControlsTab` 顶部先渲染 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、常用调节以及扳机实验参数；各自的 `SettingsTab` 只渲染握把开关、常用调节以及握把实验参数。GUI 双列布局让总开关和共享扳机反馈各占整行，L2 与 R2 卡片并排；窄窗口仍退回单列，卡片只在列数变化时原地重新 `grid()`。轮胎抓地力属于扳机反馈，因此也受总开关截断；body haptics、握把换挡和握把红线属于独立握把反馈。电动车红线 gate 属于运行时规则，不在 R2 或握把红线开关下重复显示车型说明。涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理继续位于扳机页默认折叠的实验性区域；握把红线曲线、起始冲击和碰撞包络位于握把页默认折叠区域。全部车辆手感字段仍属于 Profile。灯效有独立页面，转速灯带与挡位 Player LEDs 默认关闭。共享 schema、防重字段测试、翻译覆盖测试和 GUI/TUI class contract 防止同一字段漂移到两页或两套界面的不同位置。
+`src/modules/feedback_schema.py` 是扳机与握把界面字段归属的唯一声明。GUI 与 TUI 的 `ControlsTab` 顶部先渲染 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、常用调节以及扳机实验参数；各自的 `SettingsTab` 只渲染握把开关、常用调节以及握把实验参数。GUI 双列布局让总开关和共享扳机反馈各占整行，L2 与 R2 卡片并排；窄窗口仍退回单列，卡片只在列数变化时原地重新 `grid()`。R2 的 `enable_throttle_end_wall` 是普通 Profile 调节，GUI/TUI 都把它渲染在“重压阻力”正下方。轮胎抓地力属于扳机反馈，因此也受总开关截断，但不受油门连续阻力或末端 wall 开关代管；body haptics、握把换挡和握把红线属于独立握把反馈。电动车红线 gate 属于运行时规则，不在 R2 或握把红线开关下重复显示车型说明。涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理继续位于扳机页默认折叠的实验性区域；握把红线曲线、起始冲击和碰撞包络位于握把页默认折叠区域。全部车辆手感字段仍属于 Profile。灯效有独立页面，转速灯带与挡位 Player LEDs 默认关闭。共享 schema、防重字段测试、翻译覆盖测试和 GUI/TUI class contract 防止同一字段漂移到两页或两套界面的不同位置。
 
 ### 8.2 `user_preferences.json`
 
@@ -328,7 +328,7 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 - 第一次生成有效配置时，`system_language.detect_system_language()` 把 Windows 显示语言映射到现有 `en/de/ja/ru/tr/zh/zh_tw` 目录；已有配置继续使用用户选择。
 - `ProfileSession` 只在内存中保存 GUI/TUI 启动时的 `Default` Profile 快照。当前仍为 `Default` 且 Profile 字段发生变化时，统一退出入口才提示另存命名 Profile；global-only 变化和当前命名 Profile 不提示。
 - 恢复出厂会先备份现有 JSON 为 `.bak`，保留全部命名 Profile，重建 `Default` 和 globals，切回 `Default` 并重新检测系统语言。只有原子写入成功后才修改运行中的 `Settings`。
-- 旧命名 Profile 保留原 `rev_limit_*` 扳机参数；缺失的 R4 字段按当前默认值补齐，因此所有新增扳机层与灯效默认关闭，握把换挡仍默认关闭。已经显式保存的值不会被覆盖。
+- 旧命名 Profile 保留原 `rev_limit_*` 扳机参数；缺失的 R4 字段按当前默认值补齐，因此所有新增扳机层与灯效默认关闭，握把换挡仍默认关闭。缺少 `enable_throttle_end_wall` 的新旧 Profile 会幂等补入 `False`，不会根据两项阻力数值推断，也不会在切换 Profile 时继承上一份 Profile 的开启状态。已经显式保存的值不会被覆盖。
 - 早期内部版本 `3` 预览曾复用 `rev_limit_*` 作为握把参数。缺少新握把 marker 的预览 Profile 会执行一次拆分迁移：已知 `10/96` 预览默认恢复为扳机 `30/12` 并采用新握把 `10/192`；自定义值复制给握把且继续保留在扳机侧。已有新字段时迁移保持幂等。
 - 加载只接受预期 JSON 对象形状；字段按照 `Settings` 类型做严格转换，浮点数还必须有限。未知、嵌套错误或不可转换值回退到当前默认，不进入运行时热路径。
 - 写入使用同目录 UUID 临时文件再 replace，避免并发写入共用固定 `.tmp`；覆盖现有有效配置和恢复出厂前先完成可读 `.bak`，写入失败不删除原文件。

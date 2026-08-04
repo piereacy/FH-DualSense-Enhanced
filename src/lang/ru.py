@@ -60,6 +60,7 @@ STRINGS = {
     "Brake trigger dead zone": "Мёртвая зона курка тормоза",
     "Resting stiffness": "Жёсткость в покое",
     "Hard-press stiffness": "Жёсткость при полном нажатии",
+    "Throttle end wall": "Концевой упор газа",
     "Stiffness curve shape": "Форма кривой жёсткости",
     "Handbrake extra stiffness": "Доп. жёсткость ручника",
     "Wall position on the trigger": "Положение упора на курке",

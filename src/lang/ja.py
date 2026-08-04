@@ -60,6 +60,7 @@ STRINGS = {
     "Brake trigger dead zone": "ブレーキトリガーのデッドゾーン",
     "Resting stiffness": "待機時の硬さ",
     "Hard-press stiffness": "深押し時の硬さ",
+    "Throttle end wall": "アクセル終端ストッパー",
     "Stiffness curve shape": "硬さカーブの形状",
     "Handbrake extra stiffness": "ハンドブレーキの追加の硬さ",
     "Wall position on the trigger": "トリガー上のウォール位置",
