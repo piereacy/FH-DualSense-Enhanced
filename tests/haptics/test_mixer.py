@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from modules.config import preferences
 from modules.config.settings import Settings
 from modules.haptics.frame import SILENT_FRAME, to_compatible_rumble
 from modules.haptics.mixer import HapticMixer
@@ -9,7 +10,7 @@ from modules.haptics.mixer import HapticMixer
 
 @pytest.fixture
 def settings():
-    value = Settings()
+    value = _before_r11_settings()
     value.enable_body_haptics = True
     value.enable_grip_redline_haptics = True
     value.body_haptics_intensity = 1.0
@@ -19,6 +20,16 @@ def settings():
     value.slip_haptics_intensity = 1.0
     value.accel_deadzone = 50
     value.abs_min_speed_kmh = 15.0
+    return value
+
+
+def _before_r11_settings():
+    value = Settings()
+    preferences._apply_snap(
+        value,
+        preferences.default_before_r11_profile_fields(),
+        preferences._profile_fields(value),
+    )
     return value
 
 
@@ -354,7 +365,7 @@ def test_redline_grip_warning_requires_accelerator_and_rpm_threshold(settings):
 
 
 def test_redline_ducks_continuous_background_but_not_transients(settings):
-    reference = Settings()
+    reference = _before_r11_settings()
     reference.enable_body_haptics = True
     reference.body_haptics_intensity = 1.0
     reference.engine_haptics_intensity = 1.0

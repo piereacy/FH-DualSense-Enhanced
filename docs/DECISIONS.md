@@ -2,6 +2,122 @@
 
 本文记录会影响后续开发方向、但不适合塞进架构说明的关键决定。新决定应注明日期、状态、原因和后果；已被替代的决定保留并标注替代关系。
 
+## 2026-08-24：当前版本用户文案不得提及已经删除的功能
+
+- 状态：已决定并应用于 Enhanced R11 的中英文 Release 正文。
+- 背景：面向用户的增量更新日志应帮助用户快速理解当前版本实际提供什么。用“本版不包含”或与现有行为对比的方式解释已经撤下的方案，会把非交付内容重新带回当前版本说明，增加理解成本。
+- 决定：README、GitHub Release body、更新入口和其他当前版本用户文案只正面描述生产版本实际可用的功能、限制、升级影响、安装方式和必需设置。已经删除、取消、撤下或仅归档于 `experiments/` 的功能不进入这些用户表面，也不以否定句反向提及。
+- 文档边界：老三样和 Git 历史继续保留替代关系、删除原因与实现证据，避免丢失工程决策；这类内部历史不得自动复制到当前 Release 正文。
+- 后果：发行契约测试除验证必要用户事实外，还必须拒绝已删除功能的名称和对应否定式说明回流。R11 的手柄使用提醒只陈述应用运行期间的实际占用与退出方式。
+
+## 2026-08-24：R11 保持虚拟 X360，并停止准备旧 R10 监听备用包
+
+- 状态：已决定并落实。对现有 Windows 虚拟手柄方案完成源码与上游能力审查后，R11 继续使用已集成的 ViGEm Xbox 360 target，不加入 Xbox One/Xbox Series 虚拟设备、GameInput impulse trigger 或 Share 系统键模拟。
+- 交付边界：旧 R10 physical-HID 前台监听候选不再作为当前 PR 或 R11 发布的备用交付物，不构建、不推送、不写入 Release 正文，也不进入更新资产。2026-08-21 决定保留的前台 ownership 源码仍只作为 `experiments/foreground_ownership/` 下的非生产归档。
+- 替代关系：本决定只替代下方 2026-08-21 与 2026-08-20 决定中“继续提供旧 R10 独立备用”的部分；R11 不交付前台 detector、实验必须隔离、切到桌面或其他游戏不会主动释放实体 DualSense 等边界继续有效。
+
+## 2026-08-24：以配置 33 的最终 ABS 调教建立 R11 Default
+
+- 状态：已决定并落实。用户在配置 `33` 基础上开启 ABS 后确认该状态作为 R11 新 `Default`；滑块产生的四处二进制浮点尾差按 `0.6/0.6/0.3/0.6` 规范化，不改变语义，其中最后一项本来就与旧默认语义相同。新旧默认共有 136 个 Profile 字段，正好 70 项实质值不同。
+- Profile 决定：内置 Profile 固定为 `Default`、`Default before R11`、`Original`。`Default` 使用最终社区调教并默认开启 ABS；`Default before R11` 保存升级前的实际 `Default`，新安装与恢复出厂时则由 70 项历史反向覆盖重建；`Original` 继续以 pre-R11 默认作为基底应用上游 1.6.2 参数，不得被新调教连带改变。三份内置 Profile 不可删除或改名，其他命名 Profile 保持原名、内容与 active 选择。
+- 迁移决定：`r11_default_profile_from_33` 只运行一次。已有 `Default` 先补全并转存到 `Default before R11`，然后才写入新 `Default`；首次安装直接生成三份内置 Profile。marker 完成后用户对两份 Default 的后续调节必须跨重启保留，恢复出厂才重建规范三份。
+- 鸣谢决定：GUI/TUI 的“关于与许可证”均显示可点击的“调教鸣谢：Bilibili 开心散仙”，目标固定为 `https://space.bilibili.com/471461948?spm_id_from=333.337.0.0`。用户消息末尾的中文句号作为标点剔除，不进入 URL；这项鸣谢不是第三方运行时依赖或许可证替代。
+
+## 2026-08-21：R11 不交付前台 ownership 实验，源码移出生产路径
+
+- 状态：已决定并落实。R11 的 `src` 不再包含 Windows 前台窗口 detector、physical HID ownership gate、Configuration Manager 被动等待检测、`WAITING_GAME`、runtime tick 或延迟启动脉冲；GUI/TUI/headless 均恢复应用生命周期内的普通 backend 行为。
+- 生产决定：native backend 在应用启动和热切换时正常打开，应用运行期间可以枚举并持有选定的实体 DualSense；切到桌面或其他游戏不会主动释放。Xbox App direct-HID 模式在 service 生命周期内启用 input consumer、虚拟 X360、Raw Input 与用户显式开启的 HidHide；Steam 不创建本项目虚拟设备，DSX 不持有实体 HID。有效游戏遥测包直接进入输出 loop，并抢占正在播放的 Haptics Lab 预览。
+- 隔离决定：被撤下的实验不得删除，完整核心实现、原生 worker 移除补丁和原回归测试保存在 `experiments/foreground_ownership/`。该目录没有 package initializer，生产源码、活动测试、PyInstaller spec 与 Release workflow 都不得导入或收集；冻结 R11 后必须检查 PYZ 中不存在 `modules.dualsense.passive_detection` 或实验模块。
+- 版本边界：旧 R10 physical-HID 前台监听候选继续按原字节作为独立备用，保持 R10 版本资源、文件名与校验值。它不替换 R11 源码，不改名为 R11，也不进入 R11 更新资产、tag 或发布说明。
+- 后果：Haptics Lab 仍只位于“系统与更新”的默认折叠卡片；折叠、离页、失焦、断连、到期、停止、重启、退出或有效遥测都会释放预览。HidHide 若由用户开启，会在 Xbox App bridge/target 生命周期内保持 session 隔离，不再因桌面或其他窗口取得前台而自动清理。下方 2026-08-20、2026-08-12、2026-08-10 与 2026-08-09 中所有把前台 gate 写成 R11 当前生产边界的段落，均由本决定替代；其现场证据和失败历史继续保留。
+
+## 2026-08-20：Haptics Lab 归入系统页，旧 R10 监听器只作独立备用
+
+- 状态：GUI/TUI 顶层 Lab 入口已移除，默认折叠卡片、折叠/离页释放和旧 R10 独立备用均已完成；其中“R11 新监听源码保持生产状态”的部分已由 2026-08-21 决定替代。
+- 界面决定：Haptics Lab 不再占用 GUI 左侧导航或 TUI 顶层标签，只放在“系统与更新”页内的紧凑折叠卡片，并且每次启动默认折叠。展开后仍提供原有场景、强度、持续时间、状态和停止动作；折叠卡片、离开系统页或应用失焦必须撤销预览 lease。这个决定只改变入口层级，不删除 `modules.haptics.lab`、输出 loop、诊断 snapshot、场景或多语言文案。
+- 版本边界：用户需要的是旧 R10 physical-HID 监听候选作为备用，不是把 R11 新写的监听实现改名或回退。备用包保持 `FileVersion/ProductVersion=R10`、规范 R10 文件名和既有 SHA-256，独立于 R11 源码、更新资产、tag 和发布说明；原本写入此处的 R11 前台 ownership 实现已由 2026-08-21 决定移入实验区。后续不得把两个 listener lifecycle 混在同一构建中。
+- 验证边界：旧 R10 备用包只能继承其当时已经完成的自动测试、PE/sidecar 与隐藏 `--help` 校验；没有新增真实 DualSense、FH4/FH5/FH6、桌面/其他游戏切换或长时间硬件结论。R11 的 Lab 卡片也必须单独通过当前源码回归和冻结构建，不能用旧 R10 二进制替代验证。
+
+## 2026-08-12：Xbox App X360 bridge 增加 Steam Input 风格体感到摇杆
+
+- 背景：用户要求 Xbox 手柄映射支持 DualSense 陀螺仪并按 Steam Input 的交互方式配置。当前 ViGEm target 是 Xbox 360；XUSB report 没有 gyro/accelerometer 字段，因此不能把它伪装成游戏可直接读取的原生体感设备。Valve 的公开 Steam Input 更新把 Gyro to Joystick 分为 Camera 与 Deflection，其中 Deflection 使用 accelerometer sensor fusion；Linux `hid-playstation` 与 SDL 的公开实现给出 DualSense common report、feature calibration 和 sensor timestamp 的可复核格式。
+- 决定：为 Xbox App bridge 增加 global 保存的 `xinput.gyro` 层，并采用显式父子开关：必须先开启 `enable_custom_xinput_mapping` 总开关，再开启默认关闭的 `enable_xinput_gyro` 子开关，体感才可输出；任一上级关闭都由 service 向 bridge 热发布 Off，保存的模式和参数保留。Camera 按校准角速度和 full-stick deg/s 直接生成摇杆量；Deflection 以 3 MHz sensor timestamp 积分角度，用起始重力方向对可观测轴作低频校正，再按 full-stick angle 归一化。两者支持输出左右摇杆、Yaw/Roll/组合、可选垂直输出、Always/L1/R1/L2/R2/触摸板触摸激活、反转、deadzone 和 smoothing；输出只与实体摇杆相加并 clamp，不重建 target。GUI/TUI 共用同一 schema，并在 Steam 平台锁定，避免与 Steam Input 重复处理。
+- HID 边界：USB/BT common parser 解码 gyro、accelerometer 与 sensor timestamp。feature report `0x05` 只由 active runtime 的唯一 HID worker 在 handle 已打开后读取；CRC、分母、bias 或 scale 任一异常时整组回退 nominal 值，feature API 失败也不能阻断手柄连接或创建第二个 reader。键鼠 owner 期间静态 gyro 漂移不能抢回虚拟手柄，只有超过至少 5 deg/s 的动作才恢复 controller owner。
+- 范围与证据：这是对 Valve 公布模式语义的兼容实现，不复制 Steam 闭源滤波器，也不承诺与 Steam 的曲线、自动校准、Bluetooth prediction 或手感逐样本相同。自动测试覆盖 report/CRC/calibration、Camera/Deflection、激活/反转/平滑、stick 叠加/clamp、热更新、键鼠所有权、global persistence、GUI/TUI 与六语言契约；真实 DualSense、Steam Input A/B 和 Forza 驾驶手感仍需实机验收。
+
+## 2026-08-12：非地平线场景不持有或瞬时打开物理 DualSense HID
+
+- 状态：生产源码、GUI/TUI 接线、Windows Configuration Manager 被动检测、慢打开竞态防护、自动回归和隔离冻结审阅包均已完成；真实 DualSense、Forza 与崩坏：星穹铁道联动仍待用户验收。
+- 现场证据：用户实测 `dist-r10-project-fixes-review-2` 时，FHDS 不运行则崩坏：星穹铁道可正常控制；FHDS 运行且手柄保持开启时，崩铁既不能由键鼠也不能由手柄控制。该现场配置为 Steam 模式，`enable_hidhide=false`，运行日志明确记录 `HidHide: not detected`，随后在 `StarRail.exe` 已运行的非地平线场景出现 `DualSense HID opened (BT, pid=0x0ce6)`。因此根因属于 FHDS 自己仍持有物理 Bluetooth HID，不是 Steam 或 HidHide。
+- 所有权决定：Windows native backend worker 可以随应用启动，但 ownership gate 初始关闭。只有 FH4/FH5/FH6 精确拥有前台窗口，或用户在 FHDS 自身前台显式启动有界 Haptics Lab 预览时，唯一 I/O worker 才能调用 hidapi enumerate、构造 `hid.device()` 和打开物理 handle。地平线不在前台、前台查询失败、同步、安装、停止、Lab 到期/切页/窗口失焦时立即关闭 gate；worker 在自身线程内静音并关闭现有 handle。若 gate 在慢 `open_path()` 或 handover validation 期间关闭，晚返回的 candidate 立即关闭且不能提交。
+- 检测决定：等待期不再用 hidapi 枚举。`passive_detection.py` 通过 Windows Configuration Manager 的 present PnP device tree 识别 Sony `VID_054C` / Bluetooth `VID&0002054C` 与 DualSense/Edge PID；USB present 节点可直接聚合，Bluetooth PnP MAC 只有同时出现在 Classic Bluetooth API connected-only 枚举中才发布 `ControllerPhase.AVAILABLE`。这是因为 paired/remembered BTHENUM 节点在手柄关机后仍可保持 present。系统页只显示聚合的被动记录，不暴露 path、transport、serial 或 identify pulse；这些信息在 active runtime 由唯一 HID owner 解析。PnP/connected 查询都不打开 HID，连接、电量和 transport 仍只由有效输入报告建立。
+- Lab 边界：Haptics Lab 仍复用同一 I/O worker，不创建第二个 reader，也不启动 XInput、Raw Input 或 HidHide。点击预览只申请最长 3 秒的临时 lease；FHDS 窗口失焦、隐藏、切页、预览到期、Forza 抢占、backend 重启和退出都会撤销 lease。获取物理 handle 期间 Lab 等待连接，不能在第一帧因尚未收到有效报告而误判断线。
+- 替代关系：本决定替代 2026-08-10 Gate 决定中“物理 HID backend 不因 gate 关闭而退出”、2026-08-09“前台 gate 只停游戏输出，物理控制器保持检测”的持续 HID reader 部分，并恢复同日“完整 controller session”决定的 physical handle 生命周期；精确前台 PID、100 ms 许可发布、独立 detector/child worker、等待期 UDP 丢弃、Xbox 子链路、HidHide ownership 与单一 I/O thread 边界继续有效。DSX 不持有物理 HID，本轮只保留原有 UDP 行为。
+
+## 2026-08-10：前台 gate 独立观察，HidHide 等待实际 target 且不接管全局 Active
+
+- 状态：生产源码、GUI/TUI 接线、六种非英语提示与合成回归已完成；真实 DualSense、HidHide driver、Forza 和崩坏：星穹铁道联动仍未执行。
+- 问题：把前台查询放在 telemetry loop 内会受用户配置的 UDP timeout 和 child teardown 阻塞；先等待 monitor 停止再关闭许可还会留下短暂重开竞态。HidHide 若只凭 ViGEmBus probe 就隐藏物理手柄，虚拟 target 创建失败时会让游戏两边都没有可用控制器。由 FHDS 临时切换 HidHide 全局 `Active` 还会与官方客户端及其他 feeder 争夺持久配置所有权。
+- Gate 决定：Windows 由独立 50 ms detector thread 执行精确前台查询，service 对 runtime tick 只发布缓存状态。detector 不持有 child lifecycle lock，也不调用 ViGEm、Raw Input 或 HidHide；这些耗时操作由另一条串行 worker 拥有。真实 UDP socket 单次等待限制为 50 ms，合计输出停止预算为 100 ms。inactive 边沿先把许可发布为 false、失效带 token 的 consumer/visibility callback 并取消启动脉冲，再请求 child cleanup；false → true 发生在旧阻塞 start 返回前时，gate generation 迫使旧代际先清理并重新绑定。同步、停止或安装期间先禁用 gate，在途的旧查询结果不得重新打开它。该节原先允许物理 HID backend 在 gate 关闭时继续持有 handle，已由 2026-08-12 决定替代；DSX UDP backend 的原有生命周期不变。
+- HidHide 决定：可选隔离只在 `BridgeSnapshot.target_connected` 为 true 后开始，并在实际 target 丢失时清理。FHDS 只管理自己拥有的 application whitelist 和当前 PID 的 session blacklist，永远不写 HidHide 全局 `Active` 或永久 device blacklist；用户必须先在官方 Configuration Client 启用 device hiding。任一前置条件或清理失败都保持 direct HID fail open，真实 driver 与已提前打开物理 handle 的游戏仍需实机验收。
+- USB 与诊断决定：GUI/TUI 的 `UsbAudioLifecycle` 继续独占共享 USB stream 的 start/stop，telemetry manager 在 gate pause 时只写静音帧，gate 边沿投递主线程 eligibility sync，保留 Enhanced R6 的 1 秒周期恢复。诊断导出在写 ZIP 前逐行替换控制器标识和设备路径，普通本地文件路径及其他错误文本仍要求用户分享前检查。
+- 恢复边界：HidHide 启用与清理失败由 child worker 每秒重试。ViGEm stop timeout 后的新 start 只登记一个 generation-bound pending successor，允许新 publisher 先保存 latest input，但必须等旧 target/client 完整关闭后才创建新 target；旧 consumer 永久失效，再次 stop 取消 pending。Raw Input 每轮启动使用独立 cancellation event，startup/join 超时后在旧 listener 真正退出前不得创建第二条。UDP latest-only drain 每轮限制为 64 个 datagram，并拒绝同端口 localhost、wildcard 与完整 `127/8` 的明显自转发，避免持续灌包阻塞 gate 调度。
+- 替代关系：本决定补充 2026-08-09 的“检测与输出解耦”，并替代 2026-08-07 HidHide 决定中“永久列表为空时由 FHDS 临时开启并恢复全局 active”以及“兼容 ViGEmBus probe 足以开始隐藏”的部分。
+
+## 2026-08-09：Haptics Lab 与诊断包复用既有输出和快照所有权
+
+- 状态：生产源码、GUI/TUI、六种非英语翻译、自动回归和隔离 Windows 冻结审阅包已完成；真实 DualSense USB/Bluetooth、DSX 与 Forza 抢占仍待验证。
+- 需求：现有代码已经能合成引擎、路面、碰撞、换挡、红线、ABS 等反馈，但调校只能进入游戏逐项猜测；连接、UDP、HID、USB audio、Bluetooth queue 与前台 gate 的问题又分散在日志和多个运行时对象中。需要一个不依赖地平线遥测的安全预览入口，以及一个用户可以直接保存的取证包。
+- Lab 决定：`HapticsLab` 只保存有界、不可变的场景请求，`src/modules/loop.py` 继续是唯一手柄输出所有者。预览仅在地平线前台 gate 关闭且 backend 已连接时执行；地平线取得前台先抢占并释放 Lab，控制器断连、切页、显式停止、到期、重启和退出也必须释放。强度固定限制为 `10%..65%`，持续时间为 `0.25..3.0` 秒。Lab 不创建 XInput target、Raw Input、HidHide session 或第二个 HID reader，也不读取、模拟或转发玩家输入。
+- 传输边界：USB 与 Bluetooth 握把预览复用同一个 `HapticManager`、PCM renderer 和现有 `0x36` 路径；显式预览可以临时绕过 Profile 的 body haptics 开关，但不能改写或保存该开关。扳机继续走既有 `DualSense.set()`。DSX 没有本项目握把触觉能力，因此只开放扳机场景。任何预览都不能改变 HID report 布局、CRC、音频 lifecycle 或 Steam/Xbox 平台 gate。
+- 诊断决定：`DiagnosticsCollector` 只组合各组件现有不可变快照和新增的低成本计数器，并把 `diagnostics.json`、说明和有界轮转日志原子写入本地 ZIP。包可以记录运行模式、前台许可、连接传输、UDP 包率与丢弃、HID/DSX、USB/Bluetooth 触觉、XInput/HidHide、Lab 和运行时错误；不读取 preferences/Profile 原文，不保存原始 HID/UDP payload，控制器 identity、设备路径和日志中的稳定控制器标识只保留短 SHA-256 指纹。普通本地文件路径或其他错误文本仍可能存在，因此包内必须提示分享前检查；程序不得自动上传。
+- 来源边界：这一功能只借鉴“独立测试反馈”和“集中诊断”的产品方向，按本项目现有 Python 架构、输出所有权和测试契约独立实现。未复制 ForzaHorizon-DualSense-SteamOS 的源码、资源或界面；在候选复用尚未完成许可与来源审查前，不把其文件移入本仓库。
+
+## 2026-08-09：前台 gate 只停游戏输出，物理控制器保持检测（已被 2026-08-12 替代）
+
+- 状态：生产代码与定向回归已修正；新的 Windows 冻结 EXE 和真实 DualSense/崩坏：星穹铁道联动仍待本轮重新验证。
+- 回归证据：上一份前台 gate 审阅 EXE 在 Steam 模式、HidHide 关闭且地平线不在前台时只启动 UDP，没有出现 `DualSense HID opened`，界面因此只能显示等待控制器。根因不是手柄或 Steam，而是 `XInputBridgeService` 把游戏输出许可错误扩大成了 physical backend 的 `open()/close()` 所有权。
+- 决定：main、GUI 和 TUI 恢复在启动与 backend 热切换时直接 `open()` native HID 或 DSX；service 不再打开或关闭它。物理 HID reader 持续用有效输入报告维护连接真值、电量、watchdog 与重连，但前台 gate 关闭时不挂 XInput consumer。`loop.run()` 继续只在 FH4/FH5/FH6 精确前台时消费遥测并发送反馈；失去前台后只发送一次必要释放，丢弃等待期 UDP，并停止 USB/Bluetooth 触觉流、虚拟 X360、Raw Input 与 HidHide session。
+- 产品边界：保持“已检测到手柄”和“允许向游戏输出”是两个独立状态。不能为了阻止其他游戏收到 FHDS 输出而让 FHDS 自己在界面前台永远显示未检测到手柄；也不能因为 reader 仍在维护连接状态就绕过前台许可恢复虚拟输入或遥测反馈。
+- 替代关系：本决定替代紧邻下方同日决定中的“完整控制器 session、全 backend 生命周期、只有地平线前台才 open native HID/DSX”部分。精确前台 PID/basename、查询失败关闭输出、Xbox 子链路释放顺序、等待期 UDP 丢弃和真实联动尚未验证等边界继续有效。
+
+## 2026-08-09：只有地平线位于前台时才打开完整控制器 session
+
+- 状态：前台检测与 Xbox 子链路仍有效；“完整 session 包括 physical backend”先被上方同日决定替代，其 physical handle 生命周期又由 2026-08-12 决定恢复。该节保留为回归来源记录。
+- 现场约束：用户确认同一台机器与同一只已连接手柄在 FHDS 不运行时不会抢鼠标，运行 FHDS 后即使选择 Steam 模式也会出现。因此不能继续把现象归因于 Steam 自身，也不能只停止 Xbox App 的虚拟 X360；Steam 路径仍提前打开 native HID worker、发送启动脉冲并允许 USB/Bluetooth 触觉生命周期存在，上一版 gate 没有覆盖真正的共同边界。
+- 现场纠正：只检查地平线进程是否存在仍然不够。地平线可以留在后台而用户已切到崩坏：星穹铁道，此时进程 gate 会错误地继续持有 controller session；运行许可必须来自当前前台窗口，而不是“进程还活着”。
+- 决定：Windows 使用 `GetForegroundWindow()` 与 `GetWindowThreadProcessId()` 取得前台窗口 PID，再通过 psutil 读取该 PID 的 basename；只有它精确等于 `ForzaHorizon4.exe`、`ForzaHorizon5.exe` 或 `ForzaHorizon6.exe` 时，main、GUI、TUI 共用的 service 才打开 native HID/DSX。地平线失去前台后在 100 ms 轮询边界发送一次必要的中立/静音/DSX reset 并关闭，Raw Input/ViGEm/HidHide、USB/Bluetooth 触觉与等待期遥测输出一并停止。Linux/Proton 没有 compositor-independent 前台 API，保留三代精确运行进程 fallback。
+- 平台边界：Steam 仍使用实体 DualSense 与 Steam Input，不创建本项目虚拟设备；Xbox App 仍在同一 gate 内额外启用内置 XInput bridge、键鼠热切换和可选 HidHide；DSX 仍只发送扳机 UDP。平台只选择 active session 内的路径，不能决定 gate 是否存在。
+- 失败边界：不用窗口标题、可执行文件宽泛子串、光标位置或 `GetLastInputInfo` 猜测。无前台窗口、前台 PID 消失、进程名读取失败或 Win32 查询异常都按 gate 关闭处理；真实联动未完成前只能声明源码与自动回归已覆盖，不能宣称鼠标问题已实机修复。
+- 替代关系：本决定替代下方 2026-08-07 进程开关决定的“只要进程存在就持续运行”与“不得用前台窗口”边界，也替代本日初版完整 session gate 的进程存在语义；三代精确 basename、扫描失败关闭、全 backend 生命周期和 Xbox 子链路释放顺序继续有效。
+
+## 2026-08-07：虚拟 Xbox 输入必须由 FH4/FH5/FH6 进程开关许可
+
+- 状态：三代精确进程检测、service 生命周期、GUI/TUI/headless 轮询、等待状态、六种非英语翻译与合成回归已完成；真实 Xbox App Forza、DualSense、HidHide 和崩坏：星穹铁道联动尚未验证。
+- 问题：`preferred_forza_platform == xbox_app` 原本同时承担“选择输入方案”和“立即启动输入桥”两种含义。结果是 FHDS 只要保持运行就会创建虚拟 X360 并注册 Raw Input，即使用户正在玩完全无关的游戏；键鼠中立化只能缓解持续 report，不能证明这套输入链路此时应该存在。
+- 决定：平台选项今后只决定 Xbox App 是否需要内置 XInput 映射。真正的运行许可来自一次进程表扫描中对 `ForzaHorizon4.exe`、`ForzaHorizon5.exe`、`ForzaHorizon6.exe` 的精确 basename 匹配；任一代出现时自动挂 input consumer、创建 bridge、启动 Raw Input 与可选 HidHide session，三代全部消失时按相反顺序释放。检测不依赖总览当前选择的快捷启动代数，所以运行任一受支持地平线都能打开 gate。
+- 失败边界：不得用前台窗口、焦点、窗口标题或宽泛 `forza` 子串猜测；进程表扫描异常按“未运行”失败关闭。等待期间状态明确为 `WAITING_GAME`，不创建虚拟 target、不监听键鼠、不隐藏物理设备。GUI、TUI 和 headless 都必须持续轮询，不能让该行为只在总览页面刷新时生效。
+- 平台边界：Steam 模式本来就不创建本项目的虚拟 X360，继续完全停桥；因此 Xbox App 不是“软件能否等待地平线”的条件，只是 gate 打开后选用哪条输入路径的条件。Raw Input 的主动输入所有权算法和 HidHide 的 session-only 安全边界不变。
+- 替代关系：本决定替代下方 2026-08-07 Raw Input、HidHide 及 2026-07-19 XInput bridge 决定中“选择 Xbox App 即持续启用对应 session”的生命周期部分；其映射、单一 HID reader、target 内中立化、失败恢复和用户显式 HidHide 开关等其余边界继续有效。
+
+## 2026-08-07：Xbox App 可显式使用 HidHide 1.7 会话隔离物理 DualSense
+
+- 状态：原生 IOCTL 封装、应用规则所有权迁移、进程会话隐藏、direct-HID 连接回调、GUI/TUI 开关与状态、六种非英语翻译及合成回归已完成；当前机器没有安装 HidHide，真实 DualSense、HidHide driver 和崩坏：星穹铁道内验收尚未执行。
+- 问题：键鼠热切换只能停止本项目创建的虚拟 X360 report。若游戏同时直接打开物理 DualSense，它仍会把物理 HID 的连续 report 当成手柄活动，从而抢回输入模式或鼠标控制。移除虚拟 target、根据焦点猜测或停止 FHDS 的 HID reader 都不能解决这条独立输入路径。
+- 决定：增加默认关闭的 global `enable_hidhide`。它只在冻结后的 Windows 独立 EXE、Xbox App、direct-HID 且兼容 ViGEmBus 已探测可用时启动；Steam、DSX、源码运行和无 ViGEm 的环境不隐藏设备。FHDS 直接使用已安装 HidHide 1.7+ 的公开 control-device IOCTL，不调用 CLI、不捆绑或安装 driver、不提权。
+- 配置所有权：HidHide 按 NT full image name 放行 feeder，因此 FHDS 只把当前规范 EXE 持久加入 application whitelist，并在 `data/hidhide_owned.json` 记录自己拥有的路径。新版本启动会移除旧的 FHDS-owned 路径并加入当前路径；用户原有应用规则、inverse 模式和永久 device blacklist 均不被接管。关闭开关时只移除 FHDS-owned 应用规则。
+- 设备与生命周期：选中的 DualSense HID instance 只写入 HidHide 1.7 的调用进程 session blacklist；不写永久 device blacklist。驱动会在进程正常退出、崩溃或被终止后清除该 PID 的 session entries。FHDS 切到 Steam/DSX、安装或重试 ViGEm、关闭开关和退出时也显式 clear。本节原先允许在永久列表为空时由 FHDS 临时开启并恢复全局 active，该所有权已被 2026-08-10 决定替代；现在无论永久列表是否为空，FHDS 都不修改全局 `Active`，并要求用户先在官方配置客户端显式启用。
+- 失败边界：无法解析实例路径、HidHide 版本过旧、control device 被占用、inverse 用户规则冲突或任一写后校验失败都保留 direct HID fail open，并在系统页显示错误；不得因此绕过 3 秒有效输入 watchdog。游戏若在隐藏前已打开物理 handle，可能需要重启游戏后才完全生效。
+- 替代关系：本决定替代下方 2026-08-07 热切换决定中“物理设备过滤尚未设计”和 2026-07-19 bridge 决定中“不配置 HidHide”的范围边界；Raw Input 所有权算法、虚拟 target 中立化、单一 HID reader、Steam 停桥及“不接管游戏 rumble”等其余决定继续有效。
+
+## 2026-08-07：Xbox App 虚拟手柄按最后主动输入热切换
+
+- 状态：生产源码、总览状态、六种非英语翻译、自动回归和 Windows Raw Input 启停探针已完成；真实 DualSense、崩坏：星穹铁道及 Xbox App Forza 游戏内验收尚未执行。
+- 问题：Xbox App bridge 持续发送虚拟 X360 状态时，用户切到键鼠仍可能让游戏在两套输入提示或操作模式间反复切换。Windows 的 session-wide last-input tick 会受到非键鼠来源或合成输入影响，不能作为可靠分类器；物理 DualSense 的 HID report 又会持续刷新，不能把“收到 report”直接当成用户主动使用手柄。
+- 决定：只在 direct-HID Xbox App bridge 启用期间，用专用 message-only window 注册 keyboard/mouse Raw Input。收到键鼠边沿后把虚拟 X360 target 发送一次中立状态但不移除，之后只有 D-pad、数字键、触摸板点击变化，或相对基线达到摇杆 `12`、扳机 `8` 的输入变化才恢复 controller owner。状态变化复用同一个 target/player slot，并通过不可变 snapshot 暴露给总览；监听注册失败时 fail open，继续转发手柄。
+- 生命周期：切回 Steam、重试、driver 安装或退出时注销 keyboard/mouse device class 并停止监听线程。Win32 每个进程、每个 Raw Input device class 只有一个有效注册目标，未来其他模块若也需要注册必须与该层协调，不能相互静默覆盖。
+- 边界：本决定自身只抑制项目创建的虚拟 Xbox 360 report，不隐藏或独占物理 DualSense，也不承诺修复窗口焦点问题；物理设备过滤已由上方独立、默认关闭且需用户显式启用的 HidHide 决定补充，两层故障与状态不得混写。
+
 ## 2026-08-02：R2 油门末端硬墙改为独立、默认关闭的显式选项
 
 - 状态：设置字段、运行时所有权、共享 GUI/TUI 排版、六种非英语翻译、旧 Profile 兼容与自动回归已实现；真实 DualSense/Forza 手感尚未验证。
@@ -213,7 +329,7 @@
 
 - 状态：生产代码、自动测试、状态展示和配置迁移已实现；当前会话尚未枚举到真实 DualSense，因此 Enhanced R7 的关机、USB/Bluetooth 双向 handover、电量和触觉恢复仍待硬件验证。
 - 背景：旧逻辑把仍持有 HID handle 当成在线，并在检测到 HidHide 或关闭自动重连时永久跳过 input watchdog。结果可能在手柄关机后仍显示已连接，也无法在同一手柄插入 USB 或拔线回 Bluetooth 时更新 transport。
-- 决定：`ControllerSnapshot` 是 GUI/TUI 与其他消费者的唯一 native 状态事实。只有完整、report ID 正确且 Bluetooth CRC 有效的输入报告才能建立或刷新连接、电量和 latest input；约 3 秒无有效输入就清除旧状态。HidHide 只做诊断，`persistent` 不再改变 watchdog。
+- 决定：`ControllerSnapshot` 是 GUI/TUI 与其他消费者的唯一 native 状态事实。只有完整、report ID 正确且 Bluetooth CRC 有效的输入报告才能建立或刷新连接、电量和 latest input；约 3 秒无有效输入就清除旧状态。`persistent` 不再改变 watchdog；当时“HidHide 只做诊断”的配置范围已由 2026-08-07 的显式 session isolation 决定替代，但 HidHide 仍不能建立连接真值或绕过 watchdog。
 - 并发边界：所有 HID open/read/write/close、立即重连和 handover 继续在单一 I/O thread 串行执行。空闲输入 backlog 可批量丢弃，但 pending trigger/haptics 输出必须优先；XInput 只消费 latest parsed state，不能增加第二个 reader。
 - 身份与切换：轻量拓扑约每秒 enumerate，新路径连续两次出现才稳定，未知身份 feature report 只读取一次并缓存。自动切换必须证明同一身份，双传输并存时 USB 优先；目标打开失败尝试恢复旧路径。传输 handover 不受完全掉线自动重连开关限制；失败目标 cooldown 与 switching 脉冲规则由 2026-07-20 后续决定补充。
 - 配置：新安装默认开启 `enable_reconnect`；旧偏好通过 `r7_enable_reconnect_default` marker 只强制开启一次，之后尊重用户关闭，不改任何驾驶或命名 Profile 字段。“立即重新连接”是真实 I/O 命令，“重新扫描”仍只刷新设备列表。
@@ -257,7 +373,7 @@
 
 - 状态：基础 bridge 设计仍有效；其中“3 秒移除 target”已由 2026-07-22 的分层自恢复决定替代为“100 ms 中立后保留 player slot”。真实 Xbox App 版 Forza、clean-machine driver 安装和 USB/Bluetooth 游戏内回归仍待验收。
 - 背景：Xbox App 版 Forza 不会像 Steam Input 那样直接把 DualSense 映射为 XInput。用户要求程序自身完成基础输入桥，并要求 Steam 模式不产生双输入。ViGEmBus 只能稳定提供 Xbox 360 target，不能生成真正的 Xbox One target。
-- 决定：Windows x64 增加 `preferred_forza_platform`。Steam 模式完全停止 bridge；Xbox App 模式由现有 DualSense I/O thread 作为唯一 HID reader，发布 latest input 给独立 ViGEm worker，映射为虚拟 Xbox 360 Controller。100 ms 无输入先中立化，3 s 移除 target；停止或重连不得回放旧输入。当前不注册 rumble callback、不接管游戏原生振动、不安装或配置 HidHide，也不复制 DS4Windows GPL 代码。
+- 决定：Windows x64 增加 `preferred_forza_platform`。Steam 模式完全停止 bridge；Xbox App 模式由现有 DualSense I/O thread 作为唯一 HID reader，发布 latest input 给独立 ViGEm worker，映射为虚拟 Xbox 360 Controller。100 ms 无输入先中立化，3 s 移除 target；停止或重连不得回放旧输入。当前不注册 rumble callback、不接管游戏原生振动，也不复制 DS4Windows GPL 代码；其中“不安装或配置 HidHide”已由 2026-08-07 的默认关闭、仅使用已安装 driver 的 session isolation 决定部分替代。
 - 驱动：固定内置 ViGEmBus `1.22.0` 安装器和 x64 `ViGEmClient.dll`。兼容性以实际 client connect/target add 为准，不按版本号强制升级；缺少 driver 时只在用户确认、SHA-256 与 cache-only Authenticode 均通过后触发 UAC。ViGEm 已归档/EOL，软件不提供 driver 自动更新。
 - 启动：总览 Xbox App 入口先用 `Get-StartApps` 动态匹配当前代完整游戏名，只接受 `PackageFamilyName!Application` 形式并通过 `shell:AppsFolder` 激活；未发现已安装身份时打开固定 `msxbox://game/?productId=<id>` 产品页。启动始终由用户点击，不直启游戏 EXE，不把打开产品页写成游戏已启动，也不管理 Xbox 安装和许可。
 - 后果：Steam 与 Xbox App 使用同一个游戏选择和进程状态，但输入所有权严格分离。Steam 版、Steam Input 关闭的实机控制只能证明 XInput 兼容链路，不能替代真实 Xbox App 游戏验收；Release 必须明确这一限制。

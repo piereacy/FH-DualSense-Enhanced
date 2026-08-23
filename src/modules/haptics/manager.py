@@ -2,12 +2,25 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 
-from .audio import UsbAudioHaptics
-from .bt_audio import BluetoothAudioHaptics
+from .audio import UsbAudioDiagnosticsSnapshot, UsbAudioHaptics
+from .bt_audio import BluetoothAudioDiagnosticsSnapshot, BluetoothAudioHaptics
 from .frame import CompatibleRumble, HapticFrame, SILENT_FRAME, to_compatible_rumble
 
 log = logging.getLogger("fhds.haptics")
+
+
+@dataclass(frozen=True, slots=True)
+class HapticRoutingDiagnosticsSnapshot:
+    mode: str | None
+    transport: str | None
+    usb_start_failed: bool
+    bluetooth_start_failed: bool
+    compatible_rumble_owned: bool
+    closed: bool
+    usb_audio: UsbAudioDiagnosticsSnapshot | None
+    bluetooth_audio: BluetoothAudioDiagnosticsSnapshot | None
 
 
 class HapticManager:
@@ -37,6 +50,28 @@ class HapticManager:
     @property
     def mode(self) -> str | None:
         return self._mode
+
+    def diagnostics_snapshot(self) -> HapticRoutingDiagnosticsSnapshot:
+        usb_snapshot = None
+        if self._audio is not None:
+            snapshot = getattr(self._audio, "diagnostics_snapshot", None)
+            if callable(snapshot):
+                usb_snapshot = snapshot()
+        bluetooth_snapshot = None
+        if self._bt_audio is not None:
+            snapshot = getattr(self._bt_audio, "diagnostics_snapshot", None)
+            if callable(snapshot):
+                bluetooth_snapshot = snapshot()
+        return HapticRoutingDiagnosticsSnapshot(
+            mode=self._mode,
+            transport=self._last_transport,
+            usb_start_failed=self._usb_start_failed,
+            bluetooth_start_failed=self._bt_start_failed,
+            compatible_rumble_owned=self._bluetooth_rumble_owned,
+            closed=self._closed,
+            usb_audio=usb_snapshot,
+            bluetooth_audio=bluetooth_snapshot,
+        )
 
     def _warn_once(self, key: str, message: str, *args) -> None:
         if key in self._warned:
@@ -134,10 +169,10 @@ class HapticManager:
             self._stop_audio()
             self._mode = None
 
-    def route(self, frame: HapticFrame) -> CompatibleRumble | None:
+    def route(self, frame: HapticFrame, *, force: bool = False) -> CompatibleRumble | None:
         if self._closed:
             return None
-        if not getattr(self._settings, "enable_body_haptics", False):
+        if not force and not getattr(self._settings, "enable_body_haptics", False):
             release_bluetooth = (
                 self._bluetooth_rumble_owned
                 and not getattr(self._controller, "is_dsx", False)
@@ -193,8 +228,22 @@ class HapticManager:
         self._mode = None
         return None
 
-    def silence(self) -> CompatibleRumble | None:
-        return self.route(SILENT_FRAME)
+    def silence(self, *, force: bool = False) -> CompatibleRumble | None:
+        return self.route(SILENT_FRAME, force=force)
+
+    def pause(self) -> CompatibleRumble | None:
+        """Silence active haptics without permanently closing the manager."""
+        if self._closed:
+            return None
+        release_bluetooth = self._bluetooth_rumble_owned
+        self._bluetooth_rumble_owned = False
+        self._stop_audio()
+        self._stop_bt_audio()
+        self._mode = None
+        self._last_transport = None
+        self._usb_start_failed = False
+        self._bt_start_failed = False
+        return CompatibleRumble() if release_bluetooth else None
 
     def close(self) -> None:
         if self._closed:

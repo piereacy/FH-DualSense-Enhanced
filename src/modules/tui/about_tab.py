@@ -13,6 +13,8 @@ from modules.about import (
     SOURCE_URL,
     SPONSOR_URL,
     THIRD_PARTY_LINKS,
+    TUNING_CREDIT_NAME,
+    TUNING_CREDIT_URL,
 )
 from modules.config.preferences import _release_version
 
@@ -43,6 +45,11 @@ class AboutTab(VerticalScroll):
             id="about-controller-icons",
             classes="about-link",
         )
+        yield Button(
+            f"{t('Tuning credit')}: {TUNING_CREDIT_NAME}",
+            id="about-tuning-credit",
+            classes="about-link",
+        )
         yield Label("Third-party components", classes="about-title")
         for index, (label, url) in enumerate(THIRD_PARTY_LINKS):
             yield Button(
@@ -60,6 +67,8 @@ class AboutTab(VerticalScroll):
             self.app._open_url(SPONSOR_URL)
         elif event.button.id == "about-controller-icons":
             self.app._open_url(CONTROLLER_ICON_MOD_URL)
+        elif event.button.id == "about-tuning-credit":
+            self.app._open_url(TUNING_CREDIT_URL)
         elif event.button.id and event.button.id.startswith("about-third-party-"):
             try:
                 index = int(event.button.id.rsplit("-", 1)[1])

@@ -221,14 +221,18 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: false
           body: |
-            ## Enhanced R10 中文说明
+            ## Enhanced R11 中文说明
 
-            Enhanced R10 让油门阻力更容易完全关闭。
+            Enhanced R11 重点改进 Xbox App 输入、触觉预览和本地诊断能力。
 
             ### 更新内容
 
-            - **油门末端硬墙独立控制**：在“重压阻力”下方新增“油门末端硬墙”开关，默认关闭。关闭后，末端硬墙不再顶手；连续阻力仍由静止阻力和重压阻力设置决定，需要末端限位时也可以单独开启。
-            - **旧配置安全升级**：现有 Profile 不会自动打开末端硬墙，原有油门阻力设置会继续保留。
+            - **手柄占用范围**：FHDS 运行期间会持续使用当前实体 DualSense。切到桌面或其他游戏不会自动释放；其他游戏或手柄工具需要同一只 DualSense 时，请先退出 FHDS。
+            - **Xbox App 输入升级**：虚拟手柄可按最近主动输入在键鼠与 DualSense 之间热切换，保持玩家槽位并增强异常后的自动恢复。可选的 HidHide 1.7+ 会话隔离仍默认关闭，需要用户另行安装 HidHide，并先在官方 Configuration Client 中开启 Device hiding。
+            - **体感到摇杆**：Xbox App 自定义映射新增 Steam Input 风格的 Camera 与 Deflection 模式，可选择左右摇杆、激活键、方向、死区和平滑。X360 没有原生陀螺仪通道，因此该功能只生成摇杆输出，并且必须同时开启自定义 Xbox 映射总开关和默认关闭的陀螺仪子开关。
+            - **Haptics Lab 与本地诊断**：系统与更新页新增默认折叠的 Haptics Lab 小卡片，可进行有界的扳机/握把场景预览；同时支持一键导出脱敏诊断 ZIP，诊断包只保存在本机，不会自动上传。
+            - **默认调教与鸣谢**：新的 `Default` 采用社区调教并默认开启 ABS；升级时旧 `Default` 会保留为 `Default before R11`，`Original` 保持上游风格。关于与许可证页新增“调教鸣谢：Bilibili 开心散仙”链接。
+            - **输入与稳定性**：加强 Bluetooth 输入、虚拟手柄、Raw Input 热切换和异常后的恢复；Haptics Lab 会在有效游戏遥测到达时自动停止。
 
             ### Windows 独立 EXE（推荐）
 
@@ -244,14 +248,18 @@ jobs:
             - 在 Forza Horizon 中开启 Data Out，设置为 `127.0.0.1:5300`，并关闭游戏内振动。
             - Xbox App 版请在软件内选择 `XBOX 版`，并避免同时让 Steam Input 或 DS4Windows 接管手柄。
 
-            ## Enhanced R10 English notes
+            ## Enhanced R11 English notes
 
-            Enhanced R10 makes throttle resistance easier to disable completely.
+            Enhanced R11 focuses on Xbox App input, haptic previews, and local diagnostics.
 
             ### What's new
 
-            - **Independent throttle end wall**: a new `Throttle end wall` switch appears below `Heavy press resistance` and is off by default. Turning it off removes the end-stop resistance; the stationary and heavy-press settings still control continuous resistance, and the end wall can be enabled on its own when wanted.
-            - **Safe profile upgrade**: existing profiles do not automatically enable the end wall, while their throttle-resistance settings remain in place.
+            - **Controller usage scope**: FHDS continues using the selected physical DualSense while it is running. Switching to the desktop or another game does not release the controller; exit FHDS first when another game or controller tool needs the same DualSense.
+            - **Xbox App input upgrades**: the virtual controller can hand off between keyboard/mouse and DualSense according to the latest deliberate input, retain its player slot, and recover more reliably after transient failures. Optional HidHide 1.7+ session isolation remains off by default, requires a separate HidHide installation, and requires Device hiding to be enabled first in the official Configuration Client.
+            - **Motion-to-stick mapping**: Xbox App custom mapping adds Steam Input-style Camera and Deflection modes with stick, activation, direction, deadzone, and smoothing controls. X360 has no native gyro channel, so this feature produces stick output only and requires both the custom Xbox mapping master switch and its separate gyro switch, which is off by default.
+            - **Haptics Lab and local diagnostics**: a compact Haptics Lab card, collapsed by default under System and updates, provides bounded trigger/grip scene previews. One-click sanitized diagnostic ZIP export is also available; packages stay on the local computer and are never uploaded automatically.
+            - **Default tuning and credit**: the new community-tuned `Default` enables ABS. Upgrades preserve the prior `Default` as `Default before R11`, while `Original` keeps its upstream-style behavior. About and licenses now links the tuning credit for Bilibili 开心散仙.
+            - **Input and stability**: recovery is strengthened across Bluetooth input, the virtual controller, and Raw Input hand-off. Haptics Lab also stops automatically when valid game telemetry arrives.
 
             ### Windows standalone EXE (recommended)
 

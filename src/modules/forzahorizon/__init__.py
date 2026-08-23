@@ -7,7 +7,11 @@ from .udp_listener import (
     parse_packet,
 )
 from .effects import Controller, TriggerAnimations
-from .process_watch import GameProcess, ProcessWatcher, find_game_process
+from .process_watch import (
+    GameProcess,
+    ProcessWatcher,
+    find_game_process,
+)
 from .game_launch import (
     DEFAULT_FORZA_GAME_KEY,
     FORZA_GAME_KEYS,
@@ -21,6 +25,7 @@ from .game_launch import (
     discover_xbox_forza_install,
     discover_forza_install,
     get_forza_game,
+    is_any_forza_game_running,
     is_forza_game_running,
     is_windows_steam_supported,
     launch_forza_via_steam,
@@ -68,7 +73,7 @@ __all__ = [
     "ForzaInstall", "ForzaLaunchError", "discover_forza_install", "get_forza_game",
     "XboxLaunchResult", "XboxStartApp", "discover_xbox_aumid",
     "discover_xbox_forza_install", "windows_local_drive_roots", "xbox_library_roots",
-    "is_forza_game_running", "is_windows_steam_supported", "launch_forza_via_steam",
+    "is_any_forza_game_running", "is_forza_game_running", "is_windows_steam_supported", "launch_forza_via_steam",
     "launch_forza_via_xbox_app",
     "validate_forza_root",
     "ArchiveLanguage", "FH6Install", "FH6LanguageSummary", "FH6LanguageError", "FH6LanguageState",

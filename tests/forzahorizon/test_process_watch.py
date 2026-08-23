@@ -24,6 +24,35 @@ def test_exact_fh6_process_lookup_returns_the_full_executable_path(monkeypatch):
     assert found.exe == "E:/SteamLibrary/ForzaHorizon6.exe"
 
 
+def test_exact_multi_name_lookup_scans_once_and_rejects_similarly_named_helpers(
+    monkeypatch,
+):
+    processes = [
+        _process(
+            1,
+            "ForzaHorizon5Telemetry.exe",
+            "D:/Tools/ForzaHorizon5Telemetry.exe",
+        ),
+        _process(2, "ForzaHorizon4.exe", "E:/Steam/ForzaHorizon4.exe"),
+    ]
+    scans = []
+
+    def process_iter(fields):
+        scans.append(tuple(fields))
+        return processes
+
+    monkeypatch.setattr(process_watch.psutil, "process_iter", process_iter)
+
+    found = process_watch.find_game_process(
+        (),
+        exact_names=("ForzaHorizon4.exe", "ForzaHorizon5.exe", "ForzaHorizon6.exe"),
+    )
+
+    assert found is not None
+    assert found.pid == 2
+    assert scans == [("name", "exe")]
+
+
 def test_process_lookup_skips_protected_entries(monkeypatch):
     class Protected:
         pid = 1

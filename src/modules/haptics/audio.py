@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from .frame import HapticFrame, SILENT_FRAME
@@ -19,6 +20,19 @@ except (ImportError, OSError):
 log = logging.getLogger("fhds.haptics.audio")
 
 _DEFAULT_DEPENDENCY = object()
+
+
+@dataclass(frozen=True, slots=True)
+class UsbAudioDiagnosticsSnapshot:
+    running: bool
+    device_index: int | None
+    start_attempts: int
+    start_failures: int
+    stop_count: int
+    callback_count: int
+    callback_status_count: int
+    output_underflow_count: int
+    last_status: str
 
 
 def _load_sounddevice():
@@ -89,10 +103,36 @@ class UsbAudioHaptics:
             )
         self._last_status_log = 0.0
         self._warned: set[str] = set()
+        self._diagnostics_lock = threading.Lock()
+        self._start_attempts = 0
+        self._start_failures = 0
+        self._stop_count = 0
+        self._callback_count = 0
+        self._callback_status_count = 0
+        self._output_underflow_count = 0
+        self._last_status = ""
 
     @property
     def running(self) -> bool:
         return self._running
+
+    def diagnostics_snapshot(self) -> UsbAudioDiagnosticsSnapshot:
+        with self._diagnostics_lock:
+            return UsbAudioDiagnosticsSnapshot(
+                running=self._running,
+                device_index=self._device_index,
+                start_attempts=self._start_attempts,
+                start_failures=self._start_failures,
+                stop_count=self._stop_count,
+                callback_count=self._callback_count,
+                callback_status_count=self._callback_status_count,
+                output_underflow_count=self._output_underflow_count,
+                last_status=self._last_status,
+            )
+
+    def _record_start_failure(self) -> None:
+        with self._diagnostics_lock:
+            self._start_failures += 1
 
     def _warn_once(self, key: str, message: str, *args) -> None:
         if key in self._warned:
@@ -103,6 +143,8 @@ class UsbAudioHaptics:
     def start(self) -> bool:
         if self._running:
             return True
+        with self._diagnostics_lock:
+            self._start_attempts += 1
         if self._load_default_sounddevice:
             self._load_default_sounddevice = False
             try:
@@ -110,6 +152,7 @@ class UsbAudioHaptics:
             except (ImportError, OSError):
                 self._sd = None
         if self._sd is None or self._np is None:
+            self._record_start_failure()
             self._warn_once("dependencies", "USB body haptics unavailable: NumPy or sounddevice is missing.")
             return False
 
@@ -118,6 +161,7 @@ class UsbAudioHaptics:
             devices = self._sd.query_devices()
             device_index = find_dualsense_output_device(devices, hostapis, self._platform)
             if device_index is None:
+                self._record_start_failure()
                 self._warn_once(
                     "endpoint",
                     "No four-channel DualSense audio endpoint found. Connect the controller over USB.",
@@ -139,6 +183,7 @@ class UsbAudioHaptics:
             log.info("USB body haptics started on audio device %d", device_index)
             return True
         except Exception as exc:
+            self._record_start_failure()
             self._running = False
             stream, self._stream = self._stream, None
             if stream is not None:
@@ -155,6 +200,8 @@ class UsbAudioHaptics:
 
     def stop(self) -> None:
         self.set_frame(SILENT_FRAME)
+        with self._diagnostics_lock:
+            self._stop_count += 1
         self._running = False
         stream, self._stream = self._stream, None
         if stream is None:
@@ -172,6 +219,13 @@ class UsbAudioHaptics:
 
     def _audio_callback(self, outdata, frames, time_info, status) -> None:
         del time_info
+        with self._diagnostics_lock:
+            self._callback_count += 1
+            if status:
+                self._callback_status_count += 1
+                self._last_status = str(status)
+                if bool(getattr(status, "output_underflow", False)):
+                    self._output_underflow_count += 1
         if status:
             now = time.monotonic()
             if now - self._last_status_log >= 1.0:

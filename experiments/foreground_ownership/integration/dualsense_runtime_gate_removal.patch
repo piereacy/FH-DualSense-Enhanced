@@ -1,0 +1,212 @@
+*** Begin Patch
+*** Update File: src\\modules\\dualsense\\main.py
+@@
+-from .passive_detection import passive_dualsense_count
+ from .topology import StableTopology, path_key
+@@
+         self,
+         startup_pulse_force: int = 180,
+         enable_startup_pulse: bool = True,
+-        defer_startup_pulse: bool = False,
+         reconnect_interval_s: float = 5.0,
+@@
+         self._wake = threading.Event()
+         self._pulse_force = startup_pulse_force
+         self._enable_startup_pulse = enable_startup_pulse
+-        self._defer_startup_pulse = bool(defer_startup_pulse)
+-        self._startup_pulse_requested = False
+         self._startup_pulse_sent = False
+-        self._startup_pulse_cancel = threading.Event()
+@@
+-        self._runtime_enabled = False
+-        self._runtime_state_known = False
+-        self._runtime_detect_interval = min(self._reconnect_interval, 1.0)
+-        self._last_runtime_detection = -1e9
+@@
+-    @property
+-    def runtime_start_pending(self) -> bool:
+-        known, enabled = self._runtime_gate_state()
+-        return bool(known and enabled and not self.connected)
+-
+@@
+     def close(self):
+         self._running = False
+-        self._startup_pulse_cancel.set()
+         self._wake.set()
+@@
+-    def set_runtime_enabled(self, enabled: bool) -> None:
+-        """Allow the I/O worker to own the physical HID only for Forza output.
+-
+-        The foreground monitor may call this from another thread. The worker is
+-        still the sole owner of open/read/write/close; a disabled Windows
+-        runtime only queries Configuration Manager's present PnP tree and never
+-        calls hidapi enumeration or constructs a device object.
+-        """
+-        enabled = bool(enabled)
+-        with self._lock:
+-            changed = enabled != self._runtime_enabled or not self._runtime_state_known
+-            self._runtime_enabled = enabled
+-            self._runtime_state_known = True
+-            if not enabled:
+-                self._startup_pulse_requested = False
+-                self._reconnect_requested = False
+-        if not changed:
+-            return
+-        if enabled:
+-            self._last_attempt = -1e9
+-            log.info("Forza runtime gate opened; physical DualSense ownership enabled")
+-        else:
+-            self._startup_pulse_cancel.set()
+-            log.info(
+-                "Forza runtime gate closed; physical DualSense handle will be released"
+-            )
+-        self._wake.set()
+-
+-    def _runtime_gate_state(self) -> tuple[bool, bool]:
+-        with self._lock:
+-            return self._runtime_state_known, self._runtime_enabled
+-
+-    def _runtime_ownership_allowed(self) -> bool:
+-        known, enabled = self._runtime_gate_state()
+-        return not known or enabled
+-
+-    def _publish_passive_detection(self, now: float) -> None:
+-        if now - self._last_runtime_detection < self._runtime_detect_interval:
+-            return
+-        self._last_runtime_detection = now
+-        try:
+-            with self._diagnostics_lock:
+-                self._connection_enumeration_count += 1
+-            count = passive_dualsense_count(_raw_dualsense_interfaces)
+-        except Exception as exc:
+-            log.warning("Passive DualSense enumeration failed: %s", exc)
+-            self._update_snapshot(
+-                phase=ControllerPhase.ERROR,
+-                transport=None,
+-                identity="",
+-                last_input_at=None,
+-                battery_level=None,
+-                battery_status=BatteryStatus.UNKNOWN,
+-                error=str(exc) or type(exc).__name__,
+-            )
+-            return
+-        with self._diagnostics_lock:
+-            self._last_enumeration_interface_count = count
+-        if count != getattr(self, "_last_passive_enum_count", -1):
+-            self._last_passive_enum_count = count
+-            if count:
+-                log.info(
+-                    "Passive PnP detection: %d DualSense record(s) visible; no HID handle opened",
+-                    count,
+-                )
+-            else:
+-                log.info("Passive PnP detection: no DualSense record visible")
+-        self._update_snapshot(
+-            phase=(ControllerPhase.AVAILABLE if count else ControllerPhase.WAITING),
+-            transport=None,
+-            identity="",
+-            last_input_at=None,
+-            battery_level=None,
+-            battery_status=BatteryStatus.UNKNOWN,
+-            error="",
+-        )
+-
+-    def request_startup_pulse(self) -> None:
+-        """Queue the optional startup pulse after the foreground gate opens."""
+-        if not self._enable_startup_pulse:
+-            return
+-        with self._lock:
+-            if self._startup_pulse_sent:
+-                return
+-            self._startup_pulse_requested = True
+-            self._startup_pulse_cancel.clear()
+-        self._wake.set()
+-
+-    def cancel_startup_pulse(self) -> None:
+-        """Cancel a deferred pulse when Forza loses the foreground."""
+-        with self._lock:
+-            self._startup_pulse_requested = False
+-        self._startup_pulse_cancel.set()
+-        self._wake.set()
+-
+-    def _take_startup_pulse_request(self) -> bool:
+-        with self._lock:
+-            if not self._startup_pulse_requested or self._startup_pulse_sent:
+-                return False
+-            self._startup_pulse_requested = False
+-            self._startup_pulse_sent = True
+-            return True
+-
+     def _write_startup_pulse(self) -> None:
+         pulse = rigid(self._pulse_force)
+         self._safe_write(self._build(pulse, pulse))
+-        self._startup_pulse_cancel.wait(0.2)
++        time.sleep(0.2)
+         self._safe_write(self._build(off(), off()))
+@@
+-        runtime_known, runtime_enabled = self._runtime_gate_state()
+         self._update_snapshot(
+-            phase=(
+-                ControllerPhase.RECONNECTING
+-                if not runtime_known or runtime_enabled
+-                else ControllerPhase.AVAILABLE
+-            ),
++            phase=ControllerPhase.RECONNECTING,
+             error="",
+         )
+@@
+-        if not self._runtime_ownership_allowed():
+-            return None, "runtime gate closed"
+         self._notify_device_visibility(target)
+@@
+-        if not self._runtime_ownership_allowed():
+-            self._close_candidate(candidate)
+-            return None, "runtime gate closed"
+-
+@@
+-            if not self._runtime_ownership_allowed():
+-                self._close_candidate(candidate)
+-                return None, "runtime gate closed"
+             try:
+@@
+-        if not self._runtime_ownership_allowed():
+-            self._close_candidate(validated.device)
+-            return False
+         adopted, reason = self._adopt_handover(validated)
+@@
+-        if not self._runtime_ownership_allowed():
+-            return False
+         self._update_snapshot(
+@@
+-        if not self._runtime_ownership_allowed():
+-            return False
+         self._notify_device_visibility(info)
+@@
+-        if not self._runtime_ownership_allowed():
+-            self._close_candidate(dev)
+-            return False
+         self.dev = dev
+@@
+         if (
+             self._enable_startup_pulse
+-            and not self._defer_startup_pulse
+             and not switching
+             and not self._startup_pulse_sent
+@@
+-            runtime_known, runtime_enabled = self._runtime_gate_state()
+-            if runtime_known and not runtime_enabled:
+-                if self.dev is not None:
+-                    self._disconnect(
+-                        "Forza runtime gate closed",
+-                        next_phase=ControllerPhase.WAITING,
+-                    )
+-                self._publish_passive_detection(now)
+-                self._wake.wait(0.25)
+-                self._wake.clear()
+-                continue
+-
+@@
+-            if self._take_startup_pulse_request():
+-                self._write_startup_pulse()
+-
+*** End Patch

@@ -119,6 +119,49 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## HidHide
+
+The optional Windows physical-controller isolation interoperates with an
+already-installed HidHide 1.7 or newer driver through its published control
+device and IOCTL contract:
+
+- Source: <https://github.com/nefarius/HidHide>
+- Reference version: `v1.7.346.0`
+- Reference commit: `22a1ff5fdce550ec789f7b229ad4c59d6709ab61`
+- Copyright: Copyright (c) 2020 Eric Korff de Gidts
+- Copyright: Copyright (c) 2021-2024 Benjamin Höglinger-Stelzer
+- License: MIT
+
+FH-DualSense-Enhanced does not bundle, install, elevate, update, or
+redistribute the HidHide driver or configuration client. The integration is
+off by default. It uses the process-lifetime session blacklist introduced in
+HidHide 1.7 and does not write the user's persistent device blacklist.
+
+```text
+MIT License
+
+Copyright (c) 2020 Eric Korff de Gidts
+Copyright (c) 2021-2024 Benjamin Höglinger-Stelzer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## ViGEmBus
 
 The Windows EXE bundles the official ViGEmBus `1.22.0` installer for explicit,

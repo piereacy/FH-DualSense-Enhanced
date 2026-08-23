@@ -1,7 +1,18 @@
+from modules.config import preferences
 from modules.config.settings import Settings
 from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from modules.forzahorizon.lighting import LightingController
 from modules.forzahorizon.redline import RedlineDetector
+
+
+def _before_r11_settings():
+    settings = Settings()
+    preferences._apply_snap(
+        settings,
+        preferences.default_before_r11_profile_fields(),
+        preferences._profile_fields(settings),
+    )
+    return settings
 
 
 def _telemetry(**overrides):
@@ -58,14 +69,14 @@ def _confirm_broad_cut(detector, start, rpm):
     )
 
 
-def test_lighting_does_not_claim_controller_fields_by_default():
-    assert LightingController().update(_telemetry(), Settings(), 1.0) == (
+def test_lighting_does_not_claim_controller_fields_when_disabled():
+    assert LightingController().update(_telemetry(), _before_r11_settings(), 1.0) == (
         NO_VISUAL_CONTROL
     )
 
 
 def test_tachometer_uses_teal_gradient_and_flashes_at_redline():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_tachometer_lightbar = True
     controller = LightingController()
 
@@ -85,7 +96,7 @@ def test_tachometer_uses_teal_gradient_and_flashes_at_redline():
 
 
 def test_tachometer_uses_the_shared_dynamic_redline_when_available():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_tachometer_lightbar = True
     controller = LightingController()
 
@@ -103,7 +114,7 @@ def test_tachometer_uses_the_shared_dynamic_redline_when_available():
 
 
 def test_tachometer_follows_the_new_broad_learning_result_end_to_end():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_tachometer_lightbar = True
     lighting = LightingController()
     detector = RedlineDetector()
@@ -139,7 +150,7 @@ def test_tachometer_follows_the_new_broad_learning_result_end_to_end():
 
 
 def test_confirmed_limiter_event_forces_the_tachometer_flash():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_tachometer_lightbar = True
 
     state = LightingController().update(
@@ -157,7 +168,7 @@ def test_confirmed_limiter_event_forces_the_tachometer_flash():
 
 
 def test_ev_tachometer_stays_steady_red_without_shift_flashing():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_tachometer_lightbar = True
     controller = LightingController()
     electric_limit = _telemetry(
@@ -181,7 +192,7 @@ def test_ev_tachometer_stays_steady_red_without_shift_flashing():
 
 
 def test_multi_speed_ev_tachometer_keeps_near_limit_gradient_and_steady_red():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_tachometer_lightbar = True
     controller = LightingController()
     electric = _telemetry(

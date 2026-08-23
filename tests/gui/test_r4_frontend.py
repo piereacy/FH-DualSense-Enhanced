@@ -16,6 +16,7 @@ def _constant_translation_keys() -> set[str]:
     keys = set()
     sources = list((ROOT / "src/modules/gui").glob("*.py"))
     sources.extend((ROOT / "src/modules/tui").glob("*.py"))
+    sources.append(ROOT / "src/modules/xinput/service.py")
     sources.append(
         ROOT / "src/modules/forzahorizon/fh6_language_presentation.py"
     )
@@ -171,3 +172,81 @@ def test_all_non_english_catalogs_cover_the_complete_gui_and_tui_surface():
         strings = runpy.run_path(str(path))["STRINGS"]
         missing = required - strings.keys()
         assert not missing, f"{path.name} is missing {sorted(missing)}"
+
+
+def test_lab_and_hidhide_backend_lifetime_messages_are_translated():
+    required = {
+        (
+            "The lab never starts virtual Xbox input, Raw Input, or HidHide. "
+            "Live game telemetry takes priority, and every preview stops automatically."
+        ),
+        "Isolation remains active while the Xbox App bridge is running",
+    }
+    removed = {
+        "Controller output is off unless FH4, FH5, or FH6 is in the foreground",
+        "Isolation starts only while FH4, FH5, or FH6 is in the foreground",
+    }
+
+    for locale in ("de", "ja", "ru", "tr", "zh", "zh_tw"):
+        strings = runpy.run_path(str(ROOT / f"src/lang/{locale}.py"))["STRINGS"]
+        assert required <= strings.keys()
+        assert removed.isdisjoint(strings)
+
+
+
+def test_hidhide_help_keeps_global_driver_configuration_user_owned():
+    key = (
+        "Requires HidHide 1.7 or newer and Xbox App mode. Before enabling this "
+        "option, turn on Device hiding in the official HidHide Configuration "
+        "Client. FHDS does not install the driver, change HidHide's global Active "
+        "switch, or edit the permanent device list; it only manages its own "
+        "application whitelist entry and process-lifetime session blacklist."
+    )
+    expected = {
+        "de": (
+            "Erfordert HidHide 1.7 oder neuer und den Xbox-App-Modus. Aktivieren Sie "
+            "vor dieser Option zunächst Device hiding im offiziellen HidHide "
+            "Configuration Client. FHDS installiert den Treiber nicht, ändert weder "
+            "den globalen Active-Schalter von HidHide noch die permanente Geräteliste; "
+            "es verwaltet nur seinen eigenen Eintrag in der Anwendungs-Whitelist und "
+            "eine prozessgebundene Session-Blacklist."
+        ),
+        "ja": (
+            "HidHide 1.7 以降と Xbox App モードが必要です。このオプションを有効にする前に、"
+            "公式 HidHide Configuration Client で Device hiding を有効にしてください。FHDS は"
+            "ドライバーのインストール、HidHide のグローバル Active スイッチの変更、永続デバイス"
+            "一覧の編集を行いません。管理するのは FHDS 自身のアプリケーション・ホワイトリスト項目と、"
+            "プロセス存続中だけ有効なセッション・ブラックリストのみです。"
+        ),
+        "ru": (
+            "Требуются HidHide 1.7 или новее и режим Xbox App. Перед включением этой "
+            "опции сначала включите Device hiding в официальном HidHide Configuration "
+            "Client. FHDS не устанавливает драйвер, не изменяет глобальный переключатель "
+            "Active HidHide и постоянный список устройств; программа управляет только "
+            "собственной записью в белом списке приложений и чёрным списком сеанса, "
+            "действующим до завершения процесса."
+        ),
+        "tr": (
+            "HidHide 1.7 veya daha yenisi ve Xbox App modu gerekir. Bu seçeneği "
+            "etkinleştirmeden önce resmi HidHide Configuration Client'da Device hiding'i "
+            "açın. FHDS sürücüyü kurmaz, HidHide'ın genel Active anahtarını veya kalıcı "
+            "aygıt listesini değiştirmez; yalnızca kendi uygulama beyaz liste girdisini "
+            "ve işlem ömrüyle sınırlı oturum kara listesini yönetir."
+        ),
+        "zh": (
+            "需要 HidHide 1.7 或更高版本及 Xbox App 模式。启用此选项前，请先在官方 HidHide "
+            "Configuration Client 中开启 Device hiding。FHDS 不会安装驱动、切换 HidHide 的全局 "
+            "Active 开关或修改永久设备列表；它只管理自身的应用白名单条目和随进程生命周期存在的会话黑名单。"
+        ),
+        "zh_tw": (
+            "需要 HidHide 1.7 或更新版本及 Xbox App 模式。啟用此選項前，請先在官方 HidHide "
+            "Configuration Client 中開啟 Device hiding。FHDS 不會安裝驅動程式、切換 HidHide 的"
+            "全域 Active 開關或修改永久裝置清單；它只管理自身的應用程式白名單項目及隨處理程序生命週期"
+            "存在的工作階段黑名單。"
+        ),
+    }
+
+    assert key in _constant_translation_keys()
+    for locale, text in expected.items():
+        strings = runpy.run_path(str(ROOT / f"src/lang/{locale}.py"))["STRINGS"]
+        assert strings[key] == text

@@ -250,6 +250,71 @@ STRINGS = {
 }
 
 STRINGS.update({
+    "Haptics Lab": "触觉实验室",
+    "Preview one bounded feedback layer at a time without game input forwarding.":
+        "一次预览一个有安全上限的反馈层，不转发游戏输入。",
+    "Preview safety limits": "预览安全限制",
+    ("The lab never starts virtual Xbox input, Raw Input, or HidHide. "
+     "Live game telemetry takes priority, and every preview stops automatically."):
+        "实验室绝不会启动虚拟 Xbox 输入、Raw Input 或 HidHide。"
+        "实时游戏遥测始终优先，而且每次预览都会自动停止。",
+    "Preview intensity": "预览强度",
+    "Preview duration": "预览时长",
+    "Ready for a preview": "可以开始预览",
+    "Stop all previews": "停止全部预览",
+    "Play preview": "播放预览",
+    "Feedback backend is not ready": "反馈后端尚未就绪",
+    "Connect a DualSense to use the lab": "连接 DualSense 后即可使用实验室",
+    "Playing {scene} - {seconds:.1f} s remaining":
+        "正在播放 {scene} - 剩余 {seconds:.1f} 秒",
+    "Preview complete": "预览完成",
+    "DSX mode supports adaptive-trigger previews only":
+        "DSX 模式仅支持自适应扳机预览",
+    "Engine sweep": "发动机扫频",
+    "A low engine tone that rises through a short RPM sweep.":
+        "通过短暂转速扫频逐渐升高的低频发动机触感。",
+    "Road texture": "路面纹理",
+    "A steady fine texture on both grips.": "双侧握把上的稳定细腻纹理。",
+    "Water and puddles": "积水与水坑",
+    "A softer uneven texture for wet surfaces and puddles.":
+        "用于湿滑路面和水坑的柔和不均匀纹理。",
+    "Tire slip": "轮胎打滑",
+    "A fast high-frequency warning on both grips.": "双侧握把上的快速高频警告。",
+    "Suspension travel": "悬挂行程",
+    "A rounded low-frequency suspension movement.": "圆润的低频悬挂运动触感。",
+    "Collision - left": "碰撞 - 左侧",
+    "A decaying impact isolated to the left grip.": "仅在左握把输出的衰减碰撞。",
+    "Collision - right": "碰撞 - 右侧",
+    "A decaying impact isolated to the right grip.": "仅在右握把输出的衰减碰撞。",
+    "Upshift": "升挡",
+    "A short, firm shift thump on both grips.": "双侧握把上短促有力的换挡冲击。",
+    "Downshift": "降挡",
+    "A heavier double-stage shift thump on both grips.": "双侧握把上更重的两段式换挡冲击。",
+    "Redline pulse": "红线脉冲",
+    "A rhythmic warning pulse on the left grip.": "左握把上的节奏式警告脉冲。",
+    "ABS preview": "ABS 预览",
+    "A brake-trigger buzz with matching grip feedback.": "刹车扳机震动及对应握把反馈。",
+    "Traction control preview": "牵引力控制预览",
+    "A throttle-trigger buzz with right-grip slip feedback.":
+        "油门扳机震动及右握把打滑反馈。",
+    "Brake resistance": "刹车阻力",
+    "A bounded progressive resistance curve on L2.": "L2 上有安全上限的渐进阻力曲线。",
+    "Throttle resistance": "油门阻力",
+    "A bounded progressive resistance curve on R2.": "R2 上有安全上限的渐进阻力曲线。",
+    "Diagnostics": "诊断",
+    ("Create a ZIP with controller, input owner, telemetry, "
+     "USB/Bluetooth haptics counters, and bounded runtime logs."):
+        "创建包含控制器、输入所有者、遥测、USB/蓝牙触觉计数器"
+        "和有界运行日志的 ZIP。",
+    ("Preferences and profiles are excluded. Review the ZIP before sharing because logs can contain local paths."):
+        "不包含偏好设置和配置文件。日志可能包含本地路径，请在分享前检查 ZIP。",
+    "Create diagnostic package": "创建诊断包",
+    "Creating diagnostic package...": "正在创建诊断包...",
+    "Diagnostic package failed: {error}": "诊断包创建失败：{error}",
+    "Diagnostic package saved: {path}": "诊断包已保存：{path}",
+})
+
+STRINGS.update({
     # --- R4 dynamic triggers and lighting ---
     "R2 optional dynamic resistance": "R2 扳机键可选动态阻力",
     "Boost activation threshold": "涡轮增压启用阈值",
@@ -368,6 +433,7 @@ STRINGS.update({
     "DSX unavailable": "DSX 不可用",
     "Target {target}; fire-and-forget UDP has no acknowledgement": "目标 {target}；单向 UDP 不会返回确认",
     "Waiting for controller": "等待手柄",
+    "Controller detected": "已检测到手柄",
     "Retrying every {seconds:g} seconds": "每 {seconds:g} 秒重试一次",
     "Automatic reconnect is off": "自动重连已关闭",
     "UDP bind failed": "UDP 绑定失败",
@@ -587,6 +653,8 @@ STRINGS.update({
     "The virtual Xbox 360 controller starts after input": "收到输入后会创建虚拟 Xbox 360 手柄",
     "Xbox 360 controller active": "虚拟 Xbox 360 手柄已启用",
     "Forwarded {count} input reports": "已转发 {count} 份输入报告",
+    "Keyboard and mouse active": "键盘和鼠标正在使用",
+    "Virtual Xbox input is neutral; move or press the DualSense to resume": "虚拟 Xbox 输入已置为中立；移动摇杆或按下 DualSense 按键即可恢复",
     "Controller input paused": "手柄输入已暂停",
     "Neutral state sent to prevent stuck controls": "已发送中立状态以避免按键卡住",
     "XInput bridge error": "XInput 连接桥错误",
@@ -627,4 +695,63 @@ STRINGS.update({
     "Select Xbox App as the Forza platform to customize buttons here. If you use the Steam version, change your controller mapping in Steam.": "请先在“游戏平台”中选择“XBOX 版”后再在此自定义。如果你是 Steam 版并需要更改映射，请在 Steam 内自行修改映射。",
     "Or download manually: {url}": "或手动下载：{url}",
     "Project repository": "项目仓库",
+    "Tuning credit": "调教鸣谢",
+})
+
+STRINGS.update({
+    "Physical controller isolation": "物理手柄隔离",
+    "Hide the physical DualSense from games with HidHide": "使用 HidHide 向游戏隐藏物理 DualSense",
+    "Requires HidHide 1.7 or newer and Xbox App mode. Before enabling this option, turn on Device hiding in the official HidHide Configuration Client. FHDS does not install the driver, change HidHide's global Active switch, or edit the permanent device list; it only manages its own application whitelist entry and process-lifetime session blacklist.": "需要 HidHide 1.7 或更高版本及 Xbox App 模式。启用此选项前，请先在官方 HidHide Configuration Client 中开启 Device hiding。FHDS 不会安装驱动、切换 HidHide 的全局 Active 开关或修改永久设备列表；它只管理自身的应用白名单条目和随进程生命周期存在的会话黑名单。",
+    "HidHide isolation is off": "HidHide 隔离已关闭",
+    "The physical DualSense remains visible to games": "游戏仍可看到物理 DualSense",
+    "HidHide isolation is paused": "HidHide 隔离已暂停",
+    "Select Xbox App mode to hide the physical DualSense": "选择 Xbox App 模式后才能隐藏物理 DualSense",
+    "Direct HID mode is required; DSX owns the controller": "需要原生 HID 模式；当前手柄由 DSX 管理",
+    "Physical DualSense hidden from games": "已向游戏隐藏物理 DualSense",
+    "Hidden {count} device path(s); restart an already-running game": "已隐藏 {count} 条设备路径；若游戏已经运行，请重启游戏",
+    "HidHide isolation is ready": "HidHide 隔离已就绪",
+    "Connect or reconnect the DualSense to apply isolation": "连接或重新连接 DualSense 以应用隔离",
+    "HidHide unavailable": "HidHide 不可用",
+    "Install HidHide 1.7 or newer and restart FHDS": "请安装 HidHide 1.7 或更高版本，然后重启 FHDS",
+    "HidHide isolation error": "HidHide 隔离错误",
+    "Open the HidHide Configuration Client to recover": "请打开 HidHide Configuration Client 进行恢复",
+    "HidHide isolation is waiting": "HidHide 隔离正在等待",
+    "Isolation remains active while the Xbox App bridge is running": "Xbox App 连接桥运行期间，隔离会保持启用",
+    "ViGEmBus must be ready before the physical controller is hidden": "必须先让 ViGEmBus 就绪，才会隐藏物理手柄",
+})
+
+STRINGS.update({
+    "Customize the buttons and Steam Input-style motion sent by the Xbox App bridge. L2/R2 remain unchanged.":
+        "自定义 Xbox App 桥接输出的按键与 Steam Input 风格体感；L2/R2 保持不变。",
+    "Gyro behavior": "陀螺仪行为",
+    "Enable gyro": "启用陀螺仪",
+    "Enable custom Xbox mapping first; gyro is controlled by that master switch.":
+        "请先启用自定义 Xbox 映射；陀螺仪由该总开关控制。",
+    "Virtual Xbox 360 controllers have no motion channel, so FHDS converts DualSense motion into additive joystick output.":
+        "虚拟 Xbox 360 手柄没有体感通道，因此 FHDS 会将 DualSense 体感转换为叠加的摇杆输出。",
+    "Gyro mode": "陀螺仪模式",
+    "Output joystick": "输出摇杆",
+    "Gyro activation": "体感激活方式",
+    "Horizontal motion axis": "水平体感轴",
+    "Full-stick camera speed (deg/s)": "摇杆满幅相机速度（度/秒）",
+    "Full-stick deflection angle (deg)": "摇杆满幅偏转角度（度）",
+    "Gyro deadzone (deg/s)": "陀螺仪死区（度/秒）",
+    "Gyro smoothing (ms)": "陀螺仪平滑（毫秒）",
+    "Enable vertical gyro output": "启用垂直体感输出",
+    "Invert horizontal gyro": "反转水平体感",
+    "Invert vertical gyro": "反转垂直体感",
+    "Off": "关闭",
+    "Gyro to Joystick (Camera)": "陀螺仪到摇杆（相机）",
+    "Gyro to Joystick (Deflection)": "陀螺仪到摇杆（偏转）",
+    "Left joystick": "左摇杆",
+    "Right joystick": "右摇杆",
+    "Always on": "始终开启",
+    "L2 soft pull": "L2 轻按",
+    "R2 soft pull": "R2 轻按",
+    "L1": "L1",
+    "R1": "R1",
+    "Touchpad touch": "触摸板触摸",
+    "Yaw": "偏航",
+    "Roll": "横滚",
+    "Yaw + roll": "偏航 + 横滚",
 })

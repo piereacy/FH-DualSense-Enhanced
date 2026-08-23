@@ -8,6 +8,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Button,
+    Collapsible,
     Label,
     ProgressBar,
     RadioButton,
@@ -18,17 +19,23 @@ from textual.widgets import (
 
 from lang import t
 from modules.config import preferences
-from modules.dualsense.main import _enumerate_dualsenses, _is_bluetooth, identify_pulse
+from modules.dualsense.main import (
+    _is_bluetooth,
+    _raw_dualsense_interfaces,
+    identify_pulse,
+)
 from modules.update import UpdatePhase
 from modules.update.presentation import update_status_presentation
-from modules.xinput.bridge import BridgeStatus
+from modules.xinput.bridge import BridgeStatus, InputOwner
 from modules.xinput.driver import InstallStatus
 from modules.xinput.service import (
     STEAM_PLATFORM,
     XBOX_APP_PLATFORM,
+    hidhide_presentation,
     normalize_forza_platform,
 )
 
+from .haptics_lab_tab import HapticsLabPanel
 from .settings_tab import SYSTEM_SECTIONS, SettingsTab
 
 log = logging.getLogger("fhds")
@@ -45,6 +52,7 @@ class SystemTab(SettingsTab):
     SystemTab #controller-buttons Button { margin-right: 2; }
     SystemTab #xinput-buttons { height: 3; padding: 0 1; }
     SystemTab #update-manual-download { width: 1fr; margin: 0 1 1 1; }
+    SystemTab #diagnostics-export { width: 1fr; margin: 1; }
     SystemTab #controller-radio { height: auto; padding: 0 1 1 1; }
     SystemTab #controller-hid-section { height: auto; }
     SystemTab #controller-hid-section > Label { padding: 0 1; }
@@ -84,6 +92,64 @@ class SystemTab(SettingsTab):
             id="dsx-controller-note",
             classes="hint",
         )
+
+        yield Label(t("Physical controller isolation"), classes="section")
+        with Horizontal(classes="row"):
+            yield Switch(
+                value=self.settings.enable_hidhide,
+                id="enable_hidhide",
+            )
+            yield Label(t("Hide the physical DualSense from games with HidHide"))
+        yield Label(
+            t(
+                "Requires HidHide 1.7 or newer and Xbox App mode. Before enabling "
+                "this option, turn on Device hiding in the official HidHide "
+                "Configuration Client. FHDS does not install the driver, change "
+                "HidHide's global Active switch, or edit the permanent device list; "
+                "it only manages its own application whitelist entry and "
+                "process-lifetime session blacklist."
+            ),
+            classes="hint",
+            markup=False,
+        )
+        yield Label("", id="hidhide-status", markup=False)
+        yield Label("", id="hidhide-detail", classes="hint", markup=False)
+
+        yield Label(t("Diagnostics"), classes="section")
+        yield Label(
+            t(
+                "Create a ZIP with controller, input owner, telemetry, "
+                "USB/Bluetooth haptics counters, and bounded runtime logs."
+            ),
+            classes="hint",
+            markup=False,
+        )
+        yield Label(
+            t(
+                "Preferences and profiles are excluded. Review the ZIP before sharing because logs can contain local paths."
+            ),
+            classes="hint",
+            markup=False,
+        )
+        yield Button(
+            t("Create diagnostic package"),
+            id="diagnostics-export",
+        )
+        yield Label("", id="diagnostics-status", classes="hint", markup=False)
+
+        with Collapsible(
+            title=t("Haptics Lab"),
+            collapsed=True,
+            id="haptics-lab-card",
+        ):
+            yield Label(
+                t(
+                    "Preview one bounded feedback layer at a time without game input forwarding."
+                ),
+                classes="hint",
+                markup=False,
+            )
+            yield HapticsLabPanel()
 
         yield Label(t("Updates"), classes="section")
         with Horizontal(classes="row"):
@@ -150,18 +216,29 @@ class SystemTab(SettingsTab):
             manual_download.label = t("Or download manually: {url}").format(
                 url=presentation.manual_download_url
             )
+        self._refresh_hidhide_status()
         self._refresh_xinput_status()
+
+    def _refresh_hidhide_status(self) -> None:
+        presentation = hidhide_presentation(
+            self.settings,
+            self.app._xinput_service.snapshot(),
+            self.app._xinput_service.hidhide_snapshot(),
+            t,
+        )
+        self.query_one("#hidhide-status", Label).update(presentation.title)
+        self.query_one("#hidhide-detail", Label).update(presentation.detail)
 
     def _refresh_xinput_status(self) -> None:
         status = self.query_one("#xinput-status", Label)
         detail = self.query_one("#xinput-detail", Label)
         action = self.query_one("#xinput-action", Button)
+        snapshot = self.app._xinput_service.snapshot()
         if normalize_forza_platform(self.settings.preferred_forza_platform) == STEAM_PLATFORM:
             status.update(t("Steam Input mode"))
             detail.update(t("XInput bridge is off"))
             action.disabled = True
             return
-        snapshot = self.app._xinput_service.snapshot()
         mapping = {
             BridgeStatus.DRIVER_MISSING: (
                 t("ViGEmBus required"),
@@ -198,7 +275,17 @@ class SystemTab(SettingsTab):
                 snapshot.last_error,
             ),
         }
-        title, message = mapping[snapshot.status]
+        if (
+            snapshot.input_owner is InputOwner.KEYBOARD_MOUSE
+            and snapshot.status
+            in {BridgeStatus.WAITING_CONTROLLER, BridgeStatus.ACTIVE, BridgeStatus.STALE}
+        ):
+            title = t("Keyboard and mouse active")
+            message = t(
+                "Virtual Xbox input is neutral; move or press the DualSense to resume"
+            )
+        else:
+            title, message = mapping[snapshot.status]
         status.update(title)
         detail.update(message)
         action.disabled = snapshot.status not in {
@@ -240,6 +327,18 @@ class SystemTab(SettingsTab):
         # Re-enumerating is pointless (and the radio is hidden) under DSX.
         if not self.settings.use_dsx:
             await self._rerender_controller()
+
+    def on_hide(self) -> None:
+        self._stop_haptics_lab("page_hidden")
+
+    def on_collapsible_collapsed(self, event: Collapsible.Collapsed) -> None:
+        if event.collapsible.id == "haptics-lab-card":
+            self._stop_haptics_lab("card_collapsed")
+
+    def _stop_haptics_lab(self, reason: str) -> None:
+        panels = self.query(HapticsLabPanel)
+        for panel in panels:
+            panel.stop(reason)
 
     def _attached_serial(self) -> str:
         ds = getattr(self.app, "_ds", None)
@@ -288,8 +387,8 @@ class SystemTab(SettingsTab):
         return button.id[len("ctrl-"):]
 
     async def _rerender_controller(self) -> None:
-        # Enumerate off-thread; blocking HID I/O would freeze the event loop.
-        self._devices = await asyncio.to_thread(_enumerate_dualsenses)
+        # Enumerate off-thread; HID discovery may block the Textual event loop.
+        self._devices = await asyncio.to_thread(_raw_dualsense_interfaces)
         # await remove_children() before mount() to avoid a DuplicateIds collision.
         radio = self.query_one("#controller-radio", RadioSet)
         await radio.remove_children()
@@ -362,6 +461,25 @@ class SystemTab(SettingsTab):
             if callable(reconnect):
                 reconnect()
                 log.info("Immediate DualSense reconnect requested")
+        elif event.button.id == "diagnostics-export":
+            status = self.query_one("#diagnostics-status", Label)
+            event.button.disabled = True
+            status.update(t("Creating diagnostic package..."))
+            try:
+                path = await asyncio.to_thread(self.app.export_diagnostics)
+            except Exception as exc:
+                log.exception("Diagnostic package export failed")
+                message = t("Diagnostic package failed: {error}").format(
+                    error=str(exc) or type(exc).__name__
+                )
+                status.update(message)
+                self.app.notify(message, severity="error")
+            else:
+                message = t("Diagnostic package saved: {path}").format(path=path)
+                status.update(message)
+                self.app.notify(message)
+            finally:
+                event.button.disabled = False
         elif event.button.id == "update-check":
             self.app._update_service.check_now()
         elif event.button.id == "update-action":
@@ -386,3 +504,9 @@ class SystemTab(SettingsTab):
         if event.switch.id == "use_dsx":
             self._sync_controller_visibility()
             log.info("DSX %s", "enabled" if event.value else "disabled")
+        elif event.switch.id == "enable_hidhide":
+            threading.Thread(
+                target=self.app._xinput_service.sync_hidhide,
+                name="fhds-hidhide-toggle",
+                daemon=True,
+            ).start()

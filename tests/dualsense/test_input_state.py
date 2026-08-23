@@ -24,6 +24,9 @@ def _report(
     buttons1=0,
     buttons2=0,
     touch_xs=(),
+    gyro=(0, 0, 0),
+    accel=(0, 0, 0),
+    sensor_timestamp=0,
 ):
     bluetooth = transport is InputTransport.BLUETOOTH
     report = bytearray(
@@ -35,6 +38,9 @@ def _report(
     report[base + 7] = int(dpad) | buttons0
     report[base + 8] = buttons1
     report[base + 9] = buttons2
+    struct.pack_into("<hhh", report, base + 15, *gyro)
+    struct.pack_into("<hhh", report, base + 21, *accel)
+    struct.pack_into("<I", report, base + 27, sensor_timestamp)
     for offset in (32, 36):
         report[base + offset] = 0x80
     for index, x in enumerate(touch_xs):
@@ -57,6 +63,25 @@ def test_parses_common_axes_triggers_and_transport_layout(transport):
     assert (state.left_trigger, state.right_trigger) == (5, 6)
     assert state.dpad is DPad.NEUTRAL
     assert state.buttons == frozenset()
+
+
+@pytest.mark.parametrize("transport", list(InputTransport))
+def test_parses_signed_motion_axes_and_sensor_timestamp(transport):
+    state = parse_input_report(
+        _report(
+            transport,
+            gyro=(-32768, -16, 32767),
+            accel=(-8192, 0, 8192),
+            sensor_timestamp=0xFEDCBA98,
+        ),
+        transport,
+    )
+
+    assert (state.gyro_x, state.gyro_y, state.gyro_z) == (-32768, -16, 32767)
+    assert (state.accel_x, state.accel_y, state.accel_z) == (-8192, 0, 8192)
+    assert state.sensor_timestamp == 0xFEDCBA98
+    assert state.gyro_degrees_per_second[1] == pytest.approx(-1.0)
+    assert state.acceleration_g == pytest.approx((-1.0, 0.0, 1.0))
 
 
 @pytest.mark.parametrize("transport", list(InputTransport))
@@ -123,6 +148,7 @@ def test_touch_contact_without_click_does_not_publish_a_touchpad_region(transpor
 
     assert DualSenseButton.TOUCHPAD not in state.buttons
     assert state.touchpad_regions == frozenset()
+    assert state.touchpad_touched is True
 
 
 @pytest.mark.parametrize("transport", list(InputTransport))

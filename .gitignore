@@ -15,6 +15,13 @@ develop-eggs/
 dist/
 packaging/windows/helper_build/
 packaging/windows/helper_dist/
+packaging/windows/build-*/
+packaging/windows/dist-*/
+packaging/windows/helper_build-*/
+packaging/windows/helper_dist-*/
+packaging/windows/helper_spec-*/
+packaging/windows/helper_work-*/
+packaging/windows/diagnostics-*/
 downloads/
 eggs/
 .eggs/
@@ -227,6 +234,7 @@ user_preferences.json
 # fhds crash log
 crash.log
 runtime.log*
+/src/data/diagnostics/
 .claude
 
 # Local isolated feature worktrees

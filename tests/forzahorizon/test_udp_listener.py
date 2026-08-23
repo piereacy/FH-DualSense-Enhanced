@@ -3,7 +3,12 @@ import struct
 import pytest
 
 from modules.forzahorizon.udp_forward import UDPForwarder, _parse_targets
-from modules.forzahorizon.udp_listener import TelemetryPhase, UDPListener, parse_packet
+from modules.forzahorizon.udp_listener import (
+    MAX_DRAIN_DATAGRAMS,
+    TelemetryPhase,
+    UDPListener,
+    parse_packet,
+)
 
 
 class _FakeSocket:
@@ -16,6 +21,24 @@ class _FakeSocket:
 
     def close(self):
         self.closed = True
+
+
+class _FloodSocket:
+    def __init__(self):
+        self.recv_calls = 0
+        self.timeout_calls = []
+        self.blocking_calls = []
+
+    def settimeout(self, timeout):
+        self.timeout_calls.append(timeout)
+
+    def setblocking(self, blocking):
+        self.blocking_calls.append(blocking)
+
+    def recvfrom(self, _size):
+        self.recv_calls += 1
+        packet = bytes([self.recv_calls % 256]) + bytes(323)
+        return packet, ("127.0.0.1", 60000)
 
 
 def test_puddle_depth_fields_are_parsed_as_float32():
@@ -80,6 +103,23 @@ def test_wrong_size_datagrams_do_not_advance_the_runtime_snapshot():
     assert snapshot.packet_count == 0
 
 
+def test_recv_latest_bounds_continuously_replenished_backlog_and_restores_timeout():
+    listener = UDPListener("127.0.0.1", 5300, timeout=0.5)
+    sock = _FloodSocket()
+    listener.sock = sock
+
+    packet, address = listener.recv_latest(wait_timeout_s=0.05)
+
+    assert sock.recv_calls == 1 + MAX_DRAIN_DATAGRAMS
+    assert packet[0] == (1 + MAX_DRAIN_DATAGRAMS) % 256
+    assert address == ("127.0.0.1", 60000)
+    assert sock.timeout_calls == [0.05, 0.5]
+    assert sock.blocking_calls == [False, True]
+    snapshot = listener.snapshot()
+    assert snapshot.packet_count == 1 + MAX_DRAIN_DATAGRAMS
+    assert snapshot.drained_packet_count == MAX_DRAIN_DATAGRAMS
+
+
 def test_explicit_ipv4_host_does_not_expand_to_all_interfaces(monkeypatch):
     listener = UDPListener("127.0.0.1", 5300)
     sock = _FakeSocket()
@@ -121,6 +161,53 @@ def test_forward_targets_reject_empty_hosts_and_invalid_ports():
     assert _parse_targets("127.0.0.1:5301, :5302, host:0, host:65536") == [
         ("127.0.0.1", 5301)
     ]
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "0.0.0.0", "::"])
+def test_listener_rejects_obvious_local_self_forward_but_keeps_external_targets(host):
+    listener = UDPListener(
+        host,
+        5300,
+        forward_to=(
+            "127.0.0.1:5300,localhost:5300,"
+            "127.0.0.1:5301,192.0.2.10:5300"
+        ),
+    )
+
+    assert listener._fwd.targets == [
+        ("127.0.0.1", 5301),
+        ("192.0.2.10", 5300),
+    ]
+
+
+def test_wildcard_listener_rejects_the_full_ipv4_loopback_range():
+    listener = UDPListener(
+        "0.0.0.0",
+        5300,
+        forward_to="127.1.2.3:5300,127.1.2.3:5301",
+    )
+
+    assert listener._fwd.targets == [("127.1.2.3", 5301)]
+
+
+@pytest.mark.parametrize(
+    ("listen_host", "forward_host"),
+    [
+        ("127.1.2.3", "localhost"),
+        ("localhost", "127.1.2.3"),
+    ],
+)
+def test_explicit_loopback_aliases_cannot_forward_to_the_listener_port(
+    listen_host,
+    forward_host,
+):
+    listener = UDPListener(
+        listen_host,
+        5300,
+        forward_to=f"{forward_host}:5300,{forward_host}:5301",
+    )
+
+    assert listener._fwd.targets == [(forward_host, 5301)]
 
 
 def test_forward_send_errors_never_escape_into_telemetry_loop():

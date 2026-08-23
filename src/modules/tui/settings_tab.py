@@ -345,6 +345,13 @@ class SettingsTab(VerticalScroll):
         if hasattr(self.app, "mark_default_saved"):
             self.app.mark_default_saved()
         self.app.refresh_setting_widgets()
+        xinput_service = getattr(self.app, "_xinput_service", None)
+        if xinput_service is not None:
+            threading.Thread(
+                target=xinput_service.sync_hidhide,
+                name="fhds-hidhide-reset",
+                daemon=True,
+            ).start()
         log.info("Settings reset to defaults.")
 
     # ---- Live propagation -------------------------------------------------

@@ -643,6 +643,20 @@ def is_forza_game_running(
         return True
 
 
+def is_any_forza_game_running(*, strict: bool = False) -> bool:
+    """Return whether any supported FH4/FH5/FH6 executable is running.
+
+    The process table is scanned once and executable names are matched exactly,
+    so unrelated helpers containing the word ``forza`` cannot open the runtime
+    input gate.
+    """
+    return find_game_process(
+        (),
+        exact_names=tuple(game.executable_name for game in _GAME_DEFINITIONS),
+        strict=strict,
+    ) is not None
+
+
 def _open_steam_uri(uri: str) -> None:
     opener = getattr(os, "startfile", None)
     if opener is None:

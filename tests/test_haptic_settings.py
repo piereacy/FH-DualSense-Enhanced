@@ -521,6 +521,7 @@ def test_share_code_import_rejects_oversized_decompressed_payload(tmp_path, monk
     assert profiles.import_profile(profiles.SHARE_PREFIX + body) == ""
     assert profiles.list_profile_names(profiles.load_profiles()) == [
         "Default",
+        "Default before R11",
         "Original",
     ]
 

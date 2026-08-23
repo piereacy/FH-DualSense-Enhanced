@@ -64,6 +64,36 @@ def test_sync_silences_and_stops_audio_when_usb_becomes_ineligible():
     assert audio.stop_calls == 1
 
 
+def test_sync_never_opens_usb_audio_while_forza_runtime_gate_is_closed():
+    audio = _Audio()
+    lifecycle = UsbAudioLifecycle(audio)
+
+    assert (
+        lifecycle.sync(
+            _Controller("usb"),
+            _settings(),
+            runtime_active=False,
+        )
+        is False
+    )
+    assert audio.start_calls == 0
+
+
+def test_runtime_gate_cycle_is_stopped_and_restarted_only_by_lifecycle_owner():
+    audio = _Audio()
+    lifecycle = UsbAudioLifecycle(audio)
+    controller = _Controller("usb")
+    settings = _settings()
+
+    assert lifecycle.sync(controller, settings, runtime_active=True) is True
+    assert lifecycle.sync(controller, settings, runtime_active=False) is False
+    assert lifecycle.sync(controller, settings, runtime_active=True) is True
+
+    assert audio.start_calls == 2
+    assert audio.stop_calls == 1
+    assert audio.frames == [SILENT_FRAME]
+
+
 def test_sync_never_starts_usb_audio_for_dsx_or_bluetooth():
     controllers = (_Controller("bluetooth"), _Controller(None, is_dsx=True))
     for controller in controllers:

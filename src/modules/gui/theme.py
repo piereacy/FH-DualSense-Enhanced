@@ -71,6 +71,7 @@ ICON = {
     "Overview": "\u25c8",
     "Driving": "\U0001f3ce",
     "Haptics": "\u224b",
+    "Lab": "\u2697",
     "Lighting": "\u2726",
     "Controls": "\U0001F3AE",  # gamepad
     "Profiles": "\U0001F4CB",  # clipboard

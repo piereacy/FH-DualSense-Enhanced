@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "10"
-CURRENT_RELEASE_VERSION = "R10"
+CURRENT_INTERNAL_VERSION = "11"
+CURRENT_RELEASE_VERSION = "R11"
 
 
 def _source(path: str) -> str:
@@ -42,6 +42,13 @@ def test_retired_ui_codename_only_remains_in_internal_design_guides():
         assert retired_name not in path.read_text(encoding="utf-8"), relative
 
 
+def test_old_three_exclude_deleted_features_from_current_user_copy():
+    rule = "当前版本用户文案不得提及已经删除的功能"
+
+    for path in ("AGENTS.md", "docs/ARCHITECTURE.md", "docs/DECISIONS.md"):
+        assert rule in _source(path), f"{path} is missing the deleted-feature copy rule"
+
+
 def test_shared_application_identity_is_enhanced():
     about = runpy.run_path(str(ROOT / "src/modules/about.py"))
     project = tomllib.loads(_source("src/pyproject.toml"))
@@ -59,6 +66,35 @@ def test_runtime_surfaces_use_the_shared_enhanced_name():
     ):
         source = _source(path)
         assert "APP_NAME" in source, f"{path} does not use APP_NAME"
+
+
+def test_r11_foreground_ownership_experiment_is_outside_the_runtime_package():
+    experiment = ROOT / "experiments/foreground_ownership"
+    assert (experiment / "README.md").exists()
+    assert (experiment / "reference/passive_detection.py").exists()
+    assert (experiment / "reference/xinput_service_with_foreground_gate.py").exists()
+    assert (experiment / "integration/dualsense_runtime_gate_removal.patch").exists()
+    assert not (experiment / "__init__.py").exists()
+    assert not (ROOT / "src/modules/dualsense/passive_detection.py").exists()
+
+    production = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src").rglob("*.py"))
+    )
+    for removed_symbol in (
+        "GetForegroundWindow",
+        "find_foreground_process",
+        "is_any_forza_game_foreground",
+        "WAITING_GAME",
+        "set_runtime_enabled",
+        "runtime_tick",
+        "defer_runtime_open",
+        "defer_startup_pulse",
+        "passive_detection",
+    ):
+        assert removed_symbol not in production
+    assert "experiments.foreground_ownership" not in production
+    assert "experiments" not in _source("packaging/windows/fhds.spec")
 
 
 def test_runtime_surfaces_map_internal_version_to_public_release_version():
@@ -166,15 +202,29 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R10 中文说明" in workflow
-    assert "Enhanced R10 English notes" in workflow
+    assert "Enhanced R11 中文说明" in workflow
+    assert "Enhanced R11 English notes" in workflow
     assert "generate_release_notes: false" in workflow
-    assert "油门末端硬墙独立控制" in workflow
-    assert "Independent throttle end wall" in workflow
+    assert "手柄占用范围" in workflow
+    assert "切到桌面或其他游戏不会自动释放" in workflow
+    assert "Controller usage scope" in workflow
+    assert "Switching to the desktop or another game does not release the controller" in workflow
+    assert "旧 R10 监听版" not in workflow
+    assert "old R10 listener build" not in workflow
+    assert "仅在地平线位于前台时占用手柄" not in workflow
+    assert "experimental foreground-Forza-only ownership behavior" not in workflow
+    assert "本版不包含" not in workflow
+    assert "this release does not include" not in workflow
+    assert "体感到摇杆" in workflow
+    assert "Motion-to-stick" in workflow
+    assert "Haptics Lab" in workflow
+    assert "系统与更新页新增默认折叠" in workflow
+    assert "collapsed by default under System and updates" in workflow
+    assert "诊断" in workflow
+    assert "diagnostics" in workflow
+    assert "HidHide 1.7+" in workflow
     assert "默认关闭" in workflow
     assert "off by default" in workflow
-    assert "旧配置安全升级" in workflow
-    assert "Safe profile upgrade" in workflow
     assert "TCR / 抓地力反馈保持独立" not in workflow
     assert "TCR / grip feedback remains independent" not in workflow
     assert "R7/R8 用户" not in workflow

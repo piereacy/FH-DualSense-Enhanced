@@ -188,6 +188,23 @@ def test_exact_process_detection_distinguishes_each_generation(tmp_path, monkeyp
     assert calls == ["ForzaHorizon5.exe", "ForzaHorizon4.exe"]
 
 
+def test_any_forza_process_detection_checks_all_generations_in_one_exact_scan(
+    monkeypatch,
+):
+    calls = []
+
+    def find(_needles, *, exact_names, strict=False):
+        calls.append((exact_names, strict))
+        return GameProcess("ForzaHorizon4.exe", "D:/FH4/ForzaHorizon4.exe", 44)
+
+    monkeypatch.setattr(game_launch, "find_game_process", find)
+
+    assert game_launch.is_any_forza_game_running(strict=True) is True
+    assert calls == [
+        (("ForzaHorizon4.exe", "ForzaHorizon5.exe", "ForzaHorizon6.exe"), True)
+    ]
+
+
 @pytest.mark.parametrize("key", game_launch.FORZA_GAME_KEYS)
 def test_launch_uses_selected_game_steam_uri(tmp_path, monkeypatch, key):
     root = _game_root(tmp_path, key)

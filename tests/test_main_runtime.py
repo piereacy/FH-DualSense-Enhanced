@@ -24,7 +24,7 @@ def test_headless_startup_failure_still_closes_controller_and_xinput(
         def __init__(self, _settings):
             pass
 
-        def sync(self, _controller):
+        def sync(self, controller):
             events.append("sync")
             if failure == "sync":
                 raise RuntimeError("xinput failed")
@@ -57,7 +57,7 @@ def test_headless_health_boundary_follows_controller_xinput_and_udp_initializati
         def __init__(self, _settings):
             pass
 
-        def sync(self, _controller):
+        def sync(self, controller):
             events.append("xinput")
 
         def stop(self):
@@ -77,7 +77,10 @@ def test_headless_health_boundary_follows_controller_xinput_and_udp_initializati
     monkeypatch.setattr(app_main, "make_backend", lambda *_args: Controller())
     monkeypatch.setattr(app_main, "XInputBridgeService", XInput)
     monkeypatch.setattr(app_main.forzahorizon, "UDPListener", Listener)
-    monkeypatch.setattr(app_main.loop, "run", lambda *_args: events.append("loop"))
+    def run_loop(*_args, **_kwargs):
+        events.append("loop")
+
+    monkeypatch.setattr(app_main.loop, "run", run_loop)
 
     app_main.run(Settings(), on_ready=lambda: events.append("healthy"))
 
@@ -134,6 +137,41 @@ def test_interactive_health_callbacks_are_one_shot():
         assert events == ["healthy"]
 
 
+def test_gui_focus_change_inside_the_app_does_not_revoke_a_lab_preview():
+    from modules.gui.main import TriggerGUI
+
+    scheduled = []
+    revoked = []
+    app = TriggerGUI.__new__(TriggerGUI)
+    app.root = type(
+        "Root",
+        (),
+        {
+            "after_idle": lambda _self, callback: scheduled.append(callback),
+            "focus_displayof": lambda _self: object(),
+        },
+    )()
+    app._revoke_haptics_lab_preview = lambda reason: revoked.append(reason)
+
+    TriggerGUI._on_focus_out(app)
+    scheduled.pop()()
+
+    assert revoked == []
+
+
+def test_gui_losing_application_focus_revokes_a_lab_preview():
+    from modules.gui.main import TriggerGUI
+
+    revoked = []
+    app = TriggerGUI.__new__(TriggerGUI)
+    app.root = type("Root", (), {"focus_displayof": lambda _self: None})()
+    app._revoke_haptics_lab_preview = lambda reason: revoked.append(reason)
+
+    TriggerGUI._revoke_preview_if_unfocused(app)
+
+    assert revoked == ["app_blurred"]
+
+
 def test_gui_udp_conflict_is_healthy_once_the_error_ui_is_usable(monkeypatch):
     from modules.gui import main as gui_main
 
@@ -144,7 +182,7 @@ def test_gui_udp_conflict_is_healthy_once_the_error_ui_is_usable(monkeypatch):
             events.append("controller")
 
     class XInput:
-        def sync(self, _controller):
+        def sync(self, controller):
             events.append("xinput")
 
     class Listener:
@@ -193,7 +231,7 @@ def test_tui_udp_conflict_is_healthy_but_controller_failure_is_not(monkeypatch):
                 raise OSError("controller unavailable")
 
     class XInput:
-        def sync(self, _controller):
+        def sync(self, controller):
             events.append("xinput")
 
     class Listener:

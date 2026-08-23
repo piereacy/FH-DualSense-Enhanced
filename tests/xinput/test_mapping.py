@@ -18,6 +18,12 @@ from modules.xinput.mapping import (
     normalize_mapping_target,
     reset_mapping_settings,
 )
+from modules.xinput.gyro import (
+    GYRO_ACTIVATION_OPTIONS,
+    GYRO_HORIZONTAL_OPTIONS,
+    GYRO_MODE_OPTIONS,
+    GYRO_OUTPUT_OPTIONS,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -98,6 +104,7 @@ def test_gui_and_tui_render_the_shared_mapping_schema_and_live_refresh_service()
         assert "enable_custom_xinput_mapping" in source
         assert "reset_mapping_settings" in source
         assert "refresh_button_mapping" in source
+        assert "refresh_gyro_mapping" in source
         assert "custom_xinput_mapping_available" in source
 
 
@@ -127,8 +134,15 @@ def test_standalone_tui_mapping_page_mounts_directly_and_tracks_platform_gate():
     from modules.tui.xinput_mapping_tab import XInputMappingTab
 
     class Service:
+        def __init__(self):
+            self.button_refreshes = 0
+            self.gyro_refreshes = 0
+
         def refresh_button_mapping(self):
-            pass
+            self.button_refreshes += 1
+
+        def refresh_gyro_mapping(self):
+            self.gyro_refreshes += 1
 
     class MappingHarness(App):
         def __init__(self, settings):
@@ -148,17 +162,40 @@ def test_standalone_tui_mapping_page_mounts_directly_and_tracks_platform_gate():
         app = MappingHarness(settings)
         async with app.run_test():
             page = app.query_one(XInputMappingTab)
-            assert len(list(page.query(Select))) == len(MAPPING_SOURCES)
+            assert len(list(page.query(Select))) == len(MAPPING_SOURCES) + 4
             assert page.query_one("#enable_custom_xinput_mapping", Switch).disabled
             assert page.query_one("#xinput-mapping-restore", Button).disabled
 
             settings.preferred_forza_platform = "xbox_app"
-            settings.enable_custom_xinput_mapping = True
             page.on_show()
 
             assert not page.query_one("#enable_custom_xinput_mapping", Switch).disabled
             assert not page.query_one("#xinput-mapping-restore", Button).disabled
-            assert all(not select.disabled for select in page.query(Select))
+            assert page.query_one("#enable_xinput_gyro", Switch).disabled
+            assert page.query_one("#xinput_gyro_mode", Select).disabled
+            assert all(
+                page.query_one(f"#{source.setting}", Select).disabled
+                for source in MAPPING_SOURCES
+            )
+
+            settings.enable_custom_xinput_mapping = True
+            page.on_show()
+
+            assert all(
+                not page.query_one(f"#{source.setting}", Select).disabled
+                for source in MAPPING_SOURCES
+            )
+            assert not page.query_one("#enable_xinput_gyro", Switch).disabled
+            assert page.query_one("#xinput_gyro_mode", Select).disabled
+            assert page.query_one("#xinput_gyro_output_stick", Select).disabled
+
+            settings.enable_xinput_gyro = True
+            page.on_show()
+
+            assert not page.query_one("#xinput_gyro_mode", Select).disabled
+            assert not page.query_one("#xinput_gyro_output_stick", Select).disabled
+            assert app._xinput_service.button_refreshes >= 1
+            assert app._xinput_service.gyro_refreshes >= 1
 
     asyncio.run(check())
 
@@ -167,19 +204,52 @@ def test_every_non_english_catalog_translates_xinput_mapping_surface():
     required = {
         "Custom Xbox button mapping",
         (
-            "Customize the digital buttons sent by the Xbox App bridge. "
-            "Sticks and L2/R2 remain unchanged."
+            "Customize the buttons and Steam Input-style motion sent by the "
+            "Xbox App bridge. L2/R2 remain unchanged."
         ),
         "Enable custom Xbox mapping",
         "Restore Steam defaults",
+        "Gyro behavior",
+        "Enable gyro",
+        (
+            "Enable custom Xbox mapping first; gyro is controlled by that "
+            "master switch."
+        ),
+        "Gyro mode",
+        "Output joystick",
+        "Gyro activation",
+        "Horizontal motion axis",
+        "Full-stick camera speed (deg/s)",
+        "Full-stick deflection angle (deg)",
+        "Gyro deadzone (deg/s)",
+        "Gyro smoothing (ms)",
+        "Enable vertical gyro output",
+        "Invert horizontal gyro",
+        "Invert vertical gyro",
+        (
+            "Virtual Xbox 360 controllers have no motion channel, so FHDS "
+            "converts DualSense motion into additive joystick output."
+        ),
         (
             "Select Xbox App as the Forza platform to customize buttons here. "
             "If you use the Steam version, change your controller mapping in Steam."
         ),
+        "Keyboard and mouse active",
+        "Virtual Xbox input is neutral; move or press the DualSense to resume",
     }
     required.update(group for group, _sources in MAPPING_SOURCE_GROUPS)
     required.update(source.label for source in MAPPING_SOURCES)
     required.update(target.label for target in MAPPING_TARGETS)
+    required.update(
+        option.label
+        for options in (
+            GYRO_MODE_OPTIONS,
+            GYRO_OUTPUT_OPTIONS,
+            GYRO_ACTIVATION_OPTIONS,
+            GYRO_HORIZONTAL_OPTIONS,
+        )
+        for option in options
+    )
 
     for path in sorted((ROOT / "src/lang").glob("*.py")):
         if path.name in {"__init__.py", "en.py"}:

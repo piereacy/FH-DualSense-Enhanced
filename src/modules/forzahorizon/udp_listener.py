@@ -4,12 +4,14 @@ Packet = 324 bytes; offsets verified against FH Data Out spec.
 Always returns the *latest* packet (drains queued ones) so I never react
 to stale telemetry.
 """
+import ipaddress
 import logging
 import math
 import socket
 import struct
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -18,6 +20,43 @@ from .udp_forward import UDPForwarder
 log = logging.getLogger("fhds.udp")
 
 PACKET_SIZE = 324
+MAX_DRAIN_DATAGRAMS = 64
+
+_WILDCARD_HOSTS = {"", "0.0.0.0", "::"}
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _normalized_host(host: str) -> str:
+    return str(host).strip().strip("[]").rstrip(".").casefold()
+
+
+def _is_loopback_host(host: str) -> bool:
+    normalized = _normalized_host(host)
+    if normalized == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        return False
+
+
+def _is_obvious_self_forward(
+    listen_host: str,
+    listen_port: int,
+    target: tuple[str, int],
+) -> bool:
+    target_host, target_port = target
+    if target_port != listen_port:
+        return False
+    listen = _normalized_host(listen_host)
+    forwarded = _normalized_host(target_host)
+    if listen == forwarded:
+        return True
+    if listen in _WILDCARD_HOSTS and (
+        forwarded in _WILDCARD_HOSTS or _is_loopback_host(forwarded)
+    ):
+        return True
+    return _is_loopback_host(listen) and _is_loopback_host(forwarded)
 
 
 class TelemetryPhase(StrEnum):
@@ -36,6 +75,10 @@ class TelemetrySnapshot:
     source_host: str
     source_port: int | None
     listen_port: int
+    packet_rate_hz: float = 0.0
+    invalid_packet_count: int = 0
+    drained_packet_count: int = 0
+    receive_error_count: int = 0
 
 
 def parse_packet(p: bytes) -> dict:
@@ -171,12 +214,27 @@ class UDPListener:
         self.lost = False
         self._warned_sizes: set[int] = set()
         self._fwd = UDPForwarder(forward_to, forward_enabled)
+        safe_targets = []
+        for target in self._fwd.targets:
+            if _is_obvious_self_forward(self.host, self.port, target):
+                log.warning(
+                    "Ignoring UDP forward target %s:%d because it matches the listener endpoint",
+                    target[0],
+                    target[1],
+                )
+                continue
+            safe_targets.append(target)
+        self._fwd.targets = safe_targets
         self._clock = clock or time.monotonic
         self._state_lock = threading.Lock()
         self._packet_count = 0
         self._last_packet_at: float | None = None
         self._source_host = ""
         self._source_port: int | None = None
+        self._recent_packet_times: deque[float] = deque(maxlen=256)
+        self._invalid_packet_count = 0
+        self._drained_packet_count = 0
+        self._receive_error_count = 0
 
     def snapshot(self, *, now: float | None = None) -> TelemetrySnapshot:
         """Return a consistent, read-only view without touching the socket."""
@@ -186,6 +244,18 @@ class UDPListener:
             last = self._last_packet_at
             source_host = self._source_host
             source_port = self._source_port
+            cutoff = timestamp - 2.0
+            while self._recent_packet_times and self._recent_packet_times[0] < cutoff:
+                self._recent_packet_times.popleft()
+            recent = tuple(self._recent_packet_times)
+            invalid_count = self._invalid_packet_count
+            drained_count = self._drained_packet_count
+            receive_errors = self._receive_error_count
+        rate_hz = 0.0
+        if len(recent) >= 2:
+            span = recent[-1] - recent[0]
+            if span > 0.0:
+                rate_hz = (len(recent) - 1) / span
         age = None if last is None else max(0.0, timestamp - last)
         if count == 0:
             phase = TelemetryPhase.WAITING
@@ -200,12 +270,18 @@ class UDPListener:
             source_host=source_host,
             source_port=source_port,
             listen_port=self.port,
+            packet_rate_hz=round(rate_hz, 2),
+            invalid_packet_count=invalid_count,
+            drained_packet_count=drained_count,
+            receive_error_count=receive_errors,
         )
 
     def _record_valid_packet(self, addr) -> None:
         with self._state_lock:
+            received_at = self._clock()
             self._packet_count += 1
-            self._last_packet_at = self._clock()
+            self._last_packet_at = received_at
+            self._recent_packet_times.append(received_at)
             self._source_host = str(addr[0]) if addr else ""
             self._source_port = int(addr[1]) if addr and len(addr) > 1 else None
 
@@ -213,6 +289,8 @@ class UDPListener:
         if len(pkt) == PACKET_SIZE:
             self._record_valid_packet(addr)
             return True
+        with self._state_lock:
+            self._invalid_packet_count += 1
         if len(pkt) not in self._warned_sizes:
             self._warned_sizes.add(len(pkt))
             log.warning(
@@ -297,17 +375,33 @@ class UDPListener:
             self.sock = None
         self._fwd.close()
 
-    def recv_latest(self):
+    def recv_latest(self, *, wait_timeout_s: float | None = None):
         """Block up to ``timeout`` for at least one packet, then drain the
         socket and return only the most recent one. Returns ``(pkt, addr)``
         or ``(None, None)`` on timeout. Non-Forza packets (wrong size) are
         dropped with a one-time warning per distinct size."""
+        timeout = self.timeout
+        if wait_timeout_s is not None:
+            try:
+                requested_timeout = float(wait_timeout_s)
+            except (TypeError, ValueError, OverflowError):
+                requested_timeout = self.timeout
+            if math.isfinite(requested_timeout) and requested_timeout > 0.0:
+                timeout = requested_timeout
+        if timeout != self.timeout:
+            self.sock.settimeout(timeout)
         try:
             pkt, addr = self.sock.recvfrom(1500)
         except socket.timeout:
+            if timeout != self.timeout:
+                self.sock.settimeout(self.timeout)
             return None, None
         except OSError as e:
             # MARK: NIC change, sleep/wake, route flap - log once and skip frame
+            with self._state_lock:
+                self._receive_error_count += 1
+            if timeout != self.timeout:
+                self.sock.settimeout(self.timeout)
             log.warning("UDP recvfrom error: %s", e)
             return None, None
         forwarding = self._fwd.active
@@ -316,8 +410,10 @@ class UDPListener:
         latest = (pkt, addr) if self._accept_datagram(pkt, addr) else None
         self.sock.setblocking(False)
         try:
-            while True:
+            for _ in range(MAX_DRAIN_DATAGRAMS):
                 pkt, addr = self.sock.recvfrom(1500)
+                with self._state_lock:
+                    self._drained_packet_count += 1
                 if forwarding:
                     self._fwd.send(pkt)
                 if self._accept_datagram(pkt, addr):

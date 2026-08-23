@@ -28,7 +28,7 @@ def make_backend(s, enable_startup_pulse):
             return True
         return is_dualsense_usb_audio_endpoint_ready()
 
-    return dualsense.DualSense(
+    controller = dualsense.DualSense(
         startup_pulse_force=s.startup_pulse_force,
         enable_startup_pulse=enable_startup_pulse,
         reconnect_interval_s=s.reconnect_interval_s,
@@ -36,6 +36,7 @@ def make_backend(s, enable_startup_pulse):
         controller_lock_serial=s.controller_lock_serial,
         usb_handover_ready=usb_handover_ready,
     )
+    return controller
 
 
 # MARK: Console logging setup (--headless mode only, TUI wires its own handler)

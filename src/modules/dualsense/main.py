@@ -23,13 +23,22 @@ from .bt_haptics import (
     BluetoothHapticsPacketBuilder,
     build_bluetooth_power_off_report,
 )
-from .controller_state import ControllerPhase, ControllerSnapshot
+from .controller_state import (
+    ControllerDiagnosticsSnapshot,
+    ControllerPhase,
+    ControllerSnapshot,
+)
 from .input_state import (
     BatteryStatus,
     DualSenseInputState,
     InputReportError,
     InputTransport,
     parse_input_report,
+)
+from .motion import (
+    DEFAULT_MOTION_CALIBRATION,
+    DualSenseMotionCalibration,
+    read_motion_calibration,
 )
 from .output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from .topology import StableTopology, path_key
@@ -87,6 +96,7 @@ class _ValidatedHandover:
     device: Any
     report: bytes
     received_at: float
+    motion_calibration: DualSenseMotionCalibration
 
 
 def _force_byte(value: float) -> int:
@@ -313,6 +323,7 @@ class DualSense:
         self._wake = threading.Event()
         self._pulse_force = startup_pulse_force
         self._enable_startup_pulse = enable_startup_pulse
+        self._startup_pulse_sent = False
         self._reconnect_interval = _safe_reconnect_interval(reconnect_interval_s)
         self._enable_reconnect = enable_reconnect
         self._ever_connected = False
@@ -325,10 +336,22 @@ class DualSense:
         self._input_idle_timeout = 3.0
         self._last_input_at = 0.0
         self._input_consumer: Callable[[DualSenseInputState, float], None] | None = None
+        self._motion_calibration = DEFAULT_MOTION_CALIBRATION
+        self._device_visibility_observer: Callable[[dict[str, Any]], bool] | None = None
         self._input_parse_errors = 0
         self._input_parse_error_streak = 0
         self._input_consumer_errors = 0
         self._io_recovery_count = 0
+        self._diagnostics_lock = threading.Lock()
+        self._connection_enumeration_count = 0
+        self._last_enumeration_interface_count: int | None = None
+        self._open_attempt_count = 0
+        self._successful_open_count = 0
+        self._valid_input_report_count = 0
+        self._output_write_count = 0
+        self._output_write_failure_count = 0
+        self._reconnect_request_count = 0
+        self._bluetooth_haptics_queued_count = 0
         self._reconnect_requested = False
         self._topology = StableTopology(required_observations=2)
         self._topology_interval = 1.0
@@ -370,6 +393,42 @@ class DualSense:
     def snapshot(self) -> ControllerSnapshot:
         with self._state_lock:
             return self._snapshot
+
+    def diagnostics_snapshot(
+        self,
+        *,
+        now: float | None = None,
+    ) -> ControllerDiagnosticsSnapshot:
+        timestamp = time.monotonic() if now is None else float(now)
+        state = self.snapshot()
+        with self._diagnostics_lock:
+            values = {
+                "connection_enumeration_count": self._connection_enumeration_count,
+                "last_enumeration_interface_count": self._last_enumeration_interface_count,
+                "open_attempt_count": self._open_attempt_count,
+                "successful_open_count": self._successful_open_count,
+                "valid_input_report_count": self._valid_input_report_count,
+                "output_write_count": self._output_write_count,
+                "output_write_failure_count": self._output_write_failure_count,
+                "reconnect_request_count": self._reconnect_request_count,
+                "bluetooth_haptics_queued_count": self._bluetooth_haptics_queued_count,
+            }
+        with self._lock:
+            input_consumer_attached = self._input_consumer is not None
+        with self._lifecycle_lock:
+            worker_alive = self._thread is not None and self._thread.is_alive()
+        product_id = int((self._current_info or {}).get("product_id") or 0) or None
+        return ControllerDiagnosticsSnapshot(
+            **values,
+            rejected_input_report_count=self._input_parse_errors,
+            io_recovery_count=self._io_recovery_count,
+            bluetooth_haptics_dropped_count=self._bt_haptics_dropped,
+            bluetooth_haptics_failed=self._bt_haptics_failed,
+            last_valid_input_age_s=state.input_age(timestamp),
+            input_consumer_attached=input_consumer_attached,
+            worker_alive=worker_alive,
+            product_id=product_id,
+        )
 
     def _update_snapshot(self, **changes) -> ControllerSnapshot:
         with self._state_lock:
@@ -462,6 +521,8 @@ class DualSense:
             if self._bt_haptics_pending is not None:
                 self._bt_haptics_dropped += 1
             self._bt_haptics_pending = samples
+        with self._diagnostics_lock:
+            self._bluetooth_haptics_queued_count += 1
         self._wake.set()
         return True
 
@@ -537,12 +598,58 @@ class DualSense:
             self._input_consumer = consumer
         self._wake.set()
 
+    def _write_startup_pulse(self) -> None:
+        pulse = rigid(self._pulse_force)
+        self._safe_write(self._build(pulse, pulse))
+        time.sleep(0.2)
+        self._safe_write(self._build(off(), off()))
+
+    def set_device_visibility_observer(
+        self,
+        observer: Callable[[dict[str, Any]], bool] | None,
+    ) -> None:
+        """Attach the optional HidHide session callback used by Xbox App mode.
+
+        The callback never owns or opens the physical HID handle. It receives
+        the selected interface immediately before this sole I/O worker opens
+        it, and also receives an already-open current interface when attached
+        after startup.
+        """
+        with self._lock:
+            self._device_visibility_observer = observer
+            current = dict(self._current_info) if self._current_info is not None else None
+        if observer is not None and current is not None:
+            self._notify_device_visibility(current, observer=observer)
+        self._wake.set()
+
+    def _notify_device_visibility(
+        self,
+        info: dict[str, Any],
+        *,
+        observer: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> bool:
+        if observer is None:
+            with self._lock:
+                observer = self._device_visibility_observer
+        if observer is None:
+            return True
+        try:
+            return bool(observer(dict(info)))
+        except Exception as exc:
+            # Hiding is isolation hardening, not permission to break the
+            # controller backend. Keep direct HID forwarding fail-open.
+            log.warning("DualSense visibility observer failed: %s", exc)
+            return False
+
     def _publish_input(self, data, received_at: float) -> bool:
         transport = (
             InputTransport.BLUETOOTH if self.lay["bt"] else InputTransport.USB
         )
         try:
-            state = parse_input_report(data, transport)
+            state = replace(
+                parse_input_report(data, transport),
+                motion_calibration=self._motion_calibration,
+            )
         except InputReportError as exc:
             self._input_parse_errors += 1
             self._input_parse_error_streak += 1
@@ -555,6 +662,8 @@ class DualSense:
                     exc,
                 )
             return False
+        with self._diagnostics_lock:
+            self._valid_input_report_count += 1
         if self._input_parse_error_streak >= 8:
             log.info(
                 "DualSense input reports recovered after %d consecutive rejection(s)",
@@ -642,7 +751,12 @@ class DualSense:
         """Queue a reconnect and revive the sole HID worker if it died."""
         with self._lock:
             self._reconnect_requested = True
-        self._update_snapshot(phase=ControllerPhase.RECONNECTING, error="")
+        with self._diagnostics_lock:
+            self._reconnect_request_count += 1
+        self._update_snapshot(
+            phase=ControllerPhase.RECONNECTING,
+            error="",
+        )
         self._wake.set()
         with self._lifecycle_lock:
             thread = self._thread
@@ -791,14 +905,15 @@ class DualSense:
         target: dict[str, Any],
     ) -> tuple[_ValidatedHandover | None, str]:
         """Open and validate a candidate without touching the active handle."""
+        self._notify_device_visibility(target)
         candidate = hid.device()
         try:
             candidate.open_path(target["path"])
+            motion_calibration = read_motion_calibration(candidate)
             candidate.set_nonblocking(True)
         except (OSError, IOError) as exc:
             self._close_candidate(candidate)
             return None, f"open failed: {exc}"
-
         layout = BT if _is_bluetooth(target) else USB
         transport = (
             InputTransport.BLUETOOTH if layout["bt"] else InputTransport.USB
@@ -824,6 +939,7 @@ class DualSense:
                             device=candidate,
                             report=bytes(report),
                             received_at=received_at,
+                            motion_calibration=motion_calibration,
                         ),
                         "",
                     )
@@ -894,6 +1010,7 @@ class DualSense:
         self.dev_serial = _normalise_identity(target.get("serial_number"))
         self._current_info = dict(target)
         self.lay = new_layout
+        self._motion_calibration = validated.motion_calibration
         self._open_hinted = self._waiting_hinted = False
         with self._lock:
             self._bt_haptics_pending = None
@@ -955,6 +1072,13 @@ class DualSense:
         self._handover_readiness_logged.discard(target_key)
         return True
 
+    def _record_output_write(self, success: bool) -> None:
+        with self._diagnostics_lock:
+            if success:
+                self._output_write_count += 1
+            else:
+                self._output_write_failure_count += 1
+
     def _safe_write(self, buf) -> None:
         """Best-effort write — used for startup pulses, power-saver, and the
         off-pulse during disconnect, all of which run while the device may be
@@ -962,7 +1086,9 @@ class DualSense:
         try:
             self.dev.write(buf)
         except Exception:
-            pass
+            self._record_output_write(False)
+        else:
+            self._record_output_write(True)
 
     # MARK: connect / disconnect helpers
     def _try_connect(self, selected_info: dict[str, Any] | None = None, *, switching: bool = False) -> bool:
@@ -982,6 +1108,8 @@ class DualSense:
             error="",
         )
         try:
+            with self._diagnostics_lock:
+                self._connection_enumeration_count += 1
             devices = (
                 [dict(selected_info)]
                 if selected_info is not None
@@ -1001,6 +1129,8 @@ class DualSense:
             return False
         # Log enumeration deltas so I can see if the OS hides/exposes the device.
         n = len(devices)
+        with self._diagnostics_lock:
+            self._last_enumeration_interface_count = n
         if n != getattr(self, "_last_enum_count", -1):
             self._last_enum_count = n
             if n == 0:
@@ -1048,10 +1178,14 @@ class DualSense:
                          if _normalise_identity(d.get("serial_number")) == locked_identity), None)
         if info is None:
             info = devices[0]
+        self._notify_device_visibility(info)
         dev = None
         try:
+            with self._diagnostics_lock:
+                self._open_attempt_count += 1
             dev = hid.device()
             dev.open_path(info["path"])
+            motion_calibration = read_motion_calibration(dev)
             dev.set_nonblocking(True)
         except (OSError, IOError) as e:
             try:
@@ -1076,10 +1210,13 @@ class DualSense:
             )
             return False
         self.dev = dev
+        with self._diagnostics_lock:
+            self._successful_open_count += 1
         self.dev_path = info.get("path")
         self.dev_serial = _normalise_identity(info.get("serial_number"))
         self._current_info = dict(info)
         self.lay = BT if _is_bluetooth(info) else USB
+        self._motion_calibration = motion_calibration
         self._open_hinted = self._waiting_hinted = False
         self._last_input_at = time.monotonic()
         transport = InputTransport.BLUETOOTH if self.lay["bt"] else InputTransport.USB
@@ -1106,11 +1243,13 @@ class DualSense:
             product_id,
         )
 
-        if self._enable_startup_pulse and not switching:
-            pulse = rigid(self._pulse_force)
-            self._safe_write(self._build(pulse, pulse))
-            time.sleep(0.2)
-            self._safe_write(self._build(off(), off()))
+        if (
+            self._enable_startup_pulse
+            and not switching
+            and not self._startup_pulse_sent
+        ):
+            self._startup_pulse_sent = True
+            self._write_startup_pulse()
         # The previously sent frame may not change while the device is absent.
         # Requeue it explicitly so a reconnect restores triggers and rumble.
         with self._lock:
@@ -1162,6 +1301,7 @@ class DualSense:
         self.dev_path = None
         self.dev_serial = None
         self._current_info = None
+        self._motion_calibration = DEFAULT_MOTION_CALIBRATION
         self._handover_retries.clear()
         self._handover_settle_deadlines.clear()
         self._handover_readiness_logged.clear()
@@ -1327,21 +1467,27 @@ class DualSense:
                             self._build(left, right, rumble, visual=visual)
                         )
                     except Exception as e:
+                        self._record_output_write(False)
                         self._disconnect(f"write failed: {e}")
                         continue
                     if n is not None and n <= 0:
+                        self._record_output_write(False)
                         self._disconnect(f"write returned {n}")
                         continue
+                    self._record_output_write(True)
 
             if haptics_will_send:
                 try:
                     n = self.dev.write(self._build_bt_haptics(haptics))
                 except Exception as e:
+                    self._record_output_write(False)
                     self._mark_bt_haptics_failed(f"write failed: {e}")
                 else:
                     if n is not None and n <= 0:
+                        self._record_output_write(False)
                         self._mark_bt_haptics_failed(f"write returned {n}")
                     else:
+                        self._record_output_write(True)
                         self._bt_haptics_streamed = True
 
             # Clear before checking the queue so a producer cannot set the event

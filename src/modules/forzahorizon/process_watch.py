@@ -1,5 +1,4 @@
-"""Exit when the Forza Horizon process disappears. Cross-platform: Windows + Linux/Proton
-(Proton runs the Windows binary, so the process name is the same on both)."""
+"""Forza process-table observation helpers."""
 import logging
 import math
 import os
@@ -19,13 +18,14 @@ class GameProcess:
 
 
 class ProcessScanError(RuntimeError):
-    """The operating-system process table could not be scanned reliably."""
+    """Operating-system process state could not be read reliably."""
 
 
 def find_game_process(
     name_contains=("forza",),
     *,
     exact_name: str = "",
+    exact_names: tuple[str, ...] = (),
     strict: bool = False,
 ) -> GameProcess | None:
     """Return a matching process while tolerating protected/vanishing entries.
@@ -35,7 +35,11 @@ def find_game_process(
     an OS query failure cannot be mistaken for "the game is closed".
     """
     needles = tuple(n.lower() for n in name_contains)
-    exact = exact_name.lower()
+    exacts = frozenset(
+        name.casefold()
+        for name in (exact_name, *exact_names)
+        if str(name).strip()
+    )
     try:
         iterator = psutil.process_iter(["name", "exe"])
     except Exception as e:
@@ -53,8 +57,8 @@ def find_game_process(
                 continue
             except Exception:
                 continue
-            if exact:
-                if name.lower() != exact and exe_base.lower() != exact:
+            if exacts:
+                if name.casefold() not in exacts and exe_base.casefold() not in exacts:
                     continue
             else:
                 haystack = (name + " " + exe_base).lower()

@@ -9,6 +9,8 @@ SOURCE_URL = "https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python"
 SPONSOR_URL = "https://github.com/sponsors/HamzaYslmn"
 PROJECT_URL = "https://github.com/piereacy/FH-DualSense-Enhanced"
 MOD_URL = "https://www.nexusmods.com/forzahorizon6/mods/2"
+TUNING_CREDIT_NAME = "Bilibili 开心散仙"
+TUNING_CREDIT_URL = "https://space.bilibili.com/471461948?spm_id_from=333.337.0.0"
 
 
 def _source(path: str) -> str:
@@ -26,6 +28,8 @@ def test_shared_about_metadata_matches_the_license_exactly():
     assert values["SPONSOR_URL"] == SPONSOR_URL
     assert values["CONTROLLER_ICON_MOD_ATTRIBUTION"] == "DualSense Icons MOD by @hotline1337."
     assert values["CONTROLLER_ICON_MOD_URL"] == MOD_URL
+    assert values["TUNING_CREDIT_NAME"] == TUNING_CREDIT_NAME
+    assert values["TUNING_CREDIT_URL"] == TUNING_CREDIT_URL
     assert {label for label, _url in values["THIRD_PARTY_LINKS"]} == {
         "ViGEmBus 1.22.0 (BSD-3-Clause)",
         "ViGEmClient (MIT)",
@@ -42,6 +46,8 @@ def test_gui_about_page_exposes_attribution_and_clickable_links():
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
     assert "self.app._open_url(CONTROLLER_ICON_MOD_URL)" in source
+    assert "self.app._open_url(TUNING_CREDIT_URL)" in source
+    assert "TUNING_CREDIT_NAME" in source
     assert "THIRD_PARTY_LINKS" in source
     assert "ATTRIBUTION" not in settings
     assert "About and licenses" not in settings
@@ -59,6 +65,8 @@ def test_tui_about_page_exposes_attribution_and_clickable_links():
     assert "self.app._open_url(SOURCE_URL)" in source
     assert "self.app._open_url(SPONSOR_URL)" in source
     assert "self.app._open_url(CONTROLLER_ICON_MOD_URL)" in source
+    assert "self.app._open_url(TUNING_CREDIT_URL)" in source
+    assert "about-tuning-credit" in source
     assert "THIRD_PARTY_LINKS" in source
     assert "ATTRIBUTION" not in settings
     assert "About and licenses" not in settings
@@ -107,6 +115,7 @@ def test_tui_about_page_mounts_with_both_required_links():
             assert app.query_one("#about-sponsor", Button)
             assert app.query_one("#about-project", Button)
             assert app.query_one("#about-controller-icons", Button)
+            assert app.query_one("#about-tuning-credit", Button)
 
     asyncio.run(check())
 
@@ -118,6 +127,7 @@ def test_every_non_english_catalog_translates_about_surface():
         strings = runpy.run_path(str(path))["STRINGS"]
         assert "About and licenses" in strings, f"{path.name} is missing About and licenses"
         assert "Project repository" in strings, f"{path.name} is missing Project repository"
+        assert "Tuning credit" in strings, f"{path.name} is missing Tuning credit"
 
 
 def test_windows_packaging_ships_both_license_notice_files():
