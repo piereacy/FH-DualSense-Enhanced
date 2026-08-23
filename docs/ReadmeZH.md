@@ -21,8 +21,8 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 - 遥测驱动的握把触觉融合发动机、路面、悬挂、积水、轮胎打滑、ABS、方向碰撞，以及与转速灯条共享的动态红线学习。
 - 扩展的自适应扳机加入动态抓地力与 wheelspin、按路面变化的频率区间、分区 ABS 和可选遥测反馈层。
 - USB 和 Bluetooth 使用同一套立体声握把混音；Bluetooth 增加 HD 传输，只有该传输真实失败时才兼容回退。
-- 参考社区反馈的 Default、内置 Original 配置、持久化自动保存、命名配置和安全恢复出厂设置让配置流程更加可靠。
-- 多语言高 DPI 桌面界面实时显示连接方式、电量和充电状态，并提供 FH4/FH5/FH6 Steam/Xbox App 启动入口、内置 DualSense 到 XInput 连接桥，以及可还原的 FH6 DualSense 按键图标。
+- R11 的社区调教 `Default` 已开启 ABS，并采用当前握把、扳机与灯效调教；旧默认值保留为 `Default before R11`，同时继续提供上游风格的 `Original`、持久化自动保存、命名配置和安全恢复出厂设置。“系统与更新”内还提供默认折叠的紧凑触觉实验室卡片，可进行有界的扳机/握把预览，并可导出只保存在本机的脱敏诊断 ZIP。
+- 多语言高 DPI 桌面界面实时显示连接方式、电量和充电状态，并提供 FH4/FH5/FH6 Steam/Xbox App 启动入口、内置 DualSense 到 XInput 连接桥、可选的 Steam Input 风格 Camera/Deflection 体感到摇杆映射，以及可还原的 FH6 DualSense 按键图标。体感映射需要同时开启自定义 Xbox 映射总开关及其独立陀螺仪子开关，默认关闭，因为 X360 没有原生陀螺仪通道。
 - 独立 EXE 使用校验过的事务式更新，保留设置、迁移匹配的快捷方式，并可从中断的替换中恢复或回滚。
 
 ## 下载
@@ -65,6 +65,8 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 
 > [!IMPORTANT]
 > Steam 模式下 Steam Input 必须保持开启；所有模式都必须在 Forza 游戏设置中关闭“振动”。游戏原生振动会争用并掩盖手柄握把触觉，因此开启游戏内振动时，握把反馈无法正常工作。
+>
+> 原生手柄 backend 在 FH-DualSense-Enhanced 进程运行期间保持活动。其他游戏或手柄工具需要独占同一只 DualSense 时，请先退出 FHDS。
 
 ## USB 与 Bluetooth
 

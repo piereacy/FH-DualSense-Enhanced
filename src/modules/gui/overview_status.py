@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from modules.forzahorizon import TelemetryPhase
 from modules.update import UpdatePhase
 from modules.update.presentation import localized_status
-from modules.xinput.bridge import BridgeStatus
+from modules.xinput.bridge import BridgeStatus, InputOwner
 from modules.xinput.service import STEAM_PLATFORM
 
 
@@ -137,17 +137,22 @@ def update_status(service, settings, translate: Callable[[str], str]) -> CardSta
 
 
 def xinput_bridge_status(service, platform: str, translate: Callable[[str], str]) -> CardStatus:
-    if platform == STEAM_PLATFORM:
-        return CardStatus(
-            translate("Steam Input mode"),
-            translate("XInput bridge is off"),
-        )
     if service is None:
+        if platform == STEAM_PLATFORM:
+            return CardStatus(
+                translate("Steam Input mode"),
+                translate("XInput bridge is off"),
+            )
         return CardStatus(
             translate("XInput bridge unavailable"),
             translate("Controller backend is still starting"),
         )
     snapshot = service.snapshot()
+    if platform == STEAM_PLATFORM:
+        return CardStatus(
+            translate("Steam Input mode"),
+            translate("XInput bridge is off"),
+        )
     if snapshot.status is BridgeStatus.DRIVER_MISSING:
         return CardStatus(
             translate("ViGEmBus required"),
@@ -162,6 +167,17 @@ def xinput_bridge_status(service, platform: str, translate: Callable[[str], str]
         return CardStatus(
             translate("Windows restart required"),
             translate("Restart Windows before using the Xbox App bridge"),
+        )
+    if (
+        snapshot.input_owner is InputOwner.KEYBOARD_MOUSE
+        and snapshot.status
+        in {BridgeStatus.WAITING_CONTROLLER, BridgeStatus.ACTIVE, BridgeStatus.STALE}
+    ):
+        return CardStatus(
+            translate("Keyboard and mouse active"),
+            translate(
+                "Virtual Xbox input is neutral; move or press the DualSense to resume"
+            ),
         )
     if snapshot.status is BridgeStatus.WAITING_CONTROLLER:
         return CardStatus(

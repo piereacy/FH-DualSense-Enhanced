@@ -25,8 +25,8 @@ class Settings:
     enable_brake_resistance: bool = True
     brake_deadzone: int = 0                   # community-informed baseline
     brake_baseline_force: int = 0             # force at deadzone exit
-    brake_max_force: int = 5                  # peak force just before the wall
-    brake_curve: float = 5.0                  # parabolic exponent; higher = softer mid, harder near wall
+    brake_max_force: int = 2                  # peak force just before the wall
+    brake_curve: float = 2.0                  # parabolic exponent; higher = softer mid, harder near wall
     brake_wall_engage_at: int = 250           # byte that triggers firmware wall. DO NOT CHANGE
     brake_wall_release_at: int = 200          # hysteresis exit byte. DO NOT CHANGE
     enable_brake_static_wall: bool = False    # optional fixed wall mid-travel
@@ -39,19 +39,19 @@ class Settings:
 
     # MARK: L2 ABS pulse
     # GT7-style wall: lower zones pulse while the top zones stay maxed.
-    enable_abs: bool = False
-    abs_brake_threshold: int = 255            # min brake byte to arm
-    abs_min_speed_kmh: float = 6.0            # low-speed gate only; does not scale intensity
-    abs_slip_ratio_threshold: float = 0.3     # per-wheel slip trigger
-    abs_combined_slip_threshold: float = 0.3  # combined slip trigger
-    abs_sensitivity: float = 1.0              # normal UI sensitivity multiplier
-    abs_combined_slip_weight: float = 0.35    # combined slip stays auxiliary
+    enable_abs: bool = True
+    abs_brake_threshold: int = 0              # min brake byte to arm
+    abs_min_speed_kmh: float = 0.0            # low-speed gate only; does not scale intensity
+    abs_slip_ratio_threshold: float = 0.8     # per-wheel slip trigger
+    abs_combined_slip_threshold: float = 0.8  # combined slip trigger
+    abs_sensitivity: float = 0.8              # normal UI sensitivity multiplier
+    abs_combined_slip_weight: float = 0.8     # combined slip stays auxiliary
     abs_slip_full_scale: float = 2.0           # slip mapped to maximum pulse
     abs_freq_min: int = 20                    # pulse frequency at threshold
-    abs_freq: int = 60                        # maximum pulse frequency
-    abs_amp_min: int = 32                     # pulse amplitude at threshold
-    abs_amp: int = 90                         # maximum pulse amplitude
-    abs_hold_ms: float = 100.0                # anti-stutter hold deadline
+    abs_freq: int = 40                        # maximum pulse frequency
+    abs_amp_min: int = 5                      # pulse amplitude at threshold
+    abs_amp: int = 5                          # maximum pulse amplitude
+    abs_hold_ms: float = 80.0                 # anti-stutter hold deadline
     abs_wall_zones: int = 3                   # top zones remain a maximum wall
 
     # MARK: R2 throttle resistance
@@ -60,9 +60,9 @@ class Settings:
     enable_throttle_resistance: bool = True
     accel_deadzone: int = 0                   # community-informed baseline
     throttle_baseline_force: int = 0          # force at deadzone exit
-    throttle_max_force: int = 1               # peak force just before the wall (lighter than brake)
+    throttle_max_force: int = 2               # peak force just before the wall
     enable_throttle_end_wall: bool = False    # optional fixed wall near full travel
-    throttle_curve: float = 5.0               # parabolic exponent; higher = softer early, firmer near wall
+    throttle_curve: float = 2.0               # parabolic exponent; higher = softer early, firmer near wall
     throttle_wall_engage_at: int = 250        # byte that triggers firmware wall. DO NOT CHANGE
     throttle_wall_release_at: int = 200       # hysteresis exit byte. DO NOT CHANGE
 
@@ -80,81 +80,81 @@ class Settings:
 
     # MARK: R2 trigger redline warning
     enable_rev_limiter: bool = False
-    rev_limit_ratio: float = 0.95             # fraction of learned redline to fire at
-    rev_limit_freq: int = 30                  # adaptive-trigger vibration frequency
-    rev_limit_amp: int = 12                   # adaptive-trigger vibration strength
-    rev_limit_hold_ms: float = 120.0          # anti-stutter hold after falling below the ratio
+    rev_limit_ratio: float = 0.0              # fraction of learned redline to fire at
+    rev_limit_freq: int = 1                   # adaptive-trigger vibration frequency
+    rev_limit_amp: int = 0                    # adaptive-trigger vibration strength
+    rev_limit_hold_ms: float = 0.0            # anti-stutter hold after falling below the ratio
 
     # MARK: Body haptics redline warning
     # Fuel-cut pulse with independent left/right grip routing.
     enable_grip_redline_haptics: bool = True
     grip_redline_left: bool = True
-    grip_redline_right: bool = False
-    grip_redline_ratio: float = 0.95
-    grip_redline_release_ratio: float = 0.92
+    grip_redline_right: bool = True
+    grip_redline_ratio: float = 0.88
+    grip_redline_release_ratio: float = 0.88
     grip_redline_freq: int = 10
-    grip_redline_amp: int = 220
-    grip_redline_gain: float = 1.5
-    grip_redline_duty_cycle: float = 0.70
-    grip_redline_low_ratio: float = 0.45
-    grip_redline_attack_strength: float = 0.65
-    grip_redline_attack_duration_ms: float = 120.0
-    grip_redline_background_duck: float = 0.30
+    grip_redline_amp: int = 255
+    grip_redline_gain: float = 1.6
+    grip_redline_duty_cycle: float = 0.80
+    grip_redline_low_ratio: float = 0.80
+    grip_redline_attack_strength: float = 0.80
+    grip_redline_attack_duration_ms: float = 100.0
+    grip_redline_background_duck: float = 0.80
 
     # MARK: Shared trigger traction/grip feedback
     # Braking routes longitudinal grip to L2; accelerator or both pedals route
     # it to R2. Near zero speed, accelerator-driven rotation preserves burnouts.
     enable_wheelspin_buzz: bool = True
-    wheelspin_amp: int = 90
-    wheelspin_sensitivity: float = 1.0
+    wheelspin_amp: int = 1
+    wheelspin_sensitivity: float = 0.8
     wheelspin_slip_threshold: float = 0.6
-    wheelspin_hysteresis: float = 0.15         # fraction of the active threshold
-    wheelspin_slip_full_scale: float = 3.0
-    wheelspin_attack_ms: float = 40.0
-    wheelspin_release_ms: float = 125.0
-    wheelspin_g_damping: float = 0.25
-    wheelspin_burnout_rotation_threshold: float = 30.0
-    wheelspin_burnout_rotation_full_scale: float = 120.0
-    wheelspin_tarmac_freq_min: int = 90
-    wheelspin_tarmac_freq_max: int = 180
-    wheelspin_water_freq_min: int = 80
-    wheelspin_water_freq_max: int = 150
-    wheelspin_dirt_freq_min: int = 30
-    wheelspin_dirt_freq_max: int = 70
-    wheelspin_gravel_freq_min: int = 12
-    wheelspin_gravel_freq_max: int = 30
+    wheelspin_hysteresis: float = 0.10         # fraction of the active threshold
+    wheelspin_slip_full_scale: float = 1.5
+    wheelspin_attack_ms: float = 50.0
+    wheelspin_release_ms: float = 100.0
+    wheelspin_g_damping: float = 0.20
+    wheelspin_burnout_rotation_threshold: float = 20.0
+    wheelspin_burnout_rotation_full_scale: float = 100.0
+    wheelspin_tarmac_freq_min: int = 80
+    wheelspin_tarmac_freq_max: int = 120
+    wheelspin_water_freq_min: int = 60
+    wheelspin_water_freq_max: int = 80
+    wheelspin_dirt_freq_min: int = 40
+    wheelspin_dirt_freq_max: int = 60
+    wheelspin_gravel_freq_min: int = 20
+    wheelspin_gravel_freq_max: int = 40
 
     # MARK: R2 idle buzz
     # Engine-idle oscillation while stopped and accelerator pressed under ~25%.
     # Single chug pattern: vibrate amp toggles between low and high every half-period.
-    enable_idle_buzz: bool = True
+    enable_idle_buzz: bool = False
     idle_max_speed_kmh: float = 5.0           # only while car is essentially stopped
     idle_accel_max: int = 64                  # upper byte (~25% of 255): idle fades out past this press
     idle_freq: int = 30                       # base vibrate Hz
     idle_amp_low: int = 1                     # quiet half of the cycle
-    idle_amp_high: int = 60                   # loud half of the cycle
+    idle_amp_high: int = 0                    # loud half of the cycle
     idle_period_s: float = 0.5                # full cycle length (sec)
 
     # MARK: Gear shift
     # One short burst on up/downshift while moving.
     enable_gear_shift: bool = False           # buzz on R2
     enable_gear_shift_brake: bool = False     # also buzz on L2 via the wall
-    gear_shift_freq: int = 10
-    gear_shift_amp: int = 10
-    gear_shift_duration_ms: float = 100.0     # burst length
+    gear_shift_freq: int = 0
+    gear_shift_amp: int = 0
+    gear_shift_duration_ms: float = 0.0       # burst length
 
     # MARK: Body haptics gear shift
     # Optional centered grip thump, independent from the adaptive triggers.
-    enable_grip_gear_shift_haptics: bool = False
-    grip_gear_shift_strength: float = 0.8
-    grip_gear_shift_duration_ms: float = 100.0
+    enable_grip_gear_shift_haptics: bool = True
+    grip_gear_shift_strength: float = 0.6
+    grip_gear_shift_duration_ms: float = 80.0
 
     # MARK: R4 optional trigger events and idle road texture
     enable_collision_trigger_l2: bool = False
     enable_collision_trigger_r2: bool = False
-    collision_trigger_freq: int = 2
-    collision_trigger_amp: int = 220
-    collision_trigger_duration_ms: float = 90.0
+    collision_trigger_freq: int = 5
+    collision_trigger_amp: int = 100
+    collision_trigger_duration_ms: float = 100.0
     enable_trigger_surface_l2: bool = False
     enable_trigger_surface_r2: bool = False
     trigger_surface_freq: int = 10
@@ -166,26 +166,26 @@ class Settings:
     # USB and Bluetooth consume the same normalized HapticFrame. Only their
     # existing transport/synthesis paths differ.
     enable_body_haptics: bool = True
-    body_haptics_intensity: float = 0.5
-    engine_haptics_intensity: float = 0.5
-    road_haptics_intensity: float = 0.7
-    impact_haptics_intensity: float = 2.0
+    body_haptics_intensity: float = 0.6
+    engine_haptics_intensity: float = 0.8
+    road_haptics_intensity: float = 1.6
+    impact_haptics_intensity: float = 1.8
     slip_haptics_intensity: float = 1.0
-    slip_haptics_threshold: float = 0.8
+    slip_haptics_threshold: float = 0.3
     collision_haptics_jerk_threshold: float = 3.0
     collision_haptics_duration_ms: float = 150.0
     collision_haptics_cooldown_ms: float = 250.0
-    collision_haptics_rebound_ratio: float = 0.45
-    collision_haptics_weak_side_ratio: float = 0.35
-    collision_background_duck: float = 0.20
+    collision_haptics_rebound_ratio: float = 0.80
+    collision_haptics_weak_side_ratio: float = 0.60
+    collision_background_duck: float = 1.0
     suspension_haptics_delta_threshold: float = 0.015
 
     # MARK: R4 optional controller lighting
-    enable_tachometer_lightbar: bool = False
-    tachometer_start_ratio: float = 0.70
-    tachometer_flash_ratio: float = 0.95
-    tachometer_flash_rate_hz: float = 10.0
-    tachometer_brightness: float = 0.70
+    enable_tachometer_lightbar: bool = True
+    tachometer_start_ratio: float = 0.40
+    tachometer_flash_ratio: float = 0.88
+    tachometer_flash_rate_hz: float = 16.0
+    tachometer_brightness: float = 1.0
     tachometer_start_red: int = 57
     tachometer_start_green: int = 197
     tachometer_start_blue: int = 187
@@ -226,8 +226,13 @@ class Settings:
     # Xbox App installs are user-selected for the explicit FH6 icon MOD tool.
     fh6_xbox_install_path: str = ""
 
-    # MARK: System - experimental Xbox App digital-button mapping
-    # This only changes the virtual Xbox 360 report. Sticks and L2/R2 stay fixed.
+    # MARK: System - crash-safe HidHide isolation for the Xbox App bridge
+    # Requires an installed HidHide 1.7+ driver. FHDS never installs it and
+    # never writes the user's persistent device blacklist.
+    enable_hidhide: bool = False
+
+    # MARK: System - experimental Xbox App mapping
+    # This master owns both digital remaps and the optional gyro child feature.
     enable_custom_xinput_mapping: bool = False
     xinput_mapping_cross: str = "a"
     xinput_mapping_circle: str = "b"
@@ -246,6 +251,18 @@ class Settings:
     xinput_mapping_dpad_right: str = "dpad_right"
     xinput_mapping_touchpad_left: str = "back"
     xinput_mapping_touchpad_right: str = "start"
+    enable_xinput_gyro: bool = False
+    xinput_gyro_mode: str = "deflection"
+    xinput_gyro_output_stick: str = "left"
+    xinput_gyro_activation: str = "always"
+    xinput_gyro_horizontal_axis: str = "roll"
+    xinput_gyro_sensitivity_dps: float = 180.0
+    xinput_gyro_deflection_angle: float = 30.0
+    xinput_gyro_deadzone_dps: float = 2.0
+    xinput_gyro_smoothing_ms: float = 15.0
+    xinput_gyro_vertical_enabled: bool = False
+    xinput_gyro_invert_horizontal: bool = False
+    xinput_gyro_invert_vertical: bool = False
 
     # MARK: System - DSX
     # When on, triggers go to DualSenseX over UDP instead of HID. Lets DSX (Steam)

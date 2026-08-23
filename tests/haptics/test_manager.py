@@ -307,6 +307,42 @@ def test_external_usb_audio_receives_frames_without_worker_lifecycle_calls():
     assert audio.frames == [frame, SILENT_FRAME]
 
 
+def test_runtime_pause_silences_external_usb_audio_without_stopping_owner_stream():
+    audio = _Audio()
+    audio.running = True
+    manager = HapticManager(_Controller("usb"), _settings(), audio=audio)
+
+    manager.route(HapticFrame(left_low=0.2))
+    assert manager.pause() is None
+
+    assert audio.stop_calls == 0
+    assert audio.running is True
+    assert audio.frames[-1] == SILENT_FRAME
+    manager.route(HapticFrame(right_low=0.3))
+    assert audio.frames[-1] == HapticFrame(right_low=0.3)
+
+
+def test_runtime_pause_stops_bluetooth_worker_and_allows_restart():
+    bt_factory = _BtAudioFactory()
+    manager = HapticManager(
+        _Controller("bluetooth"),
+        _settings(),
+        bt_audio_factory=bt_factory,
+    )
+
+    manager.route(HapticFrame(left_low=0.2))
+    backend = bt_factory.instances[0]
+    assert backend.running is True
+
+    assert manager.pause() is None
+    assert backend.stop_calls == 1
+    assert backend.running is False
+
+    manager.route(HapticFrame(right_low=0.3))
+    assert backend.start_calls == 2
+    assert backend.running is True
+
+
 def test_external_usb_audio_does_not_change_bluetooth_routing():
     audio = _Audio()
     bt_factory = _BtAudioFactory()

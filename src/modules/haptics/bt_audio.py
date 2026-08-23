@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import dataclass
 
 from ..dualsense.bt_haptics import (
     BT_HAPTICS_FRAMES,
@@ -18,6 +19,16 @@ except (ImportError, OSError):
     np = None
 
 log = logging.getLogger("fhds.haptics.bluetooth")
+
+
+@dataclass(frozen=True, slots=True)
+class BluetoothAudioDiagnosticsSnapshot:
+    running: bool
+    failed: bool
+    frame_count: int
+    queue_rejection_count: int
+    deadline_miss_count: int
+    max_lateness_ms: float
 
 
 class BluetoothAudioHaptics:
@@ -54,6 +65,11 @@ class BluetoothAudioHaptics:
         self._running = False
         self._failed = False
         self._warned_failure = False
+        self._diagnostics_lock = threading.Lock()
+        self._frame_count = 0
+        self._queue_rejection_count = 0
+        self._deadline_miss_count = 0
+        self._max_lateness_s = 0.0
 
     @property
     def running(self) -> bool:
@@ -62,6 +78,17 @@ class BluetoothAudioHaptics:
     @property
     def failed(self) -> bool:
         return self._failed
+
+    def diagnostics_snapshot(self) -> BluetoothAudioDiagnosticsSnapshot:
+        with self._diagnostics_lock:
+            return BluetoothAudioDiagnosticsSnapshot(
+                running=self._running,
+                failed=self._failed,
+                frame_count=self._frame_count,
+                queue_rejection_count=self._queue_rejection_count,
+                deadline_miss_count=self._deadline_miss_count,
+                max_lateness_ms=round(self._max_lateness_s * 1000.0, 3),
+            )
 
     def reset_failure(self) -> None:
         thread = self._thread
@@ -117,6 +144,8 @@ class BluetoothAudioHaptics:
                 pcm = self._renderer.render(frame, BT_HAPTICS_FRAMES)
                 payload = self._quantizer.quantize(pcm)
                 if not self._controller.queue_bt_haptics(payload):
+                    with self._diagnostics_lock:
+                        self._queue_rejection_count += 1
                     if getattr(self._controller, "transport", None) == "bluetooth":
                         self._failed = True
                         if not self._warned_failure:
@@ -127,8 +156,16 @@ class BluetoothAudioHaptics:
                             )
                     break
 
+                with self._diagnostics_lock:
+                    self._frame_count += 1
+
                 deadline += interval
                 now = self._monotonic()
+                lateness = max(0.0, now - deadline)
+                if lateness > 0.0:
+                    with self._diagnostics_lock:
+                        self._deadline_miss_count += 1
+                        self._max_lateness_s = max(self._max_lateness_s, lateness)
                 if deadline < now - interval:
                     deadline = now
                 delay = max(0.0, deadline - now)

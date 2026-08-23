@@ -31,10 +31,11 @@ from modules.about import APP_NAME
 from modules.config import preferences, profiles
 from modules.config.profile_session import ProfileSession
 from modules.config.preferences import _release_version
+from modules.diagnostics import DiagnosticsCollector
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.dualsense.presentation import controller_pill_status
 from modules.dpi import DpiSnapshot, format_dpi_snapshot, query_windows_dpi
-from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.haptics import HAPTICS_LAB_SCENES, HapticsLab, UsbAudioHaptics, UsbAudioLifecycle
 from modules.runtime_logging import install_runtime_file_handler
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
@@ -117,11 +118,27 @@ class TriggerGUI:
         self._log_queue: queue.Queue = queue.Queue(maxsize=4000)
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
+        self._usb_audio_gate_active = False
+        self._usb_audio_sync_requested = threading.Event()
         self._update_service = UpdateService(
             settings,
             supported=self_update_supported(),
         )
         self._xinput_service = XInputBridgeService(settings)
+        self._haptics_lab = HapticsLab()
+        self._diagnostics = DiagnosticsCollector(
+            settings,
+            controller_provider=lambda: self._ds,
+            listener_provider=lambda: self._listener,
+            xinput_service=self._xinput_service,
+            usb_audio=self._usb_audio,
+            haptics_lab=self._haptics_lab,
+            error_provider=lambda: {
+                "controller": self._backend_error,
+                "udp": self._udp_error,
+            },
+            runtime_mode="gui",
+        )
         self._profile_session = ProfileSession(settings)
         cleanup_previous_update()
 
@@ -146,6 +163,7 @@ class TriggerGUI:
         )
         self.root.protocol("WM_DELETE_WINDOW", lambda: self.request_close("window"))
         self.root.bind("<Unmap>", self._on_unmap)
+        self.root.bind("<FocusOut>", self._on_focus_out, add="+")
 
         # Layout
         self._build_header()
@@ -441,6 +459,29 @@ class TriggerGUI:
 
     # MARK: lifecycle -------------------------------------------------------
 
+    def _on_focus_out(self, _event=None):
+        """Never leave an explicit Lab preview running behind another app."""
+        try:
+            self.root.after_idle(self._revoke_preview_if_unfocused)
+        except (RuntimeError, tk.TclError):
+            self._revoke_haptics_lab_preview("app_blurred")
+
+    def _revoke_preview_if_unfocused(self):
+        try:
+            if self.root.focus_displayof() is not None:
+                return
+        except tk.TclError:
+            pass
+        self._revoke_haptics_lab_preview("app_blurred")
+
+    def _revoke_haptics_lab_preview(self, reason: str):
+        requested = bool(self._xinput_service.preview_requested)
+        if not self._haptics_lab.snapshot().active and not requested:
+            return
+        self._haptics_lab.stop(reason)
+        self._xinput_service.request_preview_runtime(False)
+        self._request_usb_audio_eligibility_sync()
+
     def run(self):
         self.root.after(0, self._start_backend)
         self._update_service.start_background()
@@ -459,6 +500,7 @@ class TriggerGUI:
     def _hide_to_tray(self):
         if not self._tray.start():
             return
+        self._revoke_haptics_lab_preview("app_hidden")
         try:
             self.root.withdraw()
         except tk.TclError:
@@ -556,6 +598,11 @@ class TriggerGUI:
             self._profile_session.accept_current_default(self.settings)
             set_language(self.settings.language)
             self.refresh_setting_widgets()
+            threading.Thread(
+                target=self._xinput_service.sync_hidhide,
+                name="FHDS-HidHide-FactoryReset",
+                daemon=True,
+            ).start()
             self._refresh_profile()
             self._reset_dialog = None
             log.info("All settings restored to factory defaults.")
@@ -579,6 +626,7 @@ class TriggerGUI:
                 root.removeHandler(h)
         self._update_service.stop()
         with self._backend_restart_lock:
+            self._haptics_lab.stop("shutdown")
             self._stop.set()
             if self._thread:
                 self._thread.join(timeout=2.0)
@@ -608,6 +656,7 @@ class TriggerGUI:
     def _drain_logs(self):
         if self._tearing_down:
             return
+        self._drain_requested_usb_audio_sync()
         for _ in range(200):
             try:
                 level, msg = self._log_queue.get_nowait()
@@ -686,6 +735,8 @@ class TriggerGUI:
                 self.settings,
                 stop_event=self._stop,
                 usb_audio=self._usb_audio,
+                haptics_lab=getattr(self, "_haptics_lab", None),
+                diagnostics=getattr(self, "_diagnostics", None),
             )
         except Exception:
             log.exception("Telemetry loop crashed")
@@ -703,6 +754,7 @@ class TriggerGUI:
             if self._tearing_down:
                 return
             # MARK: stop old loop + backend, reuse listener
+            self._haptics_lab.stop("backend_restart")
             self._stop.set()
             old_thread = self._thread
             if old_thread:
@@ -750,9 +802,48 @@ class TriggerGUI:
     def _tick_usb_audio(self):
         if self._tearing_down:
             return
-        controller = self._ds if self._listener is not None else None
-        self._usb_audio_lifecycle.sync(controller, self.settings)
+        request = getattr(self, "_usb_audio_sync_requested", None)
+        if request is not None:
+            request.clear()
+        self._sync_usb_audio_eligibility_safely()
         self.root.after(1000, self._tick_usb_audio)
+
+    def _request_usb_audio_eligibility_sync(self) -> None:
+        request = getattr(self, "_usb_audio_sync_requested", None)
+        if request is not None:
+            request.set()
+
+    def _drain_requested_usb_audio_sync(self) -> None:
+        request = getattr(self, "_usb_audio_sync_requested", None)
+        if request is None or not request.is_set():
+            return
+        request.clear()
+        self._sync_usb_audio_eligibility_safely()
+
+    def _sync_usb_audio_eligibility_safely(self) -> None:
+        try:
+            self._sync_usb_audio_eligibility()
+        except Exception:
+            log.exception("USB audio eligibility sync failed")
+
+    def _sync_usb_audio_eligibility(self):
+        controller = self._ds if self._listener is not None else None
+        lab_snapshot = self._haptics_lab.snapshot()
+        body_scene_keys = {
+            scene.key for scene in HAPTICS_LAB_SCENES if scene.body_haptics
+        }
+        lab_body_active = (
+            lab_snapshot.active and lab_snapshot.scene in body_scene_keys
+        )
+        self._usb_audio_lifecycle.sync(
+            controller,
+            self.settings,
+            runtime_active=True,
+            force_body_haptics=lab_body_active,
+        )
+
+    def export_diagnostics(self):
+        return self._diagnostics.export()
 
     def _tick_status(self):
         if self._tearing_down:
@@ -790,7 +881,12 @@ class TriggerGUI:
             presentation = controller_pill_status(snapshot, t)
             if snapshot.connected:
                 color = T.GREEN
-            elif snapshot.phase.value in {"connecting", "switching", "reconnecting"}:
+            elif snapshot.phase.value in {
+                "available",
+                "connecting",
+                "switching",
+                "reconnecting",
+            }:
                 color = T.YELLOW
             else:
                 color = T.RED

@@ -7,7 +7,8 @@ FH-DualSense-Enhanced 是一个运行在 PC 上的本地 Python 应用。它监�
 - L2/R2 自适应扳机效果。
 - DualSense 握把触觉。USB 使用手柄四声道音频端点，Bluetooth 把同一左右 PCM 波形编码为 HID audio-haptics report `0x36`；失败时才使用 compatible rumble。
 - 可选的转速灯带、红线闪烁和挡位 Player LEDs。
-- Windows x64 的 Xbox App 模式可把物理 DualSense 输入映射成 ViGEm 虚拟 Xbox 360 Controller；Steam 模式不创建虚拟设备。
+- Windows x64 的 Xbox App 模式可把物理 DualSense 输入映射成 ViGEm 虚拟 Xbox 360 Controller，并按键鼠或手柄的最新主动输入热切换；Steam 模式不创建虚拟设备。
+- GUI/TUI 在“系统与更新”中提供默认折叠的 Haptics Lab 小卡片，可在不启动地平线输出链路时预览握把和扳机场景；同一系统页可把运行时快照与有界日志导出为仅保存在本机的诊断 ZIP。
 - Windows 界面可显式安装或还原内置的 FH6 DualSense 按键图标 MOD，原始普通与 HiRes 文件分别备份。
 - 冻结后的 Windows 独立 EXE 内置 GitHub Release 检查、校验下载和重启替换；源码、Linux 与 ZUV 运行不自替换。
 
@@ -27,6 +28,7 @@ flowchart LR
     UDP --> PARSE["parse_packet"]
     UDP --> FWD["UDPForwarder"]
     PARSE --> LOOP["modules.loop.run"]
+    LAB["HapticsLab immutable preview request"] --> LOOP
     LOOP --> COLLISION["shared CollisionDetector"]
     COLLISION --> TRIG["Controller / TriggerAnimations"]
     COLLISION --> MIX["HapticMixer"]
@@ -44,9 +46,17 @@ flowchart LR
     BACKEND -->|"Native"| HID["DualSense HID I/O thread"]
     BACKEND -->|"DSX"| DSX["DSX UDP 127.0.0.1:6969"]
     HID -->|"latest USB/BT input"| XIN{"Xbox App mode?"}
-    XIN -->|"yes"| MAP["DualSenseInputState -> XUSBReport"]
+    XIN -->|"yes"| OWNER{"Last active input"}
+    RAW["Windows Raw Input keyboard/mouse"] --> OWNER
+    OWNER -->|"DualSense"| MAP["DualSenseInputState -> XUSBReport"]
+    OWNER -->|"keyboard/mouse"| NEUTRAL["neutral XUSB; retain player slot"]
     MAP --> VIGEM["ViGEmClient / virtual Xbox 360"]
+    NEUTRAL --> VIGEM
     XIN -->|"Steam mode"| XOFF["bridge disabled"]
+    UDP --> DIAG["DiagnosticsCollector snapshots"]
+    ROUTE --> DIAG
+    LAB --> DIAG
+    DIAG --> ZIP["local diagnostics ZIP"]
 ```
 
 `src/modules/loop.py` 是系统的运行时中枢。它不直接了解 USB 音频细节或 HID 字节布局，而是组合 Forza 效果计算、握把混音和后端输出。
@@ -70,18 +80,21 @@ flowchart LR
 `src/modules/gui/main.py` 和 `src/modules/tui/main.py` 都负责：
 
 - 加载语言和配置。
-- 创建 native HID 或 DSX 后端。
+- 创建 controller backend。native worker 随应用生命周期正常打开并由唯一 I/O thread 枚举、连接和持有实体 DualSense；DSX 则打开本地 UDP socket。R11 不查询前台窗口，也没有等待期被动 PnP 路径。
 - 打开 UDP listener。
 - 在 worker thread 中运行 `modules.loop.run()`。
 - 管理共享 `UsbAudioHaptics` 生命周期。
-- 在 Windows x64 上按 `preferred_forza_platform` 管理可选 `XInputBridgeService`；物理输入仍由 native HID I/O thread 唯一读取。
+- 创建共享 `HapticsLab` 与 `DiagnosticsCollector`；Lab 只发布请求，诊断收集器只读取快照和计数器。
+- 由历史名称保留为 `XInputBridgeService` 的共享 service 只按平台和 backend 能力管理 Xbox bridge。Windows x64 Xbox App direct-HID 模式在 sync 时挂 input consumer，并启动 XInput、Raw Input 与用户显式开启的可选 HidHide；Steam/DSX、不支持平台、driver 安装、重试和退出会按相反顺序清理。handle 的 open/read/write/close 仍全部由 native I/O thread 串行执行。
 - 在退出时依次停止 loop、音频、listener 和手柄。
 
 GUI 的 Tk widget 只由主线程访问。后台日志进入最多 4000 条的 queue，再由 Tk 定时读取。最小化到托盘由 `settings.minimize_to_tray` 控制；窗口关闭、托盘退出、游戏关闭、遥测超时和更新重启都进入 `TriggerGUI.request_close()`，再由同一 teardown 顺序退出。TUI 的快捷键、退出按钮、backend shutdown 和更新重启同样进入 `TriggerTUI.request_close()`。两套入口都先处理 `Default` Profile 的可选命名保存，更新安装 callback 只在确认退出后执行。托盘实现位于 `src/modules/gui/tray.py`。
 
+GUI 的 `HapticsLabCard` 与 TUI 的 `HapticsLabPanel` 都只挂载在“系统与更新”页的同一个默认折叠卡片内，不占用独立左侧导航或顶层标签。强度和持续时间仅保存在卡片实例内，不写入 Profile；用户点击预览时才申请最长 3 秒的 native runtime lease，折叠卡片、离开系统页、FHDS 窗口失焦或隐藏、Forza 抢占、到期、重启、退出和显式停止都会撤销 lease。系统页的一键诊断导出在 worker 中执行，最终 ZIP 只写到 `data/diagnostics/`，不会上传。`DiagnosticsCollector` 不读取 `user_preferences.json` 或 Profile 原文，只组合 controller、telemetry、XInput/HidHide、USB/Bluetooth haptics、Lab 和运行时错误的不可变快照；快照中的 controller identity、device path 与内嵌错误文字会脱敏，日志逐行替换 Windows HID interface path、HidHide instance ID、Linux hidraw/input path、MAC 形态标识和带敏感标签的值，并为相同值保留稳定的短 SHA-256 指纹。普通本地文件路径和其他错误文本仍可能保留，因此 `README.txt` 会提醒用户分享前检查。
+
 Enhanced R4 只保留一个左侧导航壳层。其青绿色视觉来源在项目内部称为 Miku Console 设计理念，但当前产品名称、窗口标题和构建资产只使用 `FH-DualSense-Enhanced`。颜色与间距令牌集中在 `src/modules/gui/theme.py`，主强调色为 `#39C5BB`。`TriggerGUI._build_body()` 创建全部页面后，把每个 tab frame 只 `grid()` 到同一内容单元格一次；`_select_nav()` 通过 `tkraise()` 和可选 `on_show()`/`on_hide()` 改变当前页，不再以 `pack_forget()`/`pack()` 触发整页重复布局。长页面使用 `widgets.FastScroll` 注册到根窗口 `WheelRouter`：根窗口命中测试只返回当前 raised 页的指针祖先，内层到达目标方向边界后才转交外层。只有 raised 页的 `FastScroll` 响应 canvas 尺寸变化，40 ms debounce 合并最大化/拖拽产生的连续事件；隐藏页只记住最新尺寸，重新显示时同步一次，从而保留常驻页面状态又避免所有长页同时回流。驾驶反馈页的卡片保持自然高度，内容宽度低于阈值时只重新排列为单列，不重建开关。卡片说明文字读取每张卡片的实际 configure-event 宽度，把 Tk 的物理像素按 CustomTkinter widget scaling 换算回 logical px 后设置 `wraplength`；`W.Hint` 再按 Tk 文本请求高度增长，避免 125% 等 DPI 下发生二次缩放与多行裁切。顶部 Profile 和控制器状态沿用 `W.Pill` 接口，但渲染为 28 logical px 高、8 logical px 圆角的小型状态框；间距与状态点尺寸使用 4 的倍数，重复 presentation 值不再次调用 `configure()`。Enhanced R7 由嵌入 manifest 与早期 runtime bootstrap 共同目标化 Per-Monitor v2；`modules.dpi.query_dpi_state()` 查询实际 thread/window awareness 和缩放，系统页与日志展示结果。CustomTkinter 继续负责自身 widget scaling，项目不额外叠加用户缩放系数。
 
-GUI 的 `src/modules/gui/about_tab.py` 和 TUI 的 `src/modules/tui/about_tab.py` 是独立的“关于与许可证”页面，均位于日志之后，复用 `src/modules/about.py` 的本项目仓库、署名、原项目、Sponsor URL、ViGEm 第三方链接和 `@hotline1337` 的 Nexus MOD 链接。项目仓库固定指向 `piereacy/FH-DualSense-Enhanced`，不替代许可证要求保留的原项目来源。`settings_tab.py` 只负责握把触觉与调校，不再承载许可证卡片；总览页也不展示 Sponsor 或无功能的版本工作台。
+GUI 的 `src/modules/gui/about_tab.py` 和 TUI 的 `src/modules/tui/about_tab.py` 是独立的“关于与许可证”页面，均位于日志之后，复用 `src/modules/about.py` 的本项目仓库、署名、原项目、Sponsor URL、ViGEm 第三方链接、`@hotline1337` 的 Nexus MOD 链接，以及指向 Bilibili 开心散仙空间页的调教鸣谢链接。项目仓库固定指向 `piereacy/FH-DualSense-Enhanced`，不替代许可证要求保留的原项目来源。`settings_tab.py` 只负责握把触觉与调校，不再承载许可证卡片；总览页也不展示 Sponsor 或无功能的版本工作台。
 
 产品图标以 `src/data/icon.png` 和 `src/data/icon.ico` 为单一资产对。Tk 标题栏先用 1024 px PNG 提供高 DPI 源，再用 ICO 兼容 Windows；`TrayController` 读取同一 PNG。Windows 主 EXE 与更新 Helper 由 PyInstaller 嵌入同一七尺寸 ICO，Windows/Linux bundle 都携带 PNG 与 ICO，不维护按界面或平台分叉的图标副本。
 
@@ -125,11 +138,19 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 ### 3.5 Windows Xbox App XInput bridge
 
-`src/modules/dualsense/input_state.py` 只解析已验证长度、report ID 和 Bluetooth `0xA1` CRC 的 USB/BT 输入报告，生成不可变 `DualSenseInputState`。`src/modules/dualsense/main.py` 的 I/O thread 始终读取和解析完整输入，以维持连接真值、电量与 watchdog；设置 input consumer 后，它会优先 drain 当前 HID 队列，只把这一批中最新的有效状态连同单调时钟时间非阻塞发布给 bridge，不执行 ViGEm 调用。达到单批安全上限时先继续追赶输入，再处理单槽合并后的输出。这样 Bluetooth HD haptics 持续产生 `0x36` 时不会把读取限制为每轮一条，也不会把 Windows 队列中的旧输入逐条重新标记为“刚收到”。Steam 模式或 DSX backend 不挂 consumer，继续使用输出优先的普通 drain，但 native 输入解析不会因此停止。
+`src/modules/dualsense/input_state.py` 只解析已验证长度、report ID 和 Bluetooth `0xA1` CRC 的 USB/BT 输入报告，生成不可变 `DualSenseInputState`。`src/modules/dualsense/main.py` 的唯一 I/O thread 在 backend 生命周期内读取和解析完整输入，以维持连接真值、电量与 watchdog；设置 input consumer 后，它会优先 drain 当前 HID 队列，只把这一批中最新的有效状态连同单调时钟时间非阻塞发布给 bridge，不执行 ViGEm 调用。达到单批安全上限时先继续追赶输入，再处理单槽合并后的输出。这样 Bluetooth HD haptics 持续产生 `0x36` 时不会把读取限制为每轮一条，也不会把 Windows 队列中的旧输入逐条重新标记为“刚收到”。Steam 模式没有 consumer，仍使用输出优先的普通 drain。
 
-`src/modules/xinput/report.py` 把标准按钮、D-pad、摇杆和 L2/R2 扳机键映射为 `XUSB_REPORT`，不增加 deadzone、平滑或 response curve。`xinput/mapping.py` 是数字按键的唯一 schema：声明物理来源、Xbox 目标白名单与 Steam 风格默认值；自定义开关关闭或偏好值非法时逐来源回退默认。该 global 配置不进入车辆 Profile/share code；GUI 的 `xinput_mapping_tab.py` 通过左侧导航、TUI 的同名模块通过顶层标签直接渲染完整 schema，System 页不再持有映射控件或折叠子界面。只有 `preferred_forza_platform` 为 `xbox_app` 时自定义开关、映射选择和恢复默认动作才可编辑；Steam 模式只锁定这些控件而不擦除用户已存映射，并在页面常驻提示用户改去 Steam 内配置。只允许把数字来源映射到 A/B/X/Y、肩键、View/Menu、摇杆按下、Guide、D-pad 或 Disabled，摇杆轴与 L2/R2 模拟量保持固定。DualSense 触摸板按下由 USB/BT 共用输入布局的 click 位和两个触点解析，按 `1920` 宽度中线复现本机 Steam PS5 Gamepad 模板：左半区默认输出 Xbox Back/View，右半区默认输出 Start/Menu，同时出现左右触点则输出两键；无有效触点的点击按左半来源处理。触摸坐标不离开输入映射层，也不生成滑动或多点手势。`bridge.py` 的单 worker 独占 `ViGEmClient` 和虚拟 Xbox 360 target，只保留 latest state：100 ms 未收到有效报告时发送一次全中立，但只要 Xbox bridge 模式仍启用就保留同一个 target 和 player slot，避免 Forza 运行中重新枚举虚拟手柄。新输入恢复时直接复用该 target，不回放 stop 前状态；映射 revision 改变时会把仍新鲜的 latest state 立即按新映射重发，不重建 target。ViGEm session 的非 driver-missing 异常会清理旧 target/client，并按 0.25、1、5 秒上限自动重建；driver 缺失仍保持稳定状态等待用户安装或重试。`service.py` 负责 `preferred_forza_platform` 的生命周期切换和映射热更新，Steam 模式先解除 consumer、停止 worker并移除 target。Bluetooth 同一 I/O 轮次若已有 `0x36`，该 report 的 state block 已携带最新 L2/R2 扳机键和灯效；普通 state frame 没有 compatible rumble 时会被合并，避免为相同状态再占用一次 HID write。显式 rumble 及其全零释放仍走普通 report，不能被合并掉。
+`src/modules/xinput/report.py` 把标准按钮、D-pad、摇杆和 L2/R2 扳机键映射为 `XUSB_REPORT`，不增加 deadzone、平滑或 response curve。`xinput/mapping.py` 是数字按键的唯一 schema：声明物理来源、Xbox 目标白名单与 Steam 风格默认值；自定义开关关闭或偏好值非法时逐来源回退默认。该 global 配置不进入车辆 Profile/share code；GUI 的 `xinput_mapping_tab.py` 通过左侧导航、TUI 的同名模块通过顶层标签直接渲染完整 schema，System 页不再持有映射控件或折叠子界面。只有 `preferred_forza_platform` 为 `xbox_app` 时自定义开关、映射选择和恢复默认动作才可编辑；Steam 模式只锁定这些控件而不擦除用户已存映射，并在页面常驻提示用户改去 Steam 内配置。只允许把数字来源映射到 A/B/X/Y、肩键、View/Menu、摇杆按下、Guide、D-pad 或 Disabled，摇杆轴与 L2/R2 模拟量保持固定。DualSense 触摸板按下由 USB/BT 共用输入布局的 click 位和两个触点解析，按 `1920` 宽度中线复现本机 Steam PS5 Gamepad 模板：左半区默认输出 Xbox Back/View，右半区默认输出 Start/Menu，同时出现左右触点则输出两键；无有效触点的点击按左半来源处理。触摸坐标不离开输入映射层，也不生成滑动或多点手势。`bridge.py` 的单 worker 独占 `ViGEmClient` 和虚拟 Xbox 360 target，只保留 latest state：100 ms 未收到有效报告时发送一次全中立，但只要 Xbox App bridge 仍启用就保留同一个 target 和 player slot，避免输入短暂停顿时重新枚举虚拟手柄。新输入恢复时直接复用该 target，不回放 stop 前状态；映射 revision 改变时会把仍新鲜的 latest state 立即按新映射重发，不重建 target。每次真实 start 都轮换 generation-bound publisher，停止态或旧代际的迟到 callback 被拒绝。若一次 stop 超时，而新的 start 在旧 worker 退出前到达，新 publisher 可以先接收 latest input，但不会并发创建第二个 target；旧 worker 完成 neutral、target/client close 后只启动一个 pending successor。pending 期间再次 stop 会取消 successor。ViGEm session 的非 driver-missing 异常会清理旧 target/client，并按 0.25、1、5 秒上限自动重建；driver 缺失仍保持稳定状态等待用户安装或重试。
 
-`vigem_client.py` 使用项目自有 `ctypes` 最小 ABI 加载固定哈希的 x64 `ViGEmClient.dll`，没有导入 `vgamepad` runtime。`driver.py` 先按真实 client connect 探测兼容 bus；只有缺失时、用户明确确认后，才校验内置 ViGEmBus `1.22.0` 安装器的 SHA-256 与 cache-only Authenticode，再以 `runas` 触发 UAC。已有兼容 driver 不升级，安装器不联网下载资源。当前不注册 rumble callback、不模拟 Xbox One、不安装或配置 HidHide。ViGEmBus 与 ViGEmClient 已停止上游维护，版本和哈希见 `docs/THIRD_PARTY_NOTICES.md`。
+R11 生产代码不包含前台窗口 detector、physical ownership gate、`passive_detection.py`、`WAITING_GAME`、runtime tick 或延迟启动脉冲。native backend 在应用启动和热切换时正常打开，切到桌面或其他游戏不会触发释放；有效 Forza 遥测包会直接进入输出 loop。Xbox App direct-HID 模式在 service 生命周期内附加 XInput/Raw Input/HidHide 子链路，Steam 不创建本项目虚拟设备，DSX 不持有实体 HID。被移除的实验完整保存在 `experiments/foreground_ownership/`，目录没有 package initializer，生产源码、测试与 PyInstaller spec 均不得导入或收集；当前 PR 与 R11 发布不再准备旧 R10 监听备用包。
+
+`src/modules/xinput/hot_switch.py` 在专用 message-only window 上为 Generic Desktop mouse 与 keyboard 注册 `RIDEV_INPUTSINK`，因此 Xbox App bridge 在后台也能收到真实的 `WM_INPUT` 边沿，而不会把物理 DualSense 的连续 HID report 当成键鼠。首次键鼠事件把 owner 切为 keyboard/mouse，并只向既有 X360 target 发送一次中立 report；目标和 player slot 保留。此后相对切换基线的任一摇杆轴变化达到 `12`、任一扳机变化达到 `8`，或 D-pad、数字键、触摸板点击发生变化，才把 owner 切回 controller 并立即转发最新状态。小幅静态噪声不抢回所有权，多个 Raw Input 事件在 bridge 的 50 ms 轮询间隔内合并为一个边沿。`service.py` 在 direct-HID Xbox App 模式启动该监听器；切回 Steam/DSX、安装 driver、重试或退出时注销设备类别并关闭隐藏窗口，再停止 worker 和移除 target。每轮 listener 使用独立 cancellation event，慢启动阶段后都会检查取消；监听器启动失败时 controller 转发保持 fail open。总览通过 `BridgeSnapshot.input_owner` 显示当前键鼠抑制状态。该层自身只控制本项目创建的虚拟 X360 report；物理 HID 可见性由下述可选层独立处理。
+
+`src/modules/dualsense/hidhide.py` 是默认关闭的 HidHide 1.7+ 原生 control-device client。`service.py` 只在冻结后的 Windows 独立 EXE、Xbox App、direct-HID 且 `BridgeSnapshot.target_connected` 证明实际虚拟 X360 target 已连接后启动它；ViGEmBus probe 或 worker 启动本身不构成隐藏条件，target 连接/丢失回调只触发串行 reconcile。HidHide 需要用 NT full image name 识别 feeder，因此模块持久加入当前 FHDS EXE 的 application whitelist，并用 `data/hidhide_owned.json` 只记录自己拥有的路径；版本化 EXE 更新后移除旧 owned path、加入当前 path，用户规则不被删除。物理设备只通过 `IOCTL_ADD_SESSION_BLACKLIST` 加入当前 PID 的 session blacklist，不写永久 device blacklist；驱动在 PID 结束时自动回收，本程序停止时也调用 clear。`DualSense.set_device_visibility_observer()` 在唯一 I/O thread 打开普通连接或 handover 候选前登记 HID instance，运行中热启用时还会立即登记当前接口；回调失败不阻断 direct HID。全局 `Active` 始终归用户所有，FHDS 从不写入、恢复或根据永久列表猜测它；用户必须先在官方 Configuration Client 启用 device hiding，否则本次隔离失败并保持 direct HID 可见。inverse 用户规则冲突同样失败关闭。实际 target 丢失、Steam、DSX、ViGEm 安装/重试、关闭开关和退出都会解绑 observer 并清理 session；关闭开关还会删除 owned application rule。已在游戏隐藏前打开的 handle 不会被强制撤销，因此界面提示重启已运行游戏。
+
+Bluetooth 同一 I/O 轮次若已有 `0x36`，该 report 的 state block 已携带最新 L2/R2 扳机键和灯效；普通 state frame 没有 compatible rumble 时会被合并，避免为相同状态再占用一次 HID write。显式 rumble 及其全零释放仍走普通 report，不能被合并掉。
+
+`vigem_client.py` 使用项目自有 `ctypes` 最小 ABI 加载固定哈希的 x64 `ViGEmClient.dll`，没有导入 `vgamepad` runtime。`driver.py` 先按真实 client connect 探测兼容 bus；只有缺失时、用户明确确认后，才校验内置 ViGEmBus `1.22.0` 安装器的 SHA-256 与 cache-only Authenticode，再以 `runas` 触发 UAC。已有兼容 driver 不升级，安装器不联网下载资源。R11 的虚拟目标固定为 Xbox 360，不注册 rumble callback，不加入 Xbox One/Xbox Series、GameInput impulse trigger 或 Share 系统键模拟，也不捆绑、安装或升级 HidHide；可选隔离只与用户已经安装的 HidHide 1.7+ 通信。ViGEmBus、ViGEmClient 和 HidHide 来源见 `docs/THIRD_PARTY_NOTICES.md`。
 
 ### 3.6 FH6 DualSense 按键图标工具
 
@@ -143,11 +164,11 @@ R7 以后的正常更新采用版本化并排安装：保留正在使用的 `R<n
 
 `src/modules/forzahorizon/udp_listener.py` 首先尝试绑定一个 `[::]:port` 的 dual-stack IPv6 socket，失败后回退到 `settings.udp_host:settings.udp_port` 的 IPv4 socket。默认端口为 `5300`，接收超时为 `0.5s`。
 
-`recv_latest()` 先阻塞等待一个包，然后把 socket 临时设为 non-blocking 并排空队列，只返回队列中最新的 324 字节有效包。错误长度数据包只做一次警告，不推进运行时计数；即使队尾是无关 UDP 数据，前面较新的有效 Forza 包仍可返回。这样做是为了降低控制反馈延迟，避免对积压的旧遥测逐帧反应。接收缓冲区设为 4096 字节。
+`recv_latest()` 先阻塞等待一个包，然后把 socket 临时设为 non-blocking，每轮最多继续 drain 64 个 datagram，并只返回本轮最新的 324 字节有效包。持续补充 socket 的发送方也不能让热循环永久停在 drain；剩余积压由下一轮继续追赶。错误长度数据包只做一次警告，不推进运行时计数；即使队尾是无关 UDP 数据，前面较新的有效 Forza 包仍可返回。这样做是为了降低控制反馈延迟，避免对积压的旧遥测逐帧反应。接收缓冲区设为 4096 字节。
 
 每个有效数据包还会在短锁内更新计数、单调时钟时间和来源地址。`TelemetrySnapshot` 在无有效包时为 `WAITING`，最后有效包不超过一秒时为 `RECEIVING`，超过一秒时为 `LOST`。这个快照只供状态界面读取，不替代 `modules.loop` 现有的一秒静音、五秒告警和可配置遥测丢失退出语义。
 
-启用 `udp_forward` 时，`UDPForwarder` 在同一热循环中把收到的每一个原始包转发到 `udp_forward_to` 中的 `host:port` 列表。转发失败只警告一次，不中断主循环。
+启用 `udp_forward` 时，`UDPForwarder` 在同一热循环中把本轮收到的每一个原始包转发到 `udp_forward_to` 中的 `host:port` 列表。listener 构造时拒绝同端口的相同 host、wildcard/localhost 和完整 IPv4 `127/8` 明显自转发，避免应用把自己的包重新收回并形成无限回灌；不同端口与外部目标保留。转发失败只警告一次，不中断主循环。
 
 ### 4.2 324 字节数据模型
 
@@ -253,7 +274,15 @@ ABS 以四轮 longitudinal slip ratio 为主、combined slip 为低权重辅助�
 
 这些规则对应 `tests/haptics/test_mixer.py`，其设计背景也记录在 `docs/superpowers/specs/2026-07-12-physical-body-haptics-gating-design.md`。
 
-### 6.3 USB 路由
+### 6.3 Haptics Lab
+
+`src/modules/haptics/lab.py` 定义场景元数据、不可变 `HapticsLabSnapshot` 和纯函数 renderer。引擎扫频、路面、积水、打滑、悬挂、左右碰撞、升降挡、红线、ABS、牵引力控制以及 L2/R2 阻力都在 `10%..65%` 强度和 `0.25..3.0` 秒持续时间内生成；renderer 不打开设备，也不持有线程。GUI/TUI 只调用 `HapticsLab.start()`、`stop()` 和 `snapshot()`，实际输出仍由既有 `modules.loop.run()` 采样并通过同一个 `HapticManager` 与 `DualSense.set()` 发送。
+
+交互入口只存在于“系统与更新”页：GUI 使用默认 `_expanded = False` 的 `HapticsLabCard`，TUI 使用 `collapsed=True` 的 `Collapsible` 包住 `HapticsLabPanel`。折叠状态只影响控件展示和预览 lease，不卸载场景 renderer，也不删除诊断中的 Lab snapshot。
+
+Lab 在 backend 已连接时可用；收到任一有效游戏遥测包会先抢占并释放 Lab，再由正常遥测输出接管。控制器断连也会丢弃尚未到期的请求，避免短时间重连后恢复旧预览。预览期间不会启动 XInput、Raw Input、HidHide 或第二个 HID reader，也不会消费或转发控制器输入。显式握把场景可以临时请求共享 USB audio eligibility 并以 `force=True` 绕过 Profile 的 body haptics 开关，但不改写设置；Bluetooth 继续复用现有 `0x36` 路径。DSX 没有握把后端，因此开放所有含自适应扳机输出的场景并忽略其中的握把层。折叠卡片、离页、窗口失焦、到期、停止、重启和退出均发送一次必要释放并恢复静音。
+
+### 6.4 USB 路由
 
 `src/modules/haptics/audio.py` 只选择满足以下条件的输出设备：
 
@@ -269,7 +298,7 @@ GUI 和 TUI 共享一个 `UsbAudioHaptics`，由 `UsbAudioLifecycle` 在周期 s
 
 `HapticManager` 的边界只包括选择 USB PCM、Bluetooth `0x36` 或 compatible rumble fallback；它不通过 `DualSense` 请求额外的 HID 音频模式。普通 USB/BT 状态报告沿用 Enhanced R6 的字段所有权契约：始终写既有 L2/R2 扳机键状态，只有调用方显式提供 compatible rumble 时才声明 motor 字段，灯光只声明自身有效位。R7 曾把 `valid_flag0 0x20` 误当成 haptics select；该位实际会让全零报告中的 speaker volume 字段生效并写成零，控制器状态还能在进程退出后保留。生产代码因此不发送该位、对应的 `valid_flag1 0x20` 或猜测性的单次 `0x01` 重置。USB/Bluetooth handover 只切换已验证 HID handle 和音频 backend，不改变这份普通状态报告契约。
 
-### 6.4 Bluetooth 路由
+### 6.5 Bluetooth 路由
 
 Bluetooth 不依赖 Windows 音频 endpoint。`src/modules/haptics/bt_audio.py` 以 3 kHz、每块 32 帧调用与 USB 相同的 `HapticPcmRenderer`。USB 的 512 / 48000 与 Bluetooth 的 32 / 3000 都是约 10.667 ms，因此低频、高频、engine、左右混音和 `0.35` 平滑位于相同时间尺度。Bluetooth renderer 在量化前使用归一化 `tanh` 软限幅，减少多层叠加被硬裁剪成方波；`BluetoothPcmQuantizer` 以默认 `0.75` 一阶误差反馈量化为 64 字节交错 signed int8，使低幅细节在多个采样间保留平均能量。USB 仍使用 float32 PCM 的常规 `[-1, 1]` 安全裁剪。
 
@@ -293,21 +322,23 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 
 ## 7. Native DualSense 输出
 
-`src/modules/dualsense/main.py` 负责 DualSense 和 DualSense Edge 的 HID 枚举、选择、连接、输入真值、写入、USB/Bluetooth handover 和完全掉线重连。所有 handle 的 open/read/write/close 和重连命令都在同一 I/O thread 串行执行；GUI、拓扑监视、XInput worker 和触觉 renderer 都不能成为第二个物理 HID owner。
+`src/modules/dualsense/main.py` 负责应用生命周期内 DualSense 和 DualSense Edge 的 HID 枚举、选择、连接、输入真值、写入、USB/Bluetooth handover 和完全掉线重连。所有 handle 的 open/read/write/close 和重连命令都在同一 I/O thread 串行执行；GUI、拓扑监视、XInput worker 和触觉 renderer 都不能成为第二个物理 HID owner。
 
 - 只选择 usage page 1、usage 5 的 gamepad interface。USB 完整输入为 64 字节、report ID `0x01`；USB 输出为 64 字节、report ID `0x02`。Bluetooth 完整输入和普通输出均为 78 字节、report ID `0x31`，输入校验 `0xA1` seed CRC32，输出计算 `0xA2` seed CRC32。
 - BT HD haptics 报告为 398 字节、report ID `0x36`，使用同一 Bluetooth 输出 CRC 规则；HID descriptor 必须接受该 report ID 和长度。
-- `controller_state.py` 定义不可变 `ControllerSnapshot` 及 `WAITING`、`CONNECTING`、`CONNECTED`、`SWITCHING`、`RECONNECTING`、`ERROR` phase。HID handle 或枚举项不代表已连接；只有完整有效输入才能建立和刷新 `CONNECTED`。约 3 秒无有效输入会清除 transport、电量和旧输入，即使 handle 仍存在、HidHide 被检测到或自动重连关闭。
+- `controller_state.py` 定义不可变 `ControllerSnapshot` 及 `WAITING`、`AVAILABLE`、`CONNECTING`、`CONNECTED`、`SWITCHING`、`RECONNECTING`、`ERROR` phase。`AVAILABLE` 只表示 Windows PnP 树中存在受支持设备；HID handle、PnP 节点或枚举项都不代表已连接。只有 active runtime 内完整有效输入才能建立和刷新 `CONNECTED`。约 3 秒无有效输入会清除 transport、电量和旧输入，即使 handle 仍存在、HidHide 被检测到或自动重连关闭。
 - 有效输入的电池 nibble 归一化为 `0..10` 档，展示为 10% 粒度，并区分使用电池、充电、已满、不充电和未知。损坏或不完整报告不能刷新电量、在线时间或 XInput consumer。输入拒绝按连续第 1、8、32、128 次及之后每 512 次限频记录，并在长错误串恢复后记录恢复事件；打开 HID 时日志包含 PID，便于区分普通 DualSense `0x0CE6` 与 DualSense Edge `0x0DF2`。
-- `_io()` 是同一个物理 HID worker 的 session supervisor。未在局部处理的异常不会永久结束 reader，而会关闭当前 handle、按 0.25、1、5 秒上限退避并在同一线程重新进入连接循环；关闭自动重连时 worker 保持可唤醒的错误状态。“立即重新连接”发现 worker 已死亡时会先重启唯一 worker，再投递 reconnect request，不允许并行 reader。
+- `_io()` 是同一个物理 HID worker 的 session supervisor。未在局部处理的异常不会永久结束 reader，而会关闭当前 handle、按 0.25/1/5 秒上限退避并在同一线程重新进入连接循环；关闭自动重连时 worker 保持可唤醒的错误状态。“立即重新连接”发现 worker 已死亡时会先重启唯一 worker，再投递 reconnect request，不允许并行 reader。
 - 空闲读取会批量 drain HID 输入积压，避免 Windows 缓冲的旧报告延长在线时间。没有 XInput consumer 时 pending trigger、rumble、visual 或 Bluetooth haptics 输出优先；Xbox bridge 启用时，输入批次只发布最新有效状态，达到安全上限则先继续追到队尾，再处理本来就按 latest 合并的输出。该例外只服务虚拟手柄输入时延，不创建第二个 reader，也不改变 Steam/USB 音频路径。
+- `input_state.py` 还从 USB/BT common block 解码 gyro、accelerometer、3 MHz sensor timestamp 与独立 touch contact。唯一 HID owner 每次打开 active handle 或 handover candidate 后读取 feature report `0x05`，由 `dualsense/motion.py` 原子校验 CRC、bias 与 scale；任一异常或 feature API 不可用时整组回退 `1/16 deg/s` 和 `1/8192 g`，不会阻断普通按键连接。
+- `xinput/gyro.py` 是 Xbox App bridge 的 Steam Input 风格兼容层。ViGEm X360 report 没有原生 sensor 字段，所以 Camera 模式把校准角速度按 full-stick deg/s 转成摇杆量，Deflection 模式按 sensor timestamp 积分，并用可信重力向量缓慢校正可观测的 roll/pitch 漂移。输出可叠加到左或右摇杆并 clamp；支持 Yaw/Roll/组合、可选垂直轴、激活键、反转、deadzone 与 smoothing。`enable_custom_xinput_mapping` 是总开关，默认关闭的 `enable_xinput_gyro` 是子开关；service 每次同步都以两者共同决定 active gyro mapping，任一关闭即向 bridge 热发布 Off 并重置积分状态，不重建 target。键鼠 owner 期间只有超过 `max(5 deg/s, configured deadzone)` 的动作才抢回 controller owner。
 - `topology.py` 每约 1 秒轻量 enumerate，一条新路径连续两次出现才稳定。未知稳定路径的 feature report `0x09` 在 I/O thread 内读取并缓存；读取失败按 1、2、5 秒退避重试，路径消失时清除。只有规范身份相同才自动 handover，同一手柄双传输并存时 USB 优先。
 - handover 先打开候选 handle，并在最多约 250 ms 内读到一份完整有效输入；此阶段不关闭、静音或改写当前 handle、`ControllerSnapshot` 和 pending output。普通 USB → BT 验证后原子替换 handle。启用 body haptics 的 BT → USB 在稳定候选首次出现后启动非阻塞 3 秒 settle；期间继续读取 Bluetooth 输入、输出 L2/R2 扳机键并发送 `0x36` 握把触觉。settle 到期后由 readiness callback 查询活动的 Windows DualSense USB render endpoint；未就绪或探测异常时关闭 USB candidate、保留当前 BT transport/快照/pending output，并按 1、2、5 秒退避，后续重试不重复 3 秒 settle。readiness 通过后才静音旧输出、通过旧 BT control handle 发送 48 字节 feature report `0x08 / 0x02`，并在 hidapi 返回正数后提交 USB、发布新 transport/电量、关闭旧 handle、把 trigger/visual 状态标记为待写。关闭 body haptics 时 readiness callback 直接放行，不要求音频 endpoint。该顺序让 PortAudio 首次初始化发生在系统 endpoint 可见之后；feature report 返回成功仍只表示操作系统接受写入，USB 握把是否接管必须由真实手柄验证。
 - USB/Bluetooth handover 始终自动执行，不受完全掉线重连开关控制。`enable_reconnect` 只控制找不到任何同身份传输后的周期重试；“立即重新连接”由 GUI/TUI 向 I/O thread 投递命令，“重新扫描”只刷新选择列表。
 - 启动识别脉冲只用于非 switching 的新连接；handover 和失败后的旧路径恢复不播放 R2 扳机键脉冲。`SWITCHING` 是意图内的短暂状态，也不记录成普通掉线重试告警。
 - trigger flags 始终声明 L2/R2；只有传入 rumble 时才声明 motor flags。`ControllerVisualState` 的 `lightbar` 与 `player_leds` 使用 `None` 表示不占用该字段、显式零表示清除。状态同时写入 USB `0x02`、普通 BT `0x31` 和 BT haptics `0x36` 的 state block；DSX 路径不写灯光。
 
-`persistent` 仅保留为兼容属性并恒为 `False`，不再改变 watchdog 或错误处理。HidHide 模块只检查环境变量、PATH 和默认安装路径，不调用外部 CLI。Linux 不使用 PyPI hidapi 的 libusb 路径，而由 `src/modules/dualsense/_hidraw.py` 直接访问 `/dev/hidraw`，因此需要 udev 权限。该 wrapper 的非阻塞读取接口使用 `timeout_ms` 关键字，与 Windows 使用的 PyPI `hidapi` 参数名不同；两套适配层不能机械互换调用方式。
+`persistent` 仅保留为兼容属性并恒为 `False`，不再改变 watchdog 或错误处理。HidHide 的旧检测函数仍只检查环境变量、PATH 和默认安装路径且不执行 CLI；新的可选隔离直接打开 `\\.\HidHide` control device，既不以“已检测到安装”推断连接，也不改变 watchdog。Linux 不使用 PyPI hidapi 的 libusb 路径，而由 `src/modules/dualsense/_hidraw.py` 直接访问 `/dev/hidraw`，因此需要 udev 权限。该 wrapper 的非阻塞读取接口使用 `timeout_ms` 关键字，与 Windows 使用的 PyPI `hidapi` 参数名不同；两套适配层不能机械互换调用方式。
 
 ## 8. 配置、Profile 和持久化
 
@@ -315,20 +346,21 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 
 所有默认值位于 `src/modules/config/settings.py`。运行中的 GUI/TUI slider 直接修改同一个 `Settings` 实例，热循环下一帧即可读取多数变化。
 
-`src/modules/feedback_schema.py` 是扳机与握把界面字段归属的唯一声明。GUI 与 TUI 的 `ControlsTab` 顶部先渲染 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、常用调节以及扳机实验参数；各自的 `SettingsTab` 只渲染握把开关、常用调节以及握把实验参数。GUI 双列布局让总开关和共享扳机反馈各占整行，L2 与 R2 卡片并排；窄窗口仍退回单列，卡片只在列数变化时原地重新 `grid()`。R2 的 `enable_throttle_end_wall` 是普通 Profile 调节，GUI/TUI 都把它渲染在“重压阻力”正下方。轮胎抓地力属于扳机反馈，因此也受总开关截断，但不受油门连续阻力或末端 wall 开关代管；body haptics、握把换挡和握把红线属于独立握把反馈。电动车红线 gate 属于运行时规则，不在 R2 或握把红线开关下重复显示车型说明。涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理继续位于扳机页默认折叠的实验性区域；握把红线曲线、起始冲击和碰撞包络位于握把页默认折叠区域。全部车辆手感字段仍属于 Profile。灯效有独立页面，转速灯带与挡位 Player LEDs 默认关闭。共享 schema、防重字段测试、翻译覆盖测试和 GUI/TUI class contract 防止同一字段漂移到两页或两套界面的不同位置。
+`src/modules/feedback_schema.py` 是扳机与握把界面字段归属的唯一声明。GUI 与 TUI 的 `ControlsTab` 顶部先渲染 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、常用调节以及扳机实验参数；各自的 `SettingsTab` 只渲染握把开关、常用调节以及握把实验参数。GUI 双列布局让总开关和共享扳机反馈各占整行，L2 与 R2 卡片并排；窄窗口仍退回单列，卡片只在列数变化时原地重新 `grid()`。R2 的 `enable_throttle_end_wall` 是普通 Profile 调节，GUI/TUI 都把它渲染在“重压阻力”正下方。轮胎抓地力属于扳机反馈，因此也受总开关截断，但不受油门连续阻力或末端 wall 开关代管；body haptics、握把换挡和握把红线属于独立握把反馈。电动车红线 gate 属于运行时规则，不在 R2 或握把红线开关下重复显示车型说明。涡轮增压阻力、G 力阻力、L2/R2 碰撞扳机冲击和 L2/R2 空闲路面纹理继续位于扳机页默认折叠的实验性区域；握把红线曲线、起始冲击和碰撞包络位于握把页默认折叠区域。全部车辆手感字段仍属于 Profile。灯效有独立页面；R11 `Default` 开启转速灯带，挡位 Player LEDs 仍默认关闭。共享 schema、防重字段测试、翻译覆盖测试和 GUI/TUI class contract 防止同一字段漂移到两页或两套界面的不同位置。
 
 ### 8.2 `user_preferences.json`
 
 `src/modules/config/preferences.py` 使用以下逻辑：
 
-- `GLOBAL_FIELDS` 保存 UDP、重连、启动 pulse、后台行为、语言、更新、手柄选择、Forza 游戏/平台、Steam 路径缓存、Xbox FH6 手动路径和 DSX 等应用级设置。
+- `GLOBAL_FIELDS` 保存 UDP、重连、启动 pulse、后台行为、语言、更新、手柄选择、Forza 游戏/平台、Steam 路径缓存、Xbox FH6 手动路径、DSX、HidHide 隔离和 XInput 映射等应用级设置。
 - R7 把 `enable_reconnect` 的出厂默认改为 `True`。缺少 `r7_enable_reconnect_default` marker 的已有偏好在加载时只把这个 global 字段强制开启一次并写 marker；之后用户主动关闭会长期保留，驾驶与命名 Profile 字段不受迁移影响。
 - 其余简单类型字段属于当前 Profile。
-- `Default` 与命名 Profile 都会自动保存并跨启动保留，启动过程不再用 `Settings()` 覆盖 `Default`。
+- 第一次生成配置时按固定顺序创建 `Default`、`Default before R11`、`Original` 三份内置 Profile。R11 新 `Default` 对应经用户确认的 70 项社区调教变化并开启 ABS；`Default before R11` 用 70 项反向覆盖重建旧默认，`Original` 以旧默认作为基底后应用上游 1.6.2 参数，因此不会随新调教漂移。
+- 已有配置只执行一次 `r11_default_profile_from_33` 迁移：把升级前实际保存的 `Default` 补全后转存为 `Default before R11`，再安装 R11 新 `Default`。active 命名 Profile 和其他命名 Profile 保持不变；marker 写入后两份 Default 都按普通自动保存跨启动保留，不会再次覆盖。
 - 第一次生成有效配置时，`system_language.detect_system_language()` 把 Windows 显示语言映射到现有 `en/de/ja/ru/tr/zh/zh_tw` 目录；已有配置继续使用用户选择。
 - `ProfileSession` 只在内存中保存 GUI/TUI 启动时的 `Default` Profile 快照。当前仍为 `Default` 且 Profile 字段发生变化时，统一退出入口才提示另存命名 Profile；global-only 变化和当前命名 Profile 不提示。
-- 恢复出厂会先备份现有 JSON 为 `.bak`，保留全部命名 Profile，重建 `Default` 和 globals，切回 `Default` 并重新检测系统语言。只有原子写入成功后才修改运行中的 `Settings`。
-- 旧命名 Profile 保留原 `rev_limit_*` 扳机参数；缺失的 R4 字段按当前默认值补齐，因此所有新增扳机层与灯效默认关闭，握把换挡仍默认关闭。缺少 `enable_throttle_end_wall` 的新旧 Profile 会幂等补入 `False`，不会根据两项阻力数值推断，也不会在切换 Profile 时继承上一份 Profile 的开启状态。已经显式保存的值不会被覆盖。
+- 恢复出厂会先备份现有 JSON 为 `.bak`，保留全部非内置命名 Profile，重建三份内置 Profile 和 globals，切回 `Default` 并重新检测系统语言。只有原子写入成功后才修改运行中的 `Settings`。
+- 旧命名 Profile 保留原 `rev_limit_*` 扳机参数；R3 握把字段补全继续使用 pre-R11 历史默认，不会把 R11 新调教灌入旧命名 Profile。缺少 `enable_throttle_end_wall` 的新旧 Profile 会幂等补入 `False`，不会根据两项阻力数值推断，也不会在切换 Profile 时继承上一份 Profile 的开启状态。已经显式保存的值不会被覆盖。
 - 早期内部版本 `3` 预览曾复用 `rev_limit_*` 作为握把参数。缺少新握把 marker 的预览 Profile 会执行一次拆分迁移：已知 `10/96` 预览默认恢复为扳机 `30/12` 并采用新握把 `10/192`；自定义值复制给握把且继续保留在扳机侧。已有新字段时迁移保持幂等。
 - 加载只接受预期 JSON 对象形状；字段按照 `Settings` 类型做严格转换，浮点数还必须有限。未知、嵌套错误或不可转换值回退到当前默认，不进入运行时热路径。
 - 写入使用同目录 UUID 临时文件再 replace，避免并发写入共用固定 `.tmp`；覆盖现有有效配置和恢复出厂前先完成可读 `.bak`，写入失败不删除原文件。
@@ -342,6 +374,7 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 ## 9. 退出、错误和日志
 
 - `ProcessWatcher` 每隔 `game_poll_interval_s` 扫描进程名或可执行文件路径，只有先看到包含 `forza` 的进程、随后看不到时才要求退出。
+- 宽泛 `ProcessWatcher` 只服务可选的“游戏退出后关闭程序”，不控制 HID、反馈、XInput、Raw Input 或 HidHide 生命周期。R11 没有 Windows 前台窗口许可；被冻结的实验只存在于 `experiments/foreground_ownership/`，生产构建必须验证其模块未进入 PYZ。
 - 收到过遥测后，连续 1 秒无包会静音。启用 `exit_on_game_close` 时，连续 `telemetry_lost_exit_s` 无包会作为退出 fallback；关闭该选项时，进程检测和 telemetry-lost 退出都禁用，应用继续等待遥测恢复。尚未收到过包时只周期性警告，不自动退出。
 - UDP bind 失败会在 GUI/TUI 显示端口占用状态。
 - 顶部控制器状态与 UDP、update、XInput 状态彼此独立；UDP bind 错误不得覆盖仍然有效的 controller snapshot。
@@ -360,7 +393,7 @@ DSX 拥有手柄时，`HapticManager` 明确关闭本项目 body haptics。当�
 | `PYSTRAY_BACKEND` | Linux tray backend；Wayland 下默认设为 `appindicator` |
 | `PYTHONHOME`、`PYTHONPATH`、`PYTHONNOUSERSITE`、`UV_PYTHON_PREFERENCE` | launcher 隔离 host Python 并要求 uv managed Python |
 
-外部系统包括 Forza UDP、DualSense HID/audio device、本机 DSX UDP、Windows Xbox App/AppsFolder、ViGEmBus 和 GitHub Releases。Windows 独立 EXE 更新器校验 Release 配套 SHA-256，但没有代码签名信任链；ZUV launcher 会从同一仓库下载并执行 bundle，现有 BAT/ZUV 下载链路没有独立 checksum 或 signature 验证。这两条链路具有不同的供应链保证，不能混写成同一机制。Xbox App AUMID 通过当前用户的 `Get-StartApps` 动态读取，固定 product ID 只作为打开产品页的 fallback；程序不管理 Xbox 安装、许可或商店状态。
+外部系统包括 Forza UDP、DualSense HID/audio device、本机 DSX UDP、Windows Xbox App/AppsFolder、ViGEmBus、用户可选安装的 HidHide 1.7+ 和 GitHub Releases。Windows 独立 EXE 更新器校验 Release 配套 SHA-256，但没有代码签名信任链；ZUV launcher 会从同一仓库下载并执行 bundle，现有 BAT/ZUV 下载链路没有独立 checksum 或 signature 验证。这两条链路具有不同的供应链保证，不能混写成同一机制。Xbox App AUMID 通过当前用户的 `Get-StartApps` 动态读取，固定 product ID 只作为打开产品页的 fallback；程序不管理 Xbox 安装、许可或商店状态，也不安装或升级 HidHide。
 
 仓库不再提供或自动读取 `dev.env`。需要覆盖环境变量时，开发 shell、IDE、CI 或 launcher 必须显式注入；这样快捷方式工作目录和同名本地文件不会改变生产运行配置。
 
@@ -382,7 +415,7 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 - 健康 ACK 表示所选模式的核心 backend 已经可运行，不表示只完成 Python/Tk 构造。GUI/TUI/backend 初始化失败必须让新进程退出并触发事务回滚。
 - Windows DPI awareness 必须在首个 Tk 窗口前由 manifest/runtime bootstrap 确定，UI 只展示实际查询结果；不得在 GUI 构造后重新设置 process awareness。
 - 内嵌第三方组件不能绕过 Windows EXE 体积预算；超过 `5 MiB` 或 `10%` 的增量必须先经明确确认，并在构建后复测。
-- `Default` 持久化和 named/global 字段边界属于配置兼容协议；新默认值不能通过启动时强制覆盖已经保存的用户值。
+- `Default` 持久化和 named/global 字段边界属于配置兼容协议；只有带一次性 marker、先保留旧快照且有迁移回归的显式版本升级可以替换 `Default`，marker 完成后不得再次覆盖。
 - Profile 的 global 和 per-profile 边界是兼容性协议，修改字段归属需要迁移和 round-trip 测试。
 - 许可证和第三方声明属于发布要求，不是可选 UI 文案。
 
@@ -395,7 +428,7 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 - Bluetooth HD haptics 的公开协议资料有限，最初以 vDS `0.3.0-rc7` 实现并已复核到 `0.4.0-rc1`，同时继续用 DS5Dongle、真实 DualSense report descriptor 和硬件探针交叉验证；不同旧固件或蓝牙适配器仍可能触发 compatible fallback。
 - 通用退出 `ProcessWatcher` 仍按 `forza` 子串匹配，存在误匹配其他进程的可能；分体启动按钮和 FH6 语言工具通过 `game_launch.py` 使用各代精确 EXE 名与可选完整路径，不受该子串规则影响。
 - Xbox App 自动发现依赖 Windows 当前 flat-file 安装布局和未作为稳定公开 API 承诺的 `.GamingRoot` 标记；真实 Xbox App FH4/FH5/FH6 尚未在当前电脑验证。它只解决可访问 flat-file 游戏根目录，不用于直接启动 EXE，也不尝试发现或读取受保护的 `WindowsApps` package。
-- 多处退出清理仍使用 best-effort `except`，个别设备边缘错误可能只写 debug；`runtime.log` 改善了跨会话取证，但尚未提供 UI 内的一键诊断包、HID sequence 丢包统计或适配器指标。
+- 多处退出清理仍使用 best-effort `except`，个别设备边缘错误可能只写 debug。一键诊断包已覆盖 HID open/write、有效与拒绝报告、UDP 包率/无效包/排空、USB callback/underflow、Bluetooth queue/deadline、XInput/HidHide 和 Lab 快照；仍没有 HID report sequence gap 或蓝牙适配器射频指标。
 - 英文、简体中文和日语用户指南是三个独立文件，共享事实仍需人工同步；`tests/test_enhanced_distribution.py` 只校验关键事实和篇幅，不能发现翻译语义的全部漂移。
 - 更新器目前每次启动都会在约 10 秒后检查，没有跨启动 24 小时节流；Release body 只通过浏览器链接查看，也没有代码签名信任链。PE 固定版本资源只用于严格识别旧覆盖式 Helper 的 legacy bootstrap，不能充当发布者身份验证。完成或回滚的 transaction journal 当前不会自动按保留期清理。
 - `UpdateService.stop()` 不会中断或 join 已进入网络 I/O 的 daemon worker；退出期间可能留下带随机名的未完成 `.part`。无效 pending metadata 会被丢弃，但它此前指向且无法再证明归属的 staged EXE 不会被宽泛删除。

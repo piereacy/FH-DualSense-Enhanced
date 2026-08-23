@@ -5,8 +5,9 @@ File layout:
       "version": "x.y.z",
       "active_profile": "Default",
       "profiles": {
-        "Default": { ...flat Settings fields... },
-        "Sport":   { ... }
+        "Default":           { ...flat Settings fields... },
+        "Default before R11": { ...previous defaults... },
+        "Sport":             { ... }
       }
     }
 
@@ -28,10 +29,89 @@ _DATA = paths.DATA
 PATH = _DATA / "user_preferences.json"
 PYPROJECT = paths.PYPROJECT
 DEFAULT_PROFILE_NAME = "Default"
+DEFAULT_BEFORE_R11_PROFILE_NAME = "Default before R11"
 ORIGINAL_PROFILE_NAME = "Original"
-BUILTIN_PROFILE_NAMES = frozenset({DEFAULT_PROFILE_NAME, ORIGINAL_PROFILE_NAME})
+BUILTIN_PROFILE_NAMES = frozenset({
+    DEFAULT_PROFILE_NAME,
+    DEFAULT_BEFORE_R11_PROFILE_NAME,
+    ORIGINAL_PROFILE_NAME,
+})
 R7_RECONNECT_MIGRATION = "r7_enable_reconnect_default"
 R8_REDLINE_TIMING_MIGRATION = "r8_redline_timing_defaults"
+R11_DEFAULT_PROFILE_MIGRATION = "r11_default_profile_from_33"
+
+_DEFAULT_BEFORE_R11_OVERRIDES = {
+    "abs_amp": 90,
+    "abs_amp_min": 32,
+    "abs_brake_threshold": 255,
+    "abs_combined_slip_threshold": 0.3,
+    "abs_combined_slip_weight": 0.35,
+    "abs_freq": 60,
+    "abs_hold_ms": 100.0,
+    "abs_min_speed_kmh": 6.0,
+    "abs_sensitivity": 1.0,
+    "abs_slip_ratio_threshold": 0.3,
+    "body_haptics_intensity": 0.5,
+    "brake_curve": 5.0,
+    "brake_max_force": 5,
+    "collision_background_duck": 0.2,
+    "collision_haptics_rebound_ratio": 0.45,
+    "collision_haptics_weak_side_ratio": 0.35,
+    "collision_trigger_amp": 220,
+    "collision_trigger_duration_ms": 90.0,
+    "collision_trigger_freq": 2,
+    "enable_abs": False,
+    "enable_grip_gear_shift_haptics": False,
+    "enable_idle_buzz": True,
+    "enable_tachometer_lightbar": False,
+    "engine_haptics_intensity": 0.5,
+    "gear_shift_amp": 10,
+    "gear_shift_duration_ms": 100.0,
+    "gear_shift_freq": 10,
+    "grip_gear_shift_duration_ms": 100.0,
+    "grip_gear_shift_strength": 0.8,
+    "grip_redline_amp": 220,
+    "grip_redline_attack_duration_ms": 120.0,
+    "grip_redline_attack_strength": 0.65,
+    "grip_redline_background_duck": 0.3,
+    "grip_redline_duty_cycle": 0.7,
+    "grip_redline_gain": 1.5,
+    "grip_redline_low_ratio": 0.45,
+    "grip_redline_ratio": 0.95,
+    "grip_redline_release_ratio": 0.92,
+    "grip_redline_right": False,
+    "idle_amp_high": 60,
+    "impact_haptics_intensity": 2.0,
+    "rev_limit_amp": 12,
+    "rev_limit_freq": 30,
+    "rev_limit_hold_ms": 120.0,
+    "rev_limit_ratio": 0.95,
+    "road_haptics_intensity": 0.7,
+    "slip_haptics_threshold": 0.8,
+    "tachometer_brightness": 0.7,
+    "tachometer_flash_rate_hz": 10.0,
+    "tachometer_flash_ratio": 0.95,
+    "tachometer_start_ratio": 0.7,
+    "throttle_curve": 5.0,
+    "throttle_max_force": 1,
+    "wheelspin_amp": 90,
+    "wheelspin_attack_ms": 40.0,
+    "wheelspin_burnout_rotation_full_scale": 120.0,
+    "wheelspin_burnout_rotation_threshold": 30.0,
+    "wheelspin_dirt_freq_max": 70,
+    "wheelspin_dirt_freq_min": 30,
+    "wheelspin_g_damping": 0.25,
+    "wheelspin_gravel_freq_max": 30,
+    "wheelspin_gravel_freq_min": 12,
+    "wheelspin_hysteresis": 0.15,
+    "wheelspin_release_ms": 125.0,
+    "wheelspin_sensitivity": 1.0,
+    "wheelspin_slip_full_scale": 3.0,
+    "wheelspin_tarmac_freq_max": 180,
+    "wheelspin_tarmac_freq_min": 90,
+    "wheelspin_water_freq_max": 150,
+    "wheelspin_water_freq_min": 80,
+}
 
 # System fields - shared across profiles and preserved across launches.
 # Everything else lives in the active profile.
@@ -57,6 +137,7 @@ GLOBAL_FIELDS = frozenset({
     "fh5_install_path",
     "fh6_install_path",
     "fh6_xbox_install_path",
+    "enable_hidhide",
     "enable_custom_xinput_mapping",
     "xinput_mapping_cross",
     "xinput_mapping_circle",
@@ -75,6 +156,18 @@ GLOBAL_FIELDS = frozenset({
     "xinput_mapping_dpad_right",
     "xinput_mapping_touchpad_left",
     "xinput_mapping_touchpad_right",
+    "enable_xinput_gyro",
+    "xinput_gyro_mode",
+    "xinput_gyro_output_stick",
+    "xinput_gyro_activation",
+    "xinput_gyro_horizontal_axis",
+    "xinput_gyro_sensitivity_dps",
+    "xinput_gyro_deflection_angle",
+    "xinput_gyro_deadzone_dps",
+    "xinput_gyro_smoothing_ms",
+    "xinput_gyro_vertical_enabled",
+    "xinput_gyro_invert_horizontal",
+    "xinput_gyro_invert_vertical",
     "language",
     "controller_lock_serial",
     "use_dsx",
@@ -116,11 +209,18 @@ def _global_fields(s) -> dict:
     return {k: v for k, v in _fields(s).items() if k in GLOBAL_FIELDS}
 
 
-def original_profile_fields() -> dict:
-    """Current profile schema populated with upstream v1.6.2 defaults."""
+def default_before_r11_profile_fields() -> dict:
+    """Current profile schema populated with the pre-R11 defaults."""
     from .settings import Settings
 
     snapshot = _profile_fields(Settings())
+    snapshot.update(_DEFAULT_BEFORE_R11_OVERRIDES)
+    return snapshot
+
+
+def original_profile_fields() -> dict:
+    """Current profile schema populated with upstream v1.6.2 defaults."""
+    snapshot = default_before_r11_profile_fields()
     snapshot.update({
         "brake_deadzone": 50,
         "brake_baseline_force": 18,
@@ -278,6 +378,10 @@ def _ensure_active(raw: dict, s) -> dict:
     if not raw["profiles"]:
         raw["profiles"][DEFAULT_PROFILE_NAME] = _profile_fields(s)
         raw["active_profile"] = DEFAULT_PROFILE_NAME
+    raw["profiles"].setdefault(
+        DEFAULT_BEFORE_R11_PROFILE_NAME,
+        default_before_r11_profile_fields(),
+    )
     # Original is a built-in canonical preset, not a user-owned snapshot.
     # Refresh it so upgrades receive corrections to the bundled preset too.
     raw["profiles"][ORIGINAL_PROFILE_NAME] = original_profile_fields()
@@ -364,6 +468,28 @@ def _migrate_r8_redline_timing_defaults(raw: dict) -> bool:
     return True
 
 
+def _migrate_r11_default_profile(raw: dict, s, *, first_run: bool) -> bool:
+    """Install the R11 Default once and preserve the prior Default snapshot."""
+    migrations = raw.setdefault("migrations", {})
+    if not isinstance(migrations, dict):
+        migrations = {}
+        raw["migrations"] = migrations
+    if migrations.get(R11_DEFAULT_PROFILE_MIGRATION) is True:
+        return False
+
+    profiles = raw.get("profiles")
+    if isinstance(profiles, dict) and not first_run:
+        previous = default_before_r11_profile_fields()
+        stored_default = profiles.get(DEFAULT_PROFILE_NAME)
+        if isinstance(stored_default, dict):
+            previous.update(stored_default)
+        profiles[DEFAULT_BEFORE_R11_PROFILE_NAME] = previous
+        profiles[DEFAULT_PROFILE_NAME] = _profile_fields(type(s)())
+
+    migrations[R11_DEFAULT_PROFILE_MIGRATION] = True
+    return True
+
+
 _GRIP_REDLINE_FIELDS = (
     "enable_grip_redline_haptics",
     "grip_redline_left",
@@ -398,35 +524,35 @@ def _migrate_r3_redline_split(raw: dict, s) -> None:
     if not isinstance(profiles, dict):
         return
     version = str(raw.get("version", ""))
-    defaults = type(s)()
+    defaults = default_before_r11_profile_fields()
     for name, snapshot in profiles.items():
         if name == DEFAULT_PROFILE_NAME or not isinstance(snapshot, dict):
             continue
         if "enable_grip_redline_haptics" in snapshot:
             for field in _GRIP_REDLINE_FIELDS:
-                snapshot.setdefault(field, getattr(defaults, field))
+                snapshot.setdefault(field, defaults[field])
             continue
 
         if re.match(r"^3(?:\.|$)", version):
-            trigger_freq = snapshot.get("rev_limit_freq", defaults.rev_limit_freq)
-            trigger_amp = snapshot.get("rev_limit_amp", defaults.rev_limit_amp)
+            trigger_freq = snapshot.get("rev_limit_freq", defaults["rev_limit_freq"])
+            trigger_amp = snapshot.get("rev_limit_amp", defaults["rev_limit_amp"])
             snapshot["enable_grip_redline_haptics"] = bool(
-                snapshot.get("enable_rev_limiter", defaults.enable_rev_limiter)
+                snapshot.get("enable_rev_limiter", defaults["enable_rev_limiter"])
             )
             snapshot["grip_redline_ratio"] = snapshot.get(
-                "rev_limit_ratio", defaults.grip_redline_ratio
+                "rev_limit_ratio", defaults["grip_redline_ratio"]
             )
             if trigger_freq == 10 and trigger_amp == 96:
-                snapshot["rev_limit_freq"] = defaults.rev_limit_freq
-                snapshot["rev_limit_amp"] = defaults.rev_limit_amp
-                snapshot["grip_redline_freq"] = defaults.grip_redline_freq
-                snapshot["grip_redline_amp"] = defaults.grip_redline_amp
+                snapshot["rev_limit_freq"] = defaults["rev_limit_freq"]
+                snapshot["rev_limit_amp"] = defaults["rev_limit_amp"]
+                snapshot["grip_redline_freq"] = defaults["grip_redline_freq"]
+                snapshot["grip_redline_amp"] = defaults["grip_redline_amp"]
             else:
                 snapshot["grip_redline_freq"] = trigger_freq
                 snapshot["grip_redline_amp"] = trigger_amp
 
         for field in _GRIP_REDLINE_FIELDS:
-            snapshot.setdefault(field, getattr(defaults, field))
+            snapshot.setdefault(field, defaults[field])
 
 
 def _migrate_r3_grip_gear_shift(raw: dict, s) -> None:
@@ -434,12 +560,12 @@ def _migrate_r3_grip_gear_shift(raw: dict, s) -> None:
     profiles = raw.get("profiles")
     if not isinstance(profiles, dict):
         return
-    defaults = type(s)()
+    defaults = default_before_r11_profile_fields()
     for name, snapshot in profiles.items():
         if name == DEFAULT_PROFILE_NAME or not isinstance(snapshot, dict):
             continue
         for field in _GRIP_GEAR_SHIFT_FIELDS:
-            snapshot.setdefault(field, getattr(defaults, field))
+            snapshot.setdefault(field, defaults[field])
 
 
 def load(s) -> None:
@@ -457,6 +583,7 @@ def load(s) -> None:
     _migrate_r8_redline_timing_defaults(raw)
     _migrate_r3_redline_split(raw, s)
     _migrate_r3_grip_gear_shift(raw, s)
+    _migrate_r11_default_profile(raw, s, first_run=first_run)
     _write(raw)
     snap = dict(raw["globals"])
     snap.update(raw["profiles"][raw["active_profile"]])
@@ -534,11 +661,13 @@ def restore_factory(s, *, language: str | None = None) -> bool:
     }
     raw["profiles"] = {
         DEFAULT_PROFILE_NAME: _profile_fields(defaults),
+        DEFAULT_BEFORE_R11_PROFILE_NAME: default_before_r11_profile_fields(),
         ORIGINAL_PROFILE_NAME: original_profile_fields(),
         **named,
     }
     raw["active_profile"] = DEFAULT_PROFILE_NAME
     raw["globals"] = _global_fields(defaults)
+    raw.setdefault("migrations", {})[R11_DEFAULT_PROFILE_MIGRATION] = True
 
     if PATH.exists():
         try:

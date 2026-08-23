@@ -178,3 +178,22 @@ def test_maps_stick_centers_and_full_endpoints(field, raw, expected):
         "right_y": "sThumbRY",
     }[field]
     assert getattr(report, xusb_field) == expected
+
+
+def test_adds_gyro_to_selected_stick_and_clamps_with_physical_input():
+    left = map_dualsense_to_xusb(
+        _state(left_x=255),
+        gyro_axes=(0.5, -0.5),
+        gyro_stick="left",
+    )
+    assert left.sThumbLX == 32767
+    assert left.sThumbLY == -16384
+    assert left.sThumbRX == 0
+
+    right = map_dualsense_to_xusb(
+        _state(right_y=0),
+        gyro_axes=(-0.5, 0.5),
+        gyro_stick="right",
+    )
+    assert right.sThumbRX == -16384
+    assert right.sThumbRY == 32767

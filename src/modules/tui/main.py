@@ -5,6 +5,7 @@ import time
 import webbrowser
 
 from rich.markup import escape
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Button, Header, Input, Select, Static, Switch, TabbedContent, TabPane
@@ -17,7 +18,8 @@ from modules.config.profile_session import ProfileSession
 from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.dualsense.presentation import controller_pill_status
 from modules.config.preferences import _release_version
-from modules.haptics import UsbAudioHaptics, UsbAudioLifecycle
+from modules.diagnostics import DiagnosticsCollector
+from modules.haptics import HAPTICS_LAB_SCENES, HapticsLab, UsbAudioHaptics, UsbAudioLifecycle
 from modules.runtime_logging import install_runtime_file_handler
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
@@ -110,11 +112,27 @@ class TriggerTUI(App):
         self._pending_before_exit = None
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
+        self._usb_audio_gate_active = False
+        self._usb_audio_sync_requested = threading.Event()
         self._update_service = UpdateService(
             settings,
             supported=self_update_supported(),
         )
         self._xinput_service = XInputBridgeService(settings)
+        self._haptics_lab = HapticsLab()
+        self._diagnostics = DiagnosticsCollector(
+            settings,
+            controller_provider=lambda: self._ds,
+            listener_provider=lambda: self._listener,
+            xinput_service=self._xinput_service,
+            usb_audio=self._usb_audio,
+            haptics_lab=self._haptics_lab,
+            error_provider=lambda: {
+                "controller": self._backend_error,
+                "udp": self._udp_error,
+            },
+            runtime_mode="tui",
+        )
         self._profile_session = ProfileSession(settings)
         cleanup_previous_update()
 
@@ -135,7 +153,7 @@ class TriggerTUI(App):
                 yield LightingTab(self.settings)
             with TabPane(t("Custom Xbox button mapping"), id="tab-xinput-mapping"):
                 yield XInputMappingTab(self.settings)
-            with TabPane(t("System"), id="tab-system"):
+            with TabPane(t("System and updates"), id="tab-system"):
                 yield SystemTab(self.settings)
             with TabPane(t("FH6 utilities"), id="tab-fh6-utilities"):
                 yield FH6UtilitiesTab(self.settings)
@@ -148,6 +166,16 @@ class TriggerTUI(App):
         with Horizontal(id="bottombar"):
             yield Button(f"q  {t('Quit')}", id="bb-quit", classes="bb-btn")
             yield Static(id="bb-spacer")
+
+    def on_app_blur(self, _event: events.AppBlur) -> None:
+        if (
+            not self._haptics_lab.snapshot().active
+            and not self._xinput_service.preview_requested
+        ):
+            return
+        self._haptics_lab.stop("app_blurred")
+        self._xinput_service.request_preview_runtime(False)
+        self._request_usb_audio_eligibility_sync()
 
     # --- lifecycle ----------------------------------------------------------
 
@@ -184,6 +212,7 @@ class TriggerTUI(App):
                 root.removeHandler(h)
         self._update_service.stop()
         with self._backend_restart_lock:
+            self._haptics_lab.stop("shutdown")
             self._stop.set()
             if self._thread:
                 self._thread.join(timeout=2.0)
@@ -264,6 +293,8 @@ class TriggerTUI(App):
                 self.settings,
                 stop_event=self._stop,
                 usb_audio=self._usb_audio,
+                haptics_lab=getattr(self, "_haptics_lab", None),
+                diagnostics=getattr(self, "_diagnostics", None),
             )
         except Exception:
             # An unexpected error here would otherwise kill the backend thread
@@ -279,6 +310,7 @@ class TriggerTUI(App):
             if self._tearing_down:
                 return
             # MARK: stop old loop + backend, then reuse the listener
+            self._haptics_lab.stop("backend_restart")
             self._stop.set()
             old_thread = self._thread
             if old_thread:
@@ -342,13 +374,16 @@ class TriggerTUI(App):
     # --- topbar / logs bridge -----------------------------------------------
 
     def refresh_status(self):
-        controller = self._ds if self._listener is not None else None
-        self._usb_audio_lifecycle.sync(controller, self.settings)
+        request = getattr(self, "_usb_audio_sync_requested", None)
+        if request is not None:
+            request.clear()
+        self._sync_usb_audio_eligibility_safely()
         if self._backend_error:
             self.query_one("#status", Static).update(
                 f"[bold red]{t('Controller backend error')}[/]"
             )
             return
+
         connected = bool(self._ds and self._ds.connected)
         if self.settings.use_dsx:
             state = (f"[bold dodgerblue]{t('DSX: active')}[/]" if connected
@@ -361,7 +396,12 @@ class TriggerTUI(App):
                 if presentation.detail:
                     detail_color = "red" if presentation.low_battery else "green"
                     state += f" · [bold {detail_color}]{presentation.detail}[/]"
-            elif snapshot.phase.value in {"connecting", "switching", "reconnecting"}:
+            elif snapshot.phase.value in {
+                "available",
+                "connecting",
+                "switching",
+                "reconnecting",
+            }:
                 state = f"[bold yellow]{presentation.state}[/]"
             else:
                 state = f"[bold red]{presentation.state}[/]"
@@ -369,6 +409,48 @@ class TriggerTUI(App):
             state = (f"[bold green]{t('connected')}[/]" if connected
                      else f"[bold red]{t('waiting')}[/]")
         self.query_one("#status", Static).update(f"DualSense: {state}")
+
+    def _request_usb_audio_eligibility_sync(self) -> None:
+        request = getattr(self, "_usb_audio_sync_requested", None)
+        if request is None:
+            return
+        request.set()
+        try:
+            self.call_later(self._drain_requested_usb_audio_sync)
+        except RuntimeError:
+            pass
+
+    def _drain_requested_usb_audio_sync(self) -> None:
+        request = getattr(self, "_usb_audio_sync_requested", None)
+        if request is None or not request.is_set():
+            return
+        request.clear()
+        self._sync_usb_audio_eligibility_safely()
+
+    def _sync_usb_audio_eligibility_safely(self) -> None:
+        try:
+            self._sync_usb_audio_eligibility()
+        except Exception:
+            log.exception("USB audio eligibility sync failed")
+
+    def _sync_usb_audio_eligibility(self):
+        controller = self._ds if self._listener is not None else None
+        lab_snapshot = self._haptics_lab.snapshot()
+        body_scene_keys = {
+            scene.key for scene in HAPTICS_LAB_SCENES if scene.body_haptics
+        }
+        lab_body_active = (
+            lab_snapshot.active and lab_snapshot.scene in body_scene_keys
+        )
+        self._usb_audio_lifecycle.sync(
+            controller,
+            self.settings,
+            runtime_active=True,
+            force_body_haptics=lab_body_active,
+        )
+
+    def export_diagnostics(self):
+        return self._diagnostics.export()
 
     def refresh_profile(self):
         """Update the active profile label. Cheap path is called only on profile

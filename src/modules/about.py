@@ -7,6 +7,8 @@ SOURCE_URL = "https://github.com/HamzaYslmn/Forza-Horizon-DualSense-Python"
 SPONSOR_URL = "https://github.com/sponsors/HamzaYslmn"
 CONTROLLER_ICON_MOD_ATTRIBUTION = "DualSense Icons MOD by @hotline1337."
 CONTROLLER_ICON_MOD_URL = "https://www.nexusmods.com/forzahorizon6/mods/2"
+TUNING_CREDIT_NAME = "Bilibili 开心散仙"
+TUNING_CREDIT_URL = "https://space.bilibili.com/471461948?spm_id_from=333.337.0.0"
 THIRD_PARTY_LINKS = (
     ("ViGEmBus 1.22.0 (BSD-3-Clause)", "https://github.com/nefarius/ViGEmBus"),
     ("ViGEmClient (MIT)", "https://github.com/nefarius/ViGEmClient"),

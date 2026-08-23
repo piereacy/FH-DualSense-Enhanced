@@ -21,8 +21,8 @@ This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6
 - Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, directional impacts, and dynamic redline learning shared with the tachometer lightbar.
 - Expanded adaptive-trigger behavior adds dynamic traction and wheelspin, surface-aware frequency bands, zoned ABS, and optional telemetry layers.
 - USB and Bluetooth use the same stereo haptic mix; Bluetooth adds HD transport and falls back only when that transport actually fails.
-- Community-informed Default values, a built-in Original preset, persistent autosave, named profiles, and safe factory restore provide a reliable configuration workflow.
-- The multilingual high-DPI interface shows live transport, battery, and charging state and includes FH4/FH5/FH6 Steam/Xbox App launching, an integrated DualSense-to-XInput bridge, and reversible FH6 DualSense button icons.
+- R11's community-tuned `Default` enables ABS; `Default before R11` preserves prior tuning, while `Original`, autosave, profiles, and factory restore remain. System and updates also includes a collapsed-by-default Haptics Lab card for bounded trigger/grip previews and local sanitized diagnostics.
+- The multilingual high-DPI interface shows live transport, battery, and charging state and includes FH4/FH5/FH6 Steam/Xbox App launching, an integrated DualSense-to-XInput bridge with optional Steam Input-style Camera/Deflection motion-to-stick mapping, and reversible FH6 DualSense button icons. Motion mapping requires the custom Xbox mapping master switch plus its own gyro switch and is off by default because X360 has no native gyro channel.
 - The standalone EXE uses verified transactional updates, preserves settings, migrates matching shortcuts, and can recover or roll back an interrupted replacement.
 
 ## Download
@@ -65,6 +65,8 @@ If loopback packets are not received, try `::1` in both the game and the app.
 
 > [!IMPORTANT]
 > In Steam mode, keep Steam Input enabled. In every mode, turn **Vibration** off in Forza's own settings. Native game rumble competes with and masks the controller's grip haptics, so grip feedback will not work correctly when both are active.
+>
+> FHDS keeps its native controller backend active until exit. Close it before another game or tool needs the DualSense.
 
 ## USB and Bluetooth
 

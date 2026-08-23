@@ -13,6 +13,8 @@ from modules.about import (
     SOURCE_URL,
     SPONSOR_URL,
     THIRD_PARTY_LINKS,
+    TUNING_CREDIT_NAME,
+    TUNING_CREDIT_URL,
 )
 from modules.config.preferences import _release_version
 
@@ -64,6 +66,12 @@ class AboutTab(ctk.CTkFrame):
             card,
             text=f"{CONTROLLER_ICON_MOD_ATTRIBUTION} {CONTROLLER_ICON_MOD_URL}",
             command=lambda: self.app._open_url(CONTROLLER_ICON_MOD_URL),
+            anchor="w",
+        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS))
+        W.GhostButton(
+            card,
+            text=f"{t('Tuning credit')}: {TUNING_CREDIT_NAME}",
+            command=lambda: self.app._open_url(TUNING_CREDIT_URL),
             anchor="w",
         ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
 

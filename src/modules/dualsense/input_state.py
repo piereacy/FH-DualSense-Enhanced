@@ -10,6 +10,8 @@ import zlib
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 
+from .motion import DEFAULT_MOTION_CALIBRATION, DualSenseMotionCalibration
+
 
 USB_INPUT_REPORT_ID = 0x01
 USB_INPUT_REPORT_MIN_SIZE = 64
@@ -81,6 +83,39 @@ class DualSenseInputState:
     battery_level: int | None = None
     battery_status: BatteryStatus = BatteryStatus.UNKNOWN
     touchpad_regions: frozenset[TouchpadRegion] = frozenset()
+    touchpad_touched: bool = False
+    gyro_x: int = 0
+    gyro_y: int = 0
+    gyro_z: int = 0
+    accel_x: int = 0
+    accel_y: int = 0
+    accel_z: int = 0
+    sensor_timestamp: int = 0
+    motion_calibration: DualSenseMotionCalibration = DEFAULT_MOTION_CALIBRATION
+
+    @property
+    def gyro_degrees_per_second(self) -> tuple[float, float, float]:
+        raw = (self.gyro_x, self.gyro_y, self.gyro_z)
+        return tuple(
+            calibration.apply(value)
+            for calibration, value in zip(
+                self.motion_calibration.gyro,
+                raw,
+                strict=True,
+            )
+        )
+
+    @property
+    def acceleration_g(self) -> tuple[float, float, float]:
+        raw = (self.accel_x, self.accel_y, self.accel_z)
+        return tuple(
+            calibration.apply(value)
+            for calibration, value in zip(
+                self.motion_calibration.accel,
+                raw,
+                strict=True,
+            )
+        )
 
 
 _FACE_BUTTONS = (
@@ -113,6 +148,13 @@ def _pressed_touchpad_regions(data: bytes, base: int) -> frozenset[TouchpadRegio
     # A physical click normally has an active contact. Preserve a useful View
     # input if firmware timing produces a click frame without one.
     return frozenset(regions or {TouchpadRegion.LEFT})
+
+
+def _touchpad_is_touched(data: bytes, base: int) -> bool:
+    return any(
+        not data[base + offset] & _TOUCH_POINT_INACTIVE
+        for offset in _TOUCH_POINT_OFFSETS
+    )
 
 
 def parse_input_report(
@@ -217,4 +259,12 @@ def parse_input_report(
         battery_level=battery_level,
         battery_status=battery_status,
         touchpad_regions=touchpad_regions,
+        touchpad_touched=_touchpad_is_touched(data, base),
+        gyro_x=struct.unpack_from("<h", data, base + 15)[0],
+        gyro_y=struct.unpack_from("<h", data, base + 17)[0],
+        gyro_z=struct.unpack_from("<h", data, base + 19)[0],
+        accel_x=struct.unpack_from("<h", data, base + 21)[0],
+        accel_y=struct.unpack_from("<h", data, base + 23)[0],
+        accel_z=struct.unpack_from("<h", data, base + 25)[0],
+        sensor_timestamp=struct.unpack_from("<I", data, base + 27)[0],
     )

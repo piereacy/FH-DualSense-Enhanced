@@ -19,7 +19,7 @@ from modules.gui.overview_status import (
     xinput_bridge_status,
 )
 from modules.update import UpdatePhase, UpdateSnapshot
-from modules.xinput.bridge import BridgeSnapshot, BridgeStatus
+from modules.xinput.bridge import BridgeSnapshot, BridgeStatus, InputOwner
 
 
 def _t(value: str) -> str:
@@ -72,6 +72,7 @@ def test_controller_card_distinguishes_hid_dsx_reconnect_and_errors():
     failed = controller_status(None, settings, _t, error="open failed")
     assert failed.value == "Controller backend error"
     assert failed.hint == "open failed"
+
 
 
 def test_telemetry_card_maps_waiting_receiving_lost_and_bind_failure():
@@ -164,6 +165,19 @@ def test_xinput_status_distinguishes_platform_driver_active_stale_and_error():
     )
     assert active.value == "Xbox 360 controller active"
     assert active.hint == "Forwarded 42 input reports"
+
+    keyboard_mouse = xinput_bridge_status(
+        _XInput(
+            BridgeSnapshot(
+                status=BridgeStatus.ACTIVE,
+                input_owner=InputOwner.KEYBOARD_MOUSE,
+            )
+        ),
+        "xbox_app",
+        _t,
+    )
+    assert keyboard_mouse.value == "Keyboard and mouse active"
+    assert "Virtual Xbox input is neutral" in keyboard_mouse.hint
 
     stale = xinput_bridge_status(
         _XInput(BridgeSnapshot(status=BridgeStatus.STALE)),

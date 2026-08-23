@@ -43,3 +43,18 @@ def test_trigger_master_suppresses_requested_startup_pulse(monkeypatch):
     make_backend(settings, True)
 
     assert captured["enable_startup_pulse"] is False
+
+
+def test_native_backend_factory_does_not_install_a_foreground_gate(monkeypatch):
+    captured = {}
+
+    class Controller:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(modules_package.dualsense, "DualSense", Controller)
+
+    make_backend(Settings(), True)
+
+    assert captured["enable_startup_pulse"] is True
+    assert "defer_startup_pulse" not in captured

@@ -9,6 +9,7 @@ from modules.haptics.frame import (
     to_compatible_rumble,
 )
 from modules.haptics.manager import HapticManager
+from modules.haptics.lab import HapticsLab
 
 
 LEFT = rigid(30)
@@ -47,6 +48,9 @@ class _DualSense:
 
     def set(self, *args, visual=None):
         self.calls.append(args)
+
+class _DisconnectedDualSense(_DualSense):
+    connected = False
 
 
 class _LiveDisableDualSense(_DualSense):
@@ -112,17 +116,23 @@ class _Manager:
         self.controller = controller
         self.audio = audio
         self.frames = []
+        self.force_flags = []
+        self.pause_calls = 0
         self.closed = False
         type(self).instances.append(self)
 
-    def route(self, frame):
+    def route(self, frame, *, force=False):
         self.frames.append(frame)
+        self.force_flags.append(force)
         if type(self).raises:
             raise RuntimeError("haptic failure")
         return SILENT_RUMBLE if frame == SILENT_FRAME else RUMBLE
 
     def close(self):
         self.closed = True
+
+    def pause(self):
+        self.pause_calls += 1
 
 
 class _Watcher:
@@ -154,6 +164,65 @@ def _install(monkeypatch, manager_class=_Manager):
     monkeypatch.setattr(loop.forzahorizon, "parse_packet", lambda packet: telemetry)
 
 
+def test_haptics_lab_uses_the_existing_feedback_output(monkeypatch):
+    _install(monkeypatch)
+    settings = _settings()
+    settings.enable_body_haptics = False
+    controller = _DualSense()
+    listener = _Listener([])
+    lab = HapticsLab()
+    lab.start("brake_resistance", intensity=0.4, duration_s=1.0)
+
+    loop.run(
+        controller,
+        listener,
+        settings,
+        stop_event=_StopEvent(2),
+        haptics_lab=lab,
+    )
+
+    manager = _Manager.instances[-1]
+    assert True in manager.force_flags
+    assert any(call[0] != off() for call in controller.calls)
+
+
+def test_live_telemetry_preempts_an_active_lab_preview(monkeypatch):
+    _install(monkeypatch)
+    controller = _DualSense()
+    lab = HapticsLab()
+    lab.start("road")
+
+    loop.run(
+        controller,
+        _Listener([(b"packet", ("127.0.0.1", 5300))]),
+        _settings(),
+        stop_event=_StopEvent(1),
+        haptics_lab=lab,
+    )
+
+    assert lab.snapshot().stop_reason == "game_telemetry"
+    assert True in _Manager.instances[-1].force_flags
+    assert _Mixer.instances[-1].calls
+
+
+def test_haptics_lab_drops_pending_request_when_controller_disconnects(monkeypatch):
+    _install(monkeypatch)
+    controller = _DisconnectedDualSense()
+    lab = HapticsLab()
+    lab.start("brake_resistance")
+
+    loop.run(
+        controller,
+        _Listener([]),
+        _settings(),
+        stop_event=_StopEvent(1),
+        haptics_lab=lab,
+    )
+
+    assert lab.snapshot().stop_reason == "controller_disconnected"
+    assert True not in _Manager.instances[-1].force_flags
+
+
 def _settings():
     value = Settings()
     value.enable_body_haptics = True
@@ -179,6 +248,34 @@ def test_packet_routes_haptics_and_writes_one_atomic_controller_frame(monkeypatc
         (off(), off(), SILENT_RUMBLE),
     ]
     assert manager.closed is True
+
+
+def test_active_haptics_lab_preview_uses_a_short_udp_wait(monkeypatch):
+    _install(monkeypatch)
+
+    class BoundedUDPListener:
+        def __init__(self):
+            self.waits = []
+            self.lost = False
+
+        def recv_latest(self, *, wait_timeout_s=None):
+            self.waits.append(wait_timeout_s)
+            return None, None
+
+    monkeypatch.setattr(loop.forzahorizon, "UDPListener", BoundedUDPListener)
+    listener = BoundedUDPListener()
+    lab = HapticsLab()
+    lab.start("road")
+
+    loop.run(
+        _DualSense(),
+        listener,
+        _settings(),
+        stop_event=_StopEvent(1),
+        haptics_lab=lab,
+    )
+
+    assert listener.waits == [0.05]
 
 
 def test_live_disable_forwards_one_rumble_release_then_trigger_only(monkeypatch):

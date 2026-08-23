@@ -14,6 +14,7 @@ MAX_SHARE_CODE_BODY = 128 * 1024
 MAX_SHARE_PAYLOAD = 256 * 1024
 MAX_PROFILE_NAME = 64
 _DEFAULT = preferences.DEFAULT_PROFILE_NAME
+_DEFAULT_BEFORE_R11 = preferences.DEFAULT_BEFORE_R11_PROFILE_NAME
 _ORIGINAL = preferences.ORIGINAL_PROFILE_NAME
 
 
@@ -33,7 +34,11 @@ def active_name() -> str:
 def list_profile_names(store: dict) -> list:
     """All profile names with built-in profiles pinned to the top."""
     names = list(store.get("profiles", {}).keys())
-    pinned = [name for name in (_DEFAULT, _ORIGINAL) if name in names]
+    pinned = [
+        name
+        for name in (_DEFAULT, _DEFAULT_BEFORE_R11, _ORIGINAL)
+        if name in names
+    ]
     rest = sorted(
         (name for name in names if name not in preferences.BUILTIN_PROFILE_NAMES),
         key=str.lower,

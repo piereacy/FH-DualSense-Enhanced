@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from modules.config import preferences
 from modules.config.settings import Settings
 from modules.dualsense.adaptive_trigger import (
     M_OFF,
@@ -15,6 +16,16 @@ from modules.forzahorizon.effects import Controller, TriggerAnimations, _Asymmet
 
 
 WHEELS = ("fl", "fr", "rl", "rr")
+
+
+def _before_r11_settings():
+    settings = Settings()
+    preferences._apply_snap(
+        settings,
+        preferences.default_before_r11_profile_fields(),
+        preferences._profile_fields(settings),
+    )
+    return settings
 
 
 def _telemetry(**overrides):
@@ -143,7 +154,7 @@ def test_low_speed_burnout_uses_driven_wheel_rotation():
 
 
 def test_wheelspin_hysteresis_holds_until_the_release_threshold():
-    settings = Settings()
+    settings = _before_r11_settings()
     animation = TriggerAnimations()
     active = _telemetry(tire_slip_ratio_rr=1.5)
     _settled_wheelspin(animation, active, settings)
@@ -169,7 +180,7 @@ def test_wheelspin_hysteresis_holds_until_the_release_threshold():
     ],
 )
 def test_wheelspin_preserves_dynamic_surface_frequency_bands(material, expected_band):
-    settings = Settings()
+    settings = _before_r11_settings()
     telemetry = _telemetry(tire_slip_ratio_rr=2.0, **material)
 
     frame = _settled_wheelspin(TriggerAnimations(), telemetry, settings)
@@ -178,7 +189,7 @@ def test_wheelspin_preserves_dynamic_surface_frequency_bands(material, expected_
 
 
 def test_wheelspin_g_force_is_only_a_mild_inverse_amplitude_damping():
-    settings = Settings()
+    settings = _before_r11_settings()
     calm = _settled_wheelspin(
         TriggerAnimations(), _telemetry(tire_slip_ratio_rr=2.0), settings
     )
@@ -477,7 +488,7 @@ def test_static_brake_wall_remains_independent_from_brake_stiffness():
 
 
 def test_rev_buzz_uses_trigger_frequency_strength_and_hold():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     high = _telemetry(rpm=9000.0, max_rpm=9000.0)
@@ -520,7 +531,7 @@ def test_rev_buzz_suppresses_all_ev_redline_alerts():
 
 
 def test_rev_buzz_clears_an_existing_predictive_hold_for_ev():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     high = _telemetry(rpm=9000.0, max_rpm=9000.0)
@@ -539,7 +550,7 @@ def test_rev_buzz_clears_an_existing_predictive_hold_for_ev():
 
 
 def test_rev_buzz_requires_continuous_throttle_and_clears_hold_on_release():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     high = _telemetry(rpm=9000.0, max_rpm=9000.0)
@@ -590,7 +601,7 @@ def test_reset_transients_clears_rev_hold():
 
 
 def test_r2_trigger_uses_rev_limiter_when_traction_is_clear():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_rev_limiter = True
     telemetry = _telemetry(rpm=9000.0, max_rpm=9000.0)
 
@@ -601,7 +612,7 @@ def test_r2_trigger_uses_rev_limiter_when_traction_is_clear():
 
 
 def test_r2_trigger_uses_shared_effective_redline_without_overwriting_max_rpm():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_rev_limiter = True
     animation = TriggerAnimations()
     telemetry = _telemetry(
@@ -635,7 +646,7 @@ def test_r2_traction_keeps_priority_over_rev_limiter():
 
 
 def test_abs_requires_brake_and_minimum_speed():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_abs = True
     animation = TriggerAnimations()
     slipping = _telemetry(brake=255, tire_slip_ratio_fl=1.0)
@@ -646,7 +657,7 @@ def test_abs_requires_brake_and_minimum_speed():
 
 
 def test_abs_uses_longitudinal_slip_as_primary_and_combined_as_weaker_auxiliary():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_abs = True
     longitudinal = TriggerAnimations().abs_pulse(
         _telemetry(brake=255, tire_slip_ratio_fl=1.0), settings, 1.0
@@ -671,7 +682,7 @@ def test_abs_speed_is_a_gate_not_an_intensity_input():
 
 
 def test_abs_frequency_and_amplitude_rise_with_slip():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_abs = True
     low = TriggerAnimations().abs_pulse(
         _telemetry(brake=255, tire_slip_ratio_fl=0.4), settings, 1.0
@@ -699,7 +710,7 @@ def test_abs_keeps_the_top_three_zones_at_maximum_wall_strength():
 
 
 def test_abs_holds_the_last_dynamic_pulse_for_100_ms():
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.enable_abs = True
     animation = TriggerAnimations()
     active = _telemetry(brake=255, tire_slip_ratio_fl=1.0)
@@ -804,7 +815,7 @@ def test_optional_trigger_surface_uses_rumble_strip_then_yields_when_pressed():
 def test_invalid_numeric_tuning_fails_closed_in_trigger_primitives_and_idle_buzz():
     assert vibrate(float("nan"), float("inf")) == (M_VIBRATE, (0, 0))
 
-    settings = Settings()
+    settings = _before_r11_settings()
     settings.idle_period_s = 0.0
     frame = TriggerAnimations().idle_buzz(
         _telemetry(speed=0.0, accel=10),

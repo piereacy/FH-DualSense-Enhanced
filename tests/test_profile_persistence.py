@@ -10,6 +10,7 @@ from modules.config import preferences, profiles
 from modules.config.profile_session import ProfileSession
 from modules.config.settings import Settings
 from modules.xinput.mapping import MAPPING_SETTING_FIELDS
+from modules.xinput.gyro import GYRO_SETTING_FIELDS
 
 
 def test_network_and_exit_timing_settings_are_global():
@@ -24,7 +25,9 @@ def test_network_and_exit_timing_settings_are_global():
 
 def test_experimental_xinput_mapping_is_global_not_profile_tuning():
     assert "enable_custom_xinput_mapping" in preferences.GLOBAL_FIELDS
+    assert "enable_hidhide" in preferences.GLOBAL_FIELDS
     assert MAPPING_SETTING_FIELDS <= preferences.GLOBAL_FIELDS
+    assert GYRO_SETTING_FIELDS <= preferences.GLOBAL_FIELDS
 
 
 def _paths(tmp_path, monkeypatch):
@@ -43,7 +46,11 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
     settings.fh4_install_path = "D:/Steam/FH4"
     settings.fh6_xbox_install_path = "G:/Xbox/FH6"
     settings.enable_custom_xinput_mapping = True
+    settings.enable_xinput_gyro = True
+    settings.enable_hidhide = True
     settings.xinput_mapping_cross = "y"
+    settings.xinput_gyro_mode = "deflection"
+    settings.xinput_gyro_output_stick = "left"
     assert preferences.save(settings)
 
     reloaded = Settings()
@@ -56,7 +63,11 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
     assert reloaded.fh4_install_path == "D:/Steam/FH4"
     assert reloaded.fh6_xbox_install_path == "G:/Xbox/FH6"
     assert reloaded.enable_custom_xinput_mapping is True
+    assert reloaded.enable_xinput_gyro is True
+    assert reloaded.enable_hidhide is True
     assert reloaded.xinput_mapping_cross == "y"
+    assert reloaded.xinput_gyro_mode == "deflection"
+    assert reloaded.xinput_gyro_output_stick == "left"
 
 
 def test_original_profile_is_seeded_from_upstream_v162_defaults(
@@ -69,7 +80,14 @@ def test_original_profile_is_seeded_from_upstream_v162_defaults(
     store = profiles.load_profiles()
     original = store["profiles"][preferences.ORIGINAL_PROFILE_NAME]
 
-    assert profiles.list_profile_names(store)[:2] == ["Default", "Original"]
+    assert profiles.list_profile_names(store)[:3] == [
+        "Default",
+        "Default before R11",
+        "Original",
+    ]
+    historical = store["profiles"][preferences.DEFAULT_BEFORE_R11_PROFILE_NAME]
+    assert historical["brake_max_force"] == 5
+    assert historical["enable_abs"] is False
     assert original["brake_deadzone"] == 50
     assert original["brake_baseline_force"] == 18
     assert original["brake_max_force"] == 80
@@ -78,6 +96,8 @@ def test_original_profile_is_seeded_from_upstream_v162_defaults(
     assert original["enable_gear_shift"] is True
     assert original["gear_shift_amp"] == 255
     assert original["enable_body_haptics"] is True
+    assert original["road_haptics_intensity"] == 0.7
+    assert original["enable_abs"] is False
 
     assert profiles.apply_profile("Original", settings)
     assert settings.brake_max_force == 80
@@ -85,6 +105,8 @@ def test_original_profile_is_seeded_from_upstream_v162_defaults(
     assert settings.enable_body_haptics is True
     assert profiles.delete_profile("Original") is False
     assert profiles.rename_profile("Original", "Classic") == ""
+    assert profiles.delete_profile("Default before R11") is False
+    assert profiles.rename_profile("Default before R11", "Classic") == ""
 
     raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
     raw["profiles"]["Original"]["brake_max_force"] = 1
@@ -110,6 +132,7 @@ def test_existing_profiles_backfill_throttle_end_wall_off(tmp_path, monkeypatch)
             "Legacy": {"throttle_max_force": 3},
         },
         "globals": {},
+        "migrations": {preferences.R11_DEFAULT_PROFILE_MIGRATION: True},
     }), encoding="utf-8")
 
     settings = Settings()
@@ -154,6 +177,7 @@ def test_r7_reconnect_migration_runs_once_and_preserves_driving_settings(tmp_pat
             }
         },
         "globals": {"enable_reconnect": False, "reconnect_interval_s": 9.0},
+        "migrations": {preferences.R11_DEFAULT_PROFILE_MIGRATION: True},
     }
     preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
 
@@ -197,6 +221,7 @@ def test_r8_redline_timing_migrates_only_untouched_default_once(
             "Track": _old_redline_timing(),
         },
         "globals": {},
+        "migrations": {preferences.R11_DEFAULT_PROFILE_MIGRATION: True},
     }
     preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
 
@@ -241,6 +266,7 @@ def test_r8_redline_timing_preserves_a_customized_default_group(
         "active_profile": "Default",
         "profiles": {"Default": customized},
         "globals": {},
+        "migrations": {preferences.R11_DEFAULT_PROFILE_MIGRATION: True},
     }
     preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
 
@@ -258,6 +284,75 @@ def test_r8_redline_timing_preserves_a_customized_default_group(
     )
 
 
+def test_r11_migration_installs_new_default_and_preserves_previous_default(
+    tmp_path,
+    monkeypatch,
+):
+    _paths(tmp_path, monkeypatch)
+    previous = preferences.default_before_r11_profile_fields()
+    previous["brake_max_force"] = 4
+    raw = {
+        "version": "10",
+        "active_profile": "Default",
+        "profiles": {"Default": previous},
+        "globals": {},
+        "migrations": {
+            preferences.R7_RECONNECT_MIGRATION: True,
+            preferences.R8_REDLINE_TIMING_MIGRATION: True,
+        },
+    }
+    preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
+
+    settings = Settings()
+    preferences.load(settings)
+    saved = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+
+    assert settings.brake_max_force == 2
+    assert settings.enable_abs is True
+    assert saved["profiles"]["Default"] == preferences._profile_fields(Settings())
+    assert saved["profiles"]["Default before R11"] == previous
+    assert saved["migrations"][preferences.R11_DEFAULT_PROFILE_MIGRATION] is True
+
+
+def test_r11_migration_preserves_named_active_profile_and_runs_only_once(
+    tmp_path,
+    monkeypatch,
+):
+    _paths(tmp_path, monkeypatch)
+    previous = preferences.default_before_r11_profile_fields()
+    track = dict(previous)
+    track.update({"brake_max_force": 3, "body_haptics_intensity": 0.77})
+    raw = {
+        "version": "10",
+        "active_profile": "Track",
+        "profiles": {"Default": previous, "Track": track},
+        "globals": {},
+        "migrations": {
+            preferences.R7_RECONNECT_MIGRATION: True,
+            preferences.R8_REDLINE_TIMING_MIGRATION: True,
+        },
+    }
+    preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
+
+    settings = Settings()
+    preferences.load(settings)
+    saved = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+
+    assert saved["active_profile"] == "Track"
+    assert saved["profiles"]["Track"] == track
+    assert settings.brake_max_force == 3
+    assert settings.body_haptics_intensity == 0.77
+
+    saved["profiles"]["Default"]["brake_max_force"] = 1
+    saved["profiles"]["Default before R11"]["brake_max_force"] = 6
+    preferences.PATH.write_text(json.dumps(saved), encoding="utf-8")
+    preferences.load(Settings())
+    reloaded = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+
+    assert reloaded["profiles"]["Default"]["brake_max_force"] == 1
+    assert reloaded["profiles"]["Default before R11"]["brake_max_force"] == 6
+
+
 def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     monkeypatch.setattr(preferences, "detect_system_language", lambda: "zh_tw")
@@ -270,7 +365,9 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     settings.fh5_install_path = "E:/Steam/FH5"
     settings.fh6_xbox_install_path = "G:/Xbox/FH6"
     settings.enable_custom_xinput_mapping = True
+    settings.enable_xinput_gyro = True
     settings.xinput_mapping_touchpad_right = "guide"
+    settings.xinput_gyro_mode = "camera"
     assert preferences.save(settings)
     assert profiles.save_profile("Track", settings) == "Track"
     settings.brake_max_force = 2
@@ -282,6 +379,13 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     store = profiles.load_profiles()
     assert store["active"] == "Default"
     assert "Track" in store["profiles"]
+    assert profiles.list_profile_names(store)[:3] == [
+        "Default",
+        "Default before R11",
+        "Original",
+    ]
+    assert store["profiles"]["Default before R11"]["brake_max_force"] == 5
+    assert store["profiles"]["Default before R11"]["enable_abs"] is False
     assert settings.brake_max_force == Settings().brake_max_force
     assert settings.minimize_to_tray is Settings().minimize_to_tray
     assert settings.preferred_forza_game == "fh6"
@@ -291,7 +395,9 @@ def test_factory_restore_resets_all_fields_and_preserves_named_profiles(tmp_path
     assert settings.fh6_install_path == ""
     assert settings.fh6_xbox_install_path == ""
     assert settings.enable_custom_xinput_mapping is False
+    assert settings.enable_xinput_gyro is False
     assert settings.xinput_mapping_touchpad_right == "start"
+    assert settings.xinput_gyro_mode == "deflection"
     assert settings.enable_reconnect is True
     assert settings.language == "zh_tw"
     assert preferences.PATH.with_suffix(".json.bak").exists()

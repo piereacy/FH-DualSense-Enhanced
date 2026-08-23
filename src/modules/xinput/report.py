@@ -106,9 +106,17 @@ def _axis_y(raw: int) -> int:
     return round((128 - raw) * 32768 / 127)
 
 
+def _add_axis(base: int, normalized: float) -> int:
+    maximum = 32767 if normalized >= 0.0 else 32768
+    return max(-32768, min(32767, base + round(normalized * maximum)))
+
+
 def map_dualsense_to_xusb(
     state: DualSenseInputState,
     mapping: XInputButtonMapping = DEFAULT_BUTTON_MAPPING,
+    *,
+    gyro_axes: tuple[float, float] = (0.0, 0.0),
+    gyro_stick: str = "right",
 ) -> XUSBReport:
     buttons = XUSBButton(0)
     for source in _DPAD_SOURCES[state.dpad]:
@@ -123,12 +131,22 @@ def map_dualsense_to_xusb(
             buttons |= _TARGET_BUTTONS[mapping.target_for("touchpad_left")]
         if TouchpadRegion.RIGHT in regions:
             buttons |= _TARGET_BUTTONS[mapping.target_for("touchpad_right")]
+    left_x = _axis_x(state.left_x)
+    left_y = _axis_y(state.left_y)
+    right_x = _axis_x(state.right_x)
+    right_y = _axis_y(state.right_y)
+    if gyro_stick == "left":
+        left_x = _add_axis(left_x, gyro_axes[0])
+        left_y = _add_axis(left_y, gyro_axes[1])
+    else:
+        right_x = _add_axis(right_x, gyro_axes[0])
+        right_y = _add_axis(right_y, gyro_axes[1])
     return XUSBReport(
         wButtons=int(buttons),
         bLeftTrigger=state.left_trigger,
         bRightTrigger=state.right_trigger,
-        sThumbLX=_axis_x(state.left_x),
-        sThumbLY=_axis_y(state.left_y),
-        sThumbRX=_axis_x(state.right_x),
-        sThumbRY=_axis_y(state.right_y),
+        sThumbLX=left_x,
+        sThumbLY=left_y,
+        sThumbRX=right_x,
+        sThumbRY=right_y,
     )

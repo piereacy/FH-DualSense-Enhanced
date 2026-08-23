@@ -18,23 +18,38 @@ def test_fresh_settings_match_community_defaults():
     assert actual == EXPECTED
 
 
-def test_r4_grip_effects_use_safe_defaults():
+def test_r11_community_tuning_defaults():
     settings = Settings()
 
     assert settings.enable_rev_limiter is False
+    assert settings.enable_abs is True
+    assert settings.abs_amp == 5
+    assert settings.abs_freq == 40
     assert settings.enable_grip_redline_haptics is True
-    assert settings.rev_limit_ratio == 0.95
-    assert settings.grip_redline_ratio == 0.95
-    assert settings.grip_redline_release_ratio == 0.92
-    assert settings.tachometer_flash_ratio == 0.95
-    assert settings.grip_redline_amp == 220
-    assert settings.grip_redline_gain == 1.5
-    assert settings.grip_redline_duty_cycle == 0.7
-    assert settings.grip_redline_low_ratio == 0.45
-    assert settings.grip_redline_attack_strength == 0.65
-    assert settings.enable_grip_gear_shift_haptics is False
-    assert settings.grip_gear_shift_strength == 0.8
-    assert settings.grip_gear_shift_duration_ms == 100.0
+    assert settings.grip_redline_right is True
+    assert settings.rev_limit_ratio == 0.0
+    assert settings.grip_redline_ratio == 0.88
+    assert settings.grip_redline_release_ratio == 0.88
+    assert settings.tachometer_flash_ratio == 0.88
+    assert settings.grip_redline_amp == 255
+    assert settings.grip_redline_gain == 1.6
+    assert settings.grip_redline_duty_cycle == 0.8
+    assert settings.grip_redline_low_ratio == 0.8
+    assert settings.grip_redline_attack_strength == 0.8
+    assert settings.enable_grip_gear_shift_haptics is True
+    assert settings.grip_gear_shift_strength == 0.6
+    assert settings.grip_gear_shift_duration_ms == 80.0
+
+
+def test_default_before_r11_reconstructs_every_previous_tuning_value():
+    current = preferences._profile_fields(Settings())
+    historical = preferences.default_before_r11_profile_fields()
+
+    assert historical.keys() == current.keys()
+    assert len(preferences._DEFAULT_BEFORE_R11_OVERRIDES) == 70
+    for field, old_value in preferences._DEFAULT_BEFORE_R11_OVERRIDES.items():
+        assert historical[field] == old_value
+        assert current[field] != old_value
 
 
 def test_fresh_default_profile_matches_community_defaults(tmp_path, monkeypatch):
@@ -79,12 +94,16 @@ def _without_grip_redline_fields(snapshot):
     }
 
 
+def _default_before_r11():
+    return preferences.default_before_r11_profile_fields()
+
+
 def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(preferences, "_DATA", tmp_path)
     monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
-    custom = _without_grip_redline_fields(EXPECTED)
+    custom = _without_grip_redline_fields(_default_before_r11())
     preferences.PATH.write_text(json.dumps({
         "version": "2",
         "active_profile": "Custom",
@@ -118,7 +137,7 @@ def test_r2_named_profile_keeps_trigger_redline_and_gets_grip_defaults(
 def test_r2_named_profile_custom_redline_values_are_preserved(tmp_path, monkeypatch):
     monkeypatch.setattr(preferences, "_DATA", tmp_path)
     monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
-    custom = _without_grip_redline_fields(EXPECTED)
+    custom = _without_grip_redline_fields(_default_before_r11())
     custom["rev_limit_freq"] = 7
     custom["rev_limit_amp"] = 144
     preferences.PATH.write_text(json.dumps({
@@ -142,7 +161,7 @@ def test_r3_prerelease_defaults_split_into_trigger_and_new_grip_defaults(
 ):
     monkeypatch.setattr(preferences, "_DATA", tmp_path)
     monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
-    custom = _without_grip_redline_fields(EXPECTED)
+    custom = _without_grip_redline_fields(_default_before_r11())
     custom["rev_limit_freq"] = 10
     custom["rev_limit_amp"] = 96
     preferences.PATH.write_text(json.dumps({
@@ -172,7 +191,7 @@ def test_r3_prerelease_custom_values_are_preserved_and_copied_once(
 ):
     monkeypatch.setattr(preferences, "_DATA", tmp_path)
     monkeypatch.setattr(preferences, "PATH", tmp_path / "user_preferences.json")
-    custom = _without_grip_redline_fields(EXPECTED)
+    custom = _without_grip_redline_fields(_default_before_r11())
     custom["enable_rev_limiter"] = False
     custom["rev_limit_freq"] = 7
     custom["rev_limit_amp"] = 144

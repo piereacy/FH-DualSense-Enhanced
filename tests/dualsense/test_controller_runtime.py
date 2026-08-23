@@ -269,6 +269,66 @@ def test_connect_failure_after_open_closes_temporary_hid_handle(monkeypatch):
     assert device.closed.is_set()
 
 
+def test_visibility_observer_receives_current_interface_when_attached():
+    controller = dualsense_main.DualSense(enable_startup_pulse=False)
+    _connected(controller, InputTransport.USB, path=b"usb-current")
+    observed = []
+
+    controller.set_device_visibility_observer(
+        lambda info: observed.append(info) or True
+    )
+
+    assert observed == [controller._current_info]
+    assert observed[0] is not controller._current_info
+
+
+def test_visibility_observer_runs_before_the_only_hid_reader_opens(monkeypatch):
+    controller = dualsense_main.DualSense(enable_startup_pulse=False)
+    events = []
+
+    class RecordingDevice(_OpeningDevice):
+        def open_path(self, _path):
+            events.append("open")
+
+    device = RecordingDevice()
+    monkeypatch.setattr(dualsense_main.hid, "device", lambda: device)
+    controller.set_device_visibility_observer(
+        lambda _info: events.append("hide") or False
+    )
+    info = {
+        "path": b"usb-test",
+        "bus_type": 1,
+        "serial_number": "00:11:22:33:44:55",
+        "product_id": 0x0CE6,
+        "usage_page": 1,
+        "usage": 5,
+    }
+
+    assert controller._try_connect(info) is True
+    assert events[:2] == ["hide", "open"]
+
+
+def test_visibility_observer_failure_is_fail_open(monkeypatch):
+    controller = dualsense_main.DualSense(enable_startup_pulse=False)
+    device = _OpeningDevice()
+    monkeypatch.setattr(dualsense_main.hid, "device", lambda: device)
+
+    def fail(_info):
+        raise RuntimeError("synthetic isolation failure")
+
+    controller.set_device_visibility_observer(fail)
+    info = {
+        "path": b"usb-test",
+        "bus_type": 1,
+        "serial_number": "00:11:22:33:44:55",
+        "product_id": 0x0CE6,
+        "usage_page": 1,
+        "usage": 5,
+    }
+
+    assert controller._try_connect(info) is True
+
+
 def test_out_of_range_startup_pulse_is_clamped_before_hid_write(monkeypatch):
     controller = dualsense_main.DualSense(
         startup_pulse_force=10000,
