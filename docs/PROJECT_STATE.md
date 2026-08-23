@@ -230,7 +230,7 @@ Haptics Lab 与诊断都复用现有 backend 和只读运行时快照；R11 不�
 
 ## 当前 Git 工作区状态
 
-- PR 分支：`feat/r11-dualsense-enhanced`，基于 `origin/main` commit `398b85e`。2026-08-24 已成功 fetch，远端没有新增 README 提交；现有 GitHub README 编辑意图已保留。分支内容包括 Xbox App 键鼠/手柄热切换、HidHide 1.7 session isolation、体感到摇杆、Haptics Lab、一键诊断包、新默认 Profile、调教鸣谢、翻译、发行文案与老三样更新；前台 ownership 实验已移出 `src` 并保存在 `experiments/foreground_ownership/`。版本为 R11，R10 tag 与线上发行资产保持不变。
+- PR 分支：`feat/r11-dualsense-enhanced`，基于 `origin/main` commit `398b85e`；GitHub PR [#5](https://github.com/piereacy/FH-DualSense-Enhanced/pull/5) 已创建，尚未合并。2026-08-24 已成功 fetch，远端没有新增 README 提交；现有 GitHub README 编辑意图已保留。分支内容包括 Xbox App 键鼠/手柄热切换、HidHide 1.7 session isolation、体感到摇杆、Haptics Lab、一键诊断包、新默认 Profile、调教鸣谢、翻译、发行文案与老三样更新；前台 ownership 实验已移出 `src` 并保存在 `experiments/foreground_ownership/`。版本为 R11，R10 tag 与线上发行资产保持不变，没有创建 R11 tag 或 Release。
 - R10 tag、Release 正文和线上资产已固定。本轮发布后只读取 GitHub 元数据，没有下载资产或执行发布后测试。
 - 本轮修改 README 前已 fetch 并确认远端没有新增提交；现有 GitHub 用户编辑意图已保留，新内容只补充 R11 的三份内置 Profile 与默认调教边界。
 - `packaging/windows/build-*`、`dist-*`、`diagnostics-*` 和 `helper_work-*` 是本地隔离构建或诊断产物，不随源码提交；已知可用的 `dist-usb-audio-gate-1` 基线没有被覆盖。
