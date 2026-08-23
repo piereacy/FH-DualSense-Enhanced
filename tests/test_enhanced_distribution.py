@@ -42,6 +42,13 @@ def test_retired_ui_codename_only_remains_in_internal_design_guides():
         assert retired_name not in path.read_text(encoding="utf-8"), relative
 
 
+def test_old_three_exclude_deleted_features_from_current_user_copy():
+    rule = "当前版本用户文案不得提及已经删除的功能"
+
+    for path in ("AGENTS.md", "docs/ARCHITECTURE.md", "docs/DECISIONS.md"):
+        assert rule in _source(path), f"{path} is missing the deleted-feature copy rule"
+
+
 def test_shared_application_identity_is_enhanced():
     about = runpy.run_path(str(ROOT / "src/modules/about.py"))
     project = tomllib.loads(_source("src/pyproject.toml"))
@@ -201,9 +208,13 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "手柄占用范围" in workflow
     assert "切到桌面或其他游戏不会自动释放" in workflow
     assert "Controller usage scope" in workflow
-    assert "switching to the desktop or another game does not release it" in workflow
+    assert "Switching to the desktop or another game does not release the controller" in workflow
     assert "旧 R10 监听版" not in workflow
     assert "old R10 listener build" not in workflow
+    assert "仅在地平线位于前台时占用手柄" not in workflow
+    assert "experimental foreground-Forza-only ownership behavior" not in workflow
+    assert "本版不包含" not in workflow
+    assert "this release does not include" not in workflow
     assert "体感到摇杆" in workflow
     assert "Motion-to-stick" in workflow
     assert "Haptics Lab" in workflow
