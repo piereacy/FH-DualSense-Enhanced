@@ -198,8 +198,10 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "Enhanced R11 中文说明" in workflow
     assert "Enhanced R11 English notes" in workflow
     assert "generate_release_notes: false" in workflow
-    assert "R11 不包含新的前台窗口监听实验" in workflow
-    assert "R11 does not ship the new foreground-window listener experiment" in workflow
+    assert "手柄占用范围" in workflow
+    assert "切到桌面或其他游戏不会自动释放" in workflow
+    assert "Controller usage scope" in workflow
+    assert "switching to the desktop or another game does not release it" in workflow
     assert "旧 R10 监听版" not in workflow
     assert "old R10 listener build" not in workflow
     assert "体感到摇杆" in workflow
