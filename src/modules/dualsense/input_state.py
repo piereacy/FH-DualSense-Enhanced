@@ -118,6 +118,20 @@ class DualSenseInputState:
         )
 
 
+def digital_input_changed(
+    previous: DualSenseInputState | None,
+    current: DualSenseInputState,
+) -> bool:
+    """Detect button and D-pad edges while ignoring continuous analog motion."""
+    if previous is None:
+        return bool(current.buttons or current.dpad is not DPad.NEUTRAL)
+    return (
+        previous.buttons != current.buttons
+        or previous.dpad != current.dpad
+        or previous.touchpad_regions != current.touchpad_regions
+    )
+
+
 _FACE_BUTTONS = (
     (0x10, DualSenseButton.SQUARE),
     (0x20, DualSenseButton.CROSS),

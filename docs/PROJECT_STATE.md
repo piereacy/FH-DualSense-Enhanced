@@ -1,14 +1,21 @@
 # FH-DualSense-Enhanced 当前项目状态
 
-最后更新时间：2026-08-24
+最后更新时间：2026-09-29
 
 ## 当前阶段
 
-- 当前开发版本：`Enhanced R11`，`src/pyproject.toml` 版本为 `11`。
-- 当前公开稳定版：GitHub Release `R10`，tag `R10` 指向 merge commit `08c5302`，发布于 2026-08-04。
-- 当前阶段：R10 继续作为公开稳定版且 tag/线上资产保持不可变；post-R10 工作树已递增为 `Enhanced R11` PR 候选，并同步锁文件、Windows 版本资源、双语 Release 契约和三语 README。Haptics Lab 已从独立 GUI/TUI 菜单迁入“系统与更新”的默认折叠小卡片；R11 新 `Default` 已按配置 `33` 的最终 ABS 调教落地，旧默认保留为 `Default before R11`，“关于与许可证”已增加 Bilibili 开心散仙调教鸣谢。PR 流程不创建 tag 或发布资产。
-- 当前开发重心：R11 汇总 Xbox App 键鼠/手柄热切换、默认关闭的 HidHide 1.7 会话隔离、Steam Input 风格体感到摇杆、系统页默认折叠的 Haptics Lab 和一键诊断包。按用户最终版本边界，R11 不包含新写的 Windows 前台窗口检测或 physical HID ownership gate：native backend 在应用生命周期内正常枚举并持有实体 DualSense，切到桌面或其他游戏不会主动释放。撤下的实现与原回归测试已隔离到 `experiments/foreground_ownership/`，不由生产源码或 PyInstaller 收集；当前 PR 不再准备旧 R10 监听备用包。R11 虚拟目标继续固定为 Xbox 360，不加入 Xbox One/Xbox Series 或 Share 系统键模拟。真实用户目录的内置更新和硬件联动验收只在用户明确要求时执行；不得为了后续修复改动已知可用的 R7 USB/BT 握把生命周期。
-- R10 Release：<https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R10>。
+- 当前开发版本：`Enhanced R12`，`src/pyproject.toml` 版本为 `12`；本地 `feat/r12-xbox-mouse` 工作树是测试候选，尚未发布。
+- 当前公开稳定版：GitHub Release `R11`；本地工作树基于 `origin/main` 的 R11 merge/release commit `f2cbc69`。
+- 当前阶段：用户明确补充问题发生在 R11 的 Xbox App 蓝牙模式：静止后切回键鼠，ABXY 通常要连按两次，摇杆、肩键、方向键正常。R12 保留蓝牙 HID 批次与 bridge 队列中的短按边沿，修正重复鼠标事件及同轮首次按键的接管基线，并提供 HidHide 一键安装、自动配置和实体隐藏状态。官方安装器按需下载并校验；HidHide 1.5 自动添加、记录和清理 FHDS 自有实体手柄规则，1.7+ 保留临时 session 路径。本机已安装 HidHide 1.5.230，曾缺失的官方配置客户端已从签名有效的安装来源恢复。新版在 HID worker 启动前放行当前 EXE，并接受 1.5 驱动列表的零填充。真实 Xbox App 游戏内 A/B 待验收。
+- 边界：R11 虚拟目标仍固定为 Xbox 360。Steam 模式不使用本项目虚拟 X360；R12 不改变 Steam 输入路径或 R7 USB/BT 握把生命周期。Steam 默认不启用 HidHide，Xbox App 模式则强制启用；只有用户点击安装按钮才会下载驱动并请求 UAC。隔离未确认时虚拟 X360 只发送中立输入。FHDS 只管理自己添加的规则，保留用户原有规则；1.5 异常退出后的持久规则在下次启动清理。
+- 前一候选验证：已核对官方 HidHide 1.5.230 x64 安装器原始 `8,078,016` 字节、SHA-256 和有效 Authenticode 签名；下载器完成真实下载与校验，且本机安装后 HidHide 服务与官方 GUI 正常运行。旧 R12 GUI 停留在 UAC 文案时已无安装器进程，具体后台调用点缺少线程堆栈，不能断言单一根因。蓝牙短按和同轮首次按键回归在 R11 逻辑下先失败，修正后通过；新 UI 的队列收尾、超时后探测和客户端启动有自动回归。前一 R12 完整自动测试 `953 passed`，Ruff、限定 `src` 的 Pyrefly（0 errors、2 suppressed、145 warnings not shown）、compileall 与 `uv lock --check` 通过。独立测试包 `outputs/r12-hidhide-linked-20260927/FH-DualSense-Enhanced-R12.exe` 为 `52,553,658` 字节，PE 版本 R12、冻结 `--help` 退出码 0、sidecar 校验通过；较桌面 R11 `52,162,333` 字节增加 `391,325` 字节（约 `0.75%`）。现场只读读取到 HidHide 全局 Active、两条蓝牙 DualSense 设备规则、仅官方客户端在应用白名单；修正解析器后，以测试包路径执行白名单准备，确认该 EXE 被放行且原有白名单、设备规则、Active 与 inverse 均未改变，所有权 journal 已写入。
+- 最新候选验证：`outputs/r12-hidhide-auto-20260927/FH-DualSense-Enhanced-R12.exe` 加入了 HidHide control device 占用后的 5 秒自动重试和准确报错；本机先观察到前一候选的蓝牙 DS5 被 HID 打开并产生有效输入、虚拟 Xbox 控制器恢复，随后隔离因官方配置窗口占用 control device 报 Windows 错误 5。关闭官方窗口后当前进程立即可读驱动。最新候选 `956 passed`，Ruff、Pyrefly（0 errors、2 suppressed、145 warnings not shown）、compileall、锁检查和 diff 检查通过；EXE 为 `52,554,003` 字节，PE 版本 R12、冻结 `--help` 退出码 0、sidecar 校验通过，较桌面 R11 增加 `391,670` 字节（约 `0.75%`）。已把最新 EXE 加入本机 HidHide 应用白名单，原有设备规则、Active 和 inverse 保持不变；前一候选退出后仅清理其自有应用白名单，保留新包和用户规则。最新候选已启动，当前没有枚举到 DS5 输入，等待实体手柄唤醒；尚未在新包核实实体 DS5 自动隐藏和 Xbox App 游戏内效果，Forza 游戏内振动和 Steam Input 状态未记录。
+- 已失效候选：Xbox App 强制 HidHide、快速入口安装/状态、隔离门禁和统一按钮颜色已进入源码，但 `outputs/r12-hidhide-required-20260928/FH-DualSense-Enhanced-R12.exe` 因 GUI 系统页留下 `_hidhide_card` 引用，在构造 `SystemTab` 时发生 AttributeError，无法启动。该包不得继续分发或作为验收基线；此前 `960 passed` 与冻结 `--help` 都没有覆盖真实 GUI 构造。
+- 当前修复与验证：系统页 DSX/控制器卡片的锚点改为仍存在的显示卡片，并添加 Windows 上真正构造 11 个 GUI 页签的启动回归测试。完整测试 `961 passed`，Ruff、Pyrefly（0 errors）、compileall、锁检查和 diff 检查通过。干净交付包 `outputs/r12-startup-repaired-20260928/FH-DualSense-Enhanced-R12.exe` 为 `52,558,286` 字节，PE FileVersion/ProductVersion 均为 R12，sidecar 校验通过；从相同冻结构建实际启动 EXE，确认出现 `FH-DualSense-Enhanced` 主窗口、持续 8 秒且没有异常弹窗，测试进程已结束。真实 DS5 与 Xbox App 游戏内结果仍待验收。
+- 本轮 HidHide 安装 UI 修正：用户截图中驱动状态显示“已安装”，按钮却仍写“安装”。只读现场检查确认本机 HidHide 1.5.230 内核服务运行、控制设备可读，但当前安装目录缺少 `HidHideClient.exe`；旧按钮错误地用客户端路径判定驱动安装。现在驱动是否安装由控制设备/Windows 服务注册判断，客户端入口单独判定；已安装驱动不会因找不到客户端而重复下载。安装进度条在下载阶段显示已接收字节的真实百分比，在校验、UAC 和静默安装等待时显示不定进度。相关 UI 和下载状态回归已加入；完整自动测试 `967 passed`，Ruff、Pyrefly（0 errors）、compileall、锁检查和 diff 检查通过。干净交付包 `outputs/r12-hidhide-progress-20260928/FH-DualSense-Enhanced-R12.exe` 为 `52,564,814` 字节，PE FileVersion/ProductVersion 均为 R12、sidecar 校验通过；冻结包 `--fhds-gui-smoke` 实际构造 GUI 后退出码 0。源码 GUI 在本机也确认驱动已安装时按钮切换为“检查 HidHide 并启用隔离”，配置客户端缺失时单独提示。烟测不启动 HID/UDP 后端，本机正在运行的用户实例未被关闭。真实新包下载进度和实体 DS5 隔离仍待用户操作验收。
+- 本轮客户端入口恢复：本机安装记录指向的官方 MSI 来源目录仍保留 `HidHideClient.exe`，虽然 `%ProgramFiles%\Nefarius Software Solutions\HidHide\x64` 中该文件缺失；来源客户端版本 `1.5.230.0`、Authenticode 签名有效，手动启动出现 `HidHide configuration client v1.5.230.0` 窗口。已从该来源恢复相同且校验通过的客户端至原安装目录，当前运行的旧 R12 可重新发现入口；没有重装或重启驱动。新 R12 的查找逻辑在标准位置缺失时还会从已注册的 1.5.230 MSI 来源读取客户端，只有固定大小和 SHA-256 匹配才允许打开。缺失、篡改与 UI 启用状态均有回归；完整自动测试 `969 passed`，Ruff、Pyrefly（0 errors）、compileall 与锁检查通过。干净交付包 `outputs/r12-hidhide-client-delivery-20260928/FH-DualSense-Enhanced-R12.exe` 为 `52,565,500` 字节、PE 版本 R12、sidecar 校验与冻结 GUI 构造烟测均通过。当前仍未做真实 Xbox App 游戏内输入验收，客户端为何从标准安装目录消失尚无证据。
+- 2026-09-29 HidHide 自动启用：旧 R12 在隐藏列表已有实体 DualSense 规则而全局 Active 关闭时拒绝继续，仍要求用户手动勾选 Enable device hiding。现在 FHDS 仅在 Xbox App direct-HID 的实际虚拟 X360 target 就绪、inverse 关闭、现有设备规则为空或全为已知 DualSense/Edge 时，通过 HidHide control device 自动开启 Active。开启前记录规则快照，停止、切换模式或下次启动清理自有规则后，只有剩余规则与快照一致才恢复原关闭状态；外部规则变化时保持开启，其他设备规则阻止自动开启。仍使用官方 HidHide 驱动，不开发新内核驱动。本机只读探测时 Active 已开启，两条设备规则均属于蓝牙 DualSense；没有为了测试改写真实驱动。按用户要求未重跑完整回归，HidHide 与 README 字数定向测试 `49 passed`，编辑文件 Ruff 和 diff 检查通过。交付包 `outputs/r12-hidhide-auto-active-delivery-20260929/FH-DualSense-Enhanced-R12.exe` 为 `52,565,310` 字节，PE FileVersion R12、sidecar 校验与冻结 GUI 构造烟测退出码 0；真实 Xbox App 游戏内输入效果待验收。
+- R11 Release：<https://github.com/piereacy/FH-DualSense-Enhanced/releases/tag/R11>。
 
 ## 代码中已经实现
 
@@ -30,7 +37,7 @@
 - `src/modules/dualsense/controller_state.py` 提供不可变 `ControllerSnapshot`、phase、transport、电量和充电状态；GUI/TUI 不再以 `dev is not None` 推断在线。
 - `src/modules/dualsense/input_state.py` 验证完整 USB/BT report、report ID、D-pad 和 Bluetooth `0xA1` CRC，并解析 10% 电量档和充电状态。损坏或不完整报告不能刷新在线时间、电量或 XInput consumer。
 - `src/modules/dualsense/main.py` 在应用生命周期内由唯一 I/O worker 枚举、打开、读取和写入选定的实体 DualSense；Steam 模式没有 XInput consumer 时仍执行普通输入解析。约 3 秒无有效输入会清除旧 transport、电量和输入；HidHide 与关闭自动重连不绕过 watchdog。R11 已删除 active `passive_detection.py`、`ControllerPhase.AVAILABLE` 和 runtime ownership gate，实验副本只存在于 `experiments/foreground_ownership/`。
-- 空闲 HID backlog 会批量 drain，防止旧缓冲延长“已连接”。Steam/无 XInput consumer 时 pending output 仍优先；Xbox bridge 启用时，I/O thread 优先追到输入队尾且只发布批次中的最新有效状态，连续 Bluetooth `0x36` 不再把读取限制为每轮一条。同轮 `0x36` 已携带扳机/灯效且普通 frame 没有 compatible rumble 时会合并重复写入，显式 rumble 与释放不受影响。
+- 空闲 HID backlog 会批量 drain，防止旧缓冲延长“已连接”。Steam/无 XInput consumer 时 pending output 仍优先；Xbox bridge 启用时，I/O thread 优先追到输入队尾，保留有效数字按键/方向键变化和最后状态，合并重复模拟报告，连续 Bluetooth `0x36` 不再把读取限制为每轮一条。bridge 以有界队列和最小保持时间转发数字边沿，过期边沿丢弃。同轮 `0x36` 已携带扳机/灯效且普通 frame 没有 compatible rumble 时会合并重复写入，显式 rumble 与释放不受影响。
 - `src/modules/dualsense/topology.py` 约每秒轻量 enumerate，新路径连续两次出现才稳定。未知身份 feature report 读取失败按 1/2/5 秒退避并在路径消失后清除；只对同一身份自动 handover，同一手柄 USB 优先。
 - USB/BT handover 和“立即重新连接”都投递到唯一 HID I/O thread。候选 handle 会先打开并读到有效输入。启用 body haptics 的 BT → USB 对稳定候选非阻塞等待 3 秒，期间继续使用 Bluetooth 输入、L2/R2 扳机键和 `0x36` 握把；到期后用只读 Windows MMDevices registry probe 确认活动的 DualSense USB render endpoint。未就绪或异常时关闭候选、保持当前 BT transport/快照/pending output，并按 1/2/5 秒退避，重试不再重复 settle；关闭 body haptics 时绕过 endpoint 条件。readiness 通过后才静音，通过旧 BT handle 发送按 HIDP `0x53` seed CRC 构造的 48 字节 feature report `0x08 / 0x02`，返回正数后原子提交 USB。该命令不用于冷启动、USB → BT 或普通 reconnect。自动 handover 不受完全掉线重连开关限制，不播放启动 R2 扳机键脉冲；“重新扫描”仍只刷新设备列表。
 - 临时 USB handle 在 `set_nonblocking` 失败时会关闭，controller lock serial 会规范化，避免设备泄漏和身份格式漂移。
@@ -53,8 +60,8 @@
 - `src/modules/feedback_schema.py` 统一声明扳机与握把字段归属。GUI/Console 的 `Trigger feedback` 顶部显示 Profile 级 `enable_trigger_feedback` 总开关，再显示 L2/R2 子开关、调节和扳机实验项；`Grip haptics` 只显示独立握把开关、调节和握把实验项。两页字段互斥并由翻译覆盖测试约束。
 - R2 的“油门末端硬墙”现为独立 Profile 开关，GUI/TUI 均放在“重压阻力”正下方并默认关闭。旧 Profile 缺少该字段时补入 `False`；连续油门阻力、末端 wall 和轮胎抓地力分别由自己的开关控制。
 - GUI 左侧导航与 TUI 顶层标签新增独立的“自定义 XBOX 按键映射”页面，全部映射项直接展示，不再放在系统页或折叠子界面。开关和 17 个数字来源属于 global 设置，不进入车辆 Profile 或分享码；关闭开关立即恢复 Steam 默认输出但保留自定义值，一键恢复只重置映射。只有游戏平台选择 Xbox App 时才允许启用或编辑；Steam 模式锁定控件、保留已存值，并明确告知用户应在 Steam 内自行修改映射。全部非英语 catalog 已覆盖该界面。
-- 系统页新增默认关闭的“物理手柄隔离”global 开关和共享状态展示。它只在冻结 Windows EXE、Xbox App、direct HID、ViGEmBus ready 与已安装 HidHide 1.7+ 同时成立时工作；切到 Steam/DSX、恢复出厂或关闭开关会热清理，不重建仍可用的虚拟 X360 target。FHDS 不安装 HidHide，也不把该开关保存进车辆 Profile。
-- Steam、Xbox App 与 DSX 只选择输入方案。GUI、TUI、headless 在启动/热切换时正常打开所选 backend；R11 不查询前台窗口，也不因桌面或其他游戏取得焦点而停止 HID、触觉或 UDP 输出。Xbox App direct-HID 模式在 service 生命周期内附加 input consumer、虚拟 X360、Raw Input 与用户显式开启的 HidHide；切回 Steam/DSX、安装/重试 driver 或退出时清理。DSX 不持有物理 HID，保留原有本地 UDP 生命周期。
+- Xbox App 模式强制使用 HidHide；GUI 总览“快速入口”显示驱动安装、官方客户端入口与实体 DualSense 隐藏状态，系统页不再提供隔离开关。“安装 HidHide 并启用隔离”只在驱动缺失时下载、校验并经 UAC 安装；已安装时改为检查入口。只有实际虚拟 X360 target 就绪后才自动配置当前 DualSense 和必要的全局隐藏状态。GUI 后台安装结果由 UI 主线程定时消费，安装器进程等待最多 120 秒。1.7+ 使用进程 session 隔离；官方 1.5 自动添加并清理 FHDS 自有持久设备规则。切到 Steam/DSX 时解除 observer 并清理隔离。
+- Steam、Xbox App 与 DSX 只选择输入方案。GUI、TUI、headless 在启动/热切换时正常打开所选 backend；R11 不查询前台窗口，也不因桌面或其他游戏取得焦点而停止 HID、触觉或 UDP 输出。Xbox App direct-HID 模式在 service 生命周期内附加 input consumer、虚拟 X360、Raw Input 与必需的 HidHide；切回 Steam/DSX、安装/重试 driver 或退出时清理。DSX 不持有物理 HID，保留原有本地 UDP 生命周期。
 
 ### 3.1 Haptics Lab 与一键诊断包
 
@@ -96,11 +103,11 @@ Haptics Lab 与诊断都复用现有 backend 和只读运行时快照；R11 不�
 ### 7. R11 backend 生命周期与 Xbox bridge 恢复
 
 - R11 生产源码已移除 `is_any_forza_game_foreground()`、Win32 foreground PID 查询、独立 detector、`WAITING_GAME`、runtime tick、被动 PnP 等待检测和延迟启动脉冲。native backend 随应用运行，实时 UDP 遥测不经过窗口许可；实验代码与旧测试保存在 `experiments/foreground_ownership/`，生产包必须验证未收集。
-- Steam 的原生 DualSense backend、Xbox App direct HID 和 DSX socket 均在应用启动时打开并保持各自连接语义。Xbox App 在 direct-HID backend sync 后附加 input consumer、X360 target、Raw Input 与可选 HidHide；Steam 不创建本项目虚拟设备。Haptics Lab 与游戏共享同一输出 loop，第一份有效遥测会停止预览而不回放旧预览请求。
+- Steam 的原生 DualSense backend、Xbox App direct HID 和 DSX socket 均在应用启动时打开并保持各自连接语义。Xbox App 在 direct-HID backend sync 后附加 input consumer、X360 target、Raw Input 与必需的 HidHide；Steam 不创建本项目虚拟设备。Haptics Lab 与游戏共享同一输出 loop，第一份有效遥测会停止预览而不回放旧预览请求。
 - `src/modules/xinput/bridge.py` 在 100 ms 无新输入时只发送一次中立状态，bridge 模式仍启用期间保留同一个 X360 target/player slot；新物理报告直接复用 target，切回 Steam 或停止应用时才移除。每次会话轮换 generation-bound publisher；stop timeout 后的新会话只登记一个 pending successor，等旧 target/client 关闭后自动恢复，不并发创建第二个虚拟手柄，也不接受旧 consumer 回放。
-- `src/modules/xinput/hot_switch.py` 现用后台 Raw Input 隐藏窗口只注册 keyboard/mouse device class。键鼠边沿会把同一个 X360 target 中立化并把 `input_owner` 设为 keyboard/mouse；小幅摇杆/扳机噪声保持抑制，D-pad、按钮、触摸板点击或越过阈值的轴变化会恢复 controller owner。总览显示“键盘和鼠标正在使用”及恢复提示。
+- `src/modules/xinput/hot_switch.py` 现用后台 Raw Input 隐藏窗口只注册 keyboard/mouse device class。键鼠边沿会把同一个 X360 target 中立化并把 `input_owner` 设为 keyboard/mouse；恢复基线只在这次 owner 转换时建立，重复鼠标事件不再移动基线。小幅摇杆/扳机噪声保持抑制，D-pad、按钮、触摸板点击或越过阈值的轴变化会恢复 controller owner。总览显示“键盘和鼠标正在使用”及恢复提示。
 - Raw Input listener 只随 direct-HID Xbox App service 启停，Steam、DSX、不支持的平台、driver 安装、重试和退出都不保留注册线程。每轮慢启动有独立 cancellation event；startup/join 超时后 monitor 在旧线程真正结束前保留引用并禁止创建第二条 listener，退出后由周期 lifecycle pass 重试。启动失败时 bridge fail open。该层只停止本项目虚拟 X360 report；物理 HID 隔离由独立的 HidHide session 层处理。
-- `src/modules/dualsense/hidhide.py` 直接实现 HidHide 1.7 control-device IOCTL。当前规范 EXE 的 application whitelist 是唯一允许的持久改动，并由 `data/hidhide_owned.json` 记录 ownership 以迁移版本化 EXE 路径；用户规则和永久 device blacklist 不被改写。DualSense instance 只加入调用 PID 的 session blacklist，正常停止显式 clear，崩溃或 kill 由 driver 自动回收。FHDS 永远不改全局 `Active`；用户未先在官方 Configuration Client 启用 device hiding、inverse 用户规则冲突、旧 driver 或写后校验失败时拒绝隔离并保持 direct HID fail open。
+- `src/modules/dualsense/hidhide.py` 直接实现 HidHide control-device IOCTL。1.7+ 的当前规范 EXE application whitelist 由 `data/hidhide_owned.json` 记录 ownership，DualSense instance 只进入调用 PID 的 session blacklist。官方 1.5 的 session IOCTL 不可用时，FHDS 在 inverse 关闭后自动管理当前 EXE 的白名单和当前 DualSense 的持久设备规则；后者由 `data/hidhide_device_owned.json` 记录以处理崩溃后的清理。原本关闭的全局 Active 只在现有设备规则为空或全为已知 DualSense/Edge 时开启；清理自有规则后，剩余规则与开启前快照一致才恢复关闭。用户原有规则不被删除，失败保持 direct HID fail open。
 - `DualSense` 唯一 I/O worker 在打开普通接口和 handover 候选前调用 visibility observer；热启用则立即登记当前接口。observer 只配置过滤器，不持有 HID handle，也不能建立连接真值。游戏已经打开物理 handle 时可能必须重启游戏。
 - USB/BT 共用输入解析现识别触摸板 click 和活动触点横坐标，并按本机 Steam PS5 Gamepad 模板把左半区映射为 Back/View、右半区映射为 Start/Menu；Create/Options 保留相同的独立入口。坐标不用于滑动或多点手势，麦克风键仍不进入 XInput。
 - `src/modules/xinput/mapping.py` 统一声明 17 个数字来源、16 个 Xbox 目标（含 Disabled）和 Steam 默认值；非法偏好逐来源回退。自定义映射开启时可交换或合并数字键，摇杆轴与 L2/R2 模拟输入始终固定。GUI/TUI 独立页面只有在游戏平台选择 Xbox App 时才开放自定义开关、映射菜单和恢复动作；Steam 模式保留设置但锁定编辑。bridge 通过 mapping revision 重发仍新鲜的 latest state，热更新不会重建 X360 target/player slot。
@@ -151,7 +158,7 @@ Haptics Lab 与诊断都复用现有 backend 和只读运行时快照；R11 不�
 5. 动态红线估计已经进入生产路径；宽范围燃油车冷启动已解除大红区无法进入预测窗口的循环依赖，合成测试覆盖 `11760 → 6200 RPM` 学习、第二次聚类才发布 limiter、第三次建立学习值、分散事件不合并和电驱排除。R2、握把与灯条共用学习值，Default 提前点为 95%，握把退出点为 92%。全部电动车 alert gate 已进入当前源码：一挡、二挡和更高挡都禁止握把/R2 红线触觉，灯条继续渐变并在极限稳定红色；真实燃油车与电动车验收仍未执行。
 6. Xbox App flat-file 自动发现已进入通用游戏模块与 FH6 语言/图标页面。代码和合成目录测试完成，本机 `.GamingRoot` 解析成功；真实 Xbox App 游戏目录仍待验收。
 7. 发布后从桌面 R7 实际点击更新复现了错误阻断：同目录实例保护由 commit `7ce4479` 首次加入 R7，R5/R6 没有该检查，R8 原样继承。此前 R5/R6 → R7 由旧版更新入口执行，所以可以成功；R7 → R8 才第一次在真实桌面升级中运行这条新检查。2026-07-30 现场内层 PID `24424` 与直接父 PID `45212` 指向同一 `FH-DualSense-Enhanced-R5.exe`，该文件真实 PE 为 R7，紧邻 `.old` 真实 PE 为 R6，并非用户启动了第二个实例。修复后隔离冻结 R9 单实例能提交到 R10，额外启动的一对 R9 PID 仍在创建 transaction 前被拒绝；发布版 R7/R8 仍需一次手动升级才能获得修复。
-8. HidHide 1.7 session isolation 已进入当前源码；本机未安装 driver，所以只完成 API 契约与 fake-driver 故障矩阵。真实验收需要安装官方 HidHide 1.7+，先在官方 Configuration Client 开启 Device hiding，再选择 Xbox App 和 direct HID、确认 ViGEmBus ready 后显式打开 FHDS 开关；随后重启已运行的崩坏：星穹铁道并检查物理 DualSense 不再被游戏枚举、虚拟 X360 与键鼠 owner 热切换正常。FHDS 不安装 driver、不改变全局 `Active` 或永久设备列表；测试后记录游戏内振动与 Steam Input 状态。
+8. R12 的 HidHide 一键安装与自动隔离、Raw Input 恢复基线修正已进入当前源码：固定官方 1.5.230 安装包按需下载并校验，安装经 UAC；1.5 自动管理有 journal 的实体设备规则，1.7+ 使用 session isolation。本机已安装 HidHide 1.5.230，官方客户端可用；自动测试覆盖 API 契约、驱动故障矩阵、隐藏状态回读和输入门禁，但当前交付包仍需连接真实 DS5 实测。真实验收以地平线 Xbox App 版内“鼠标能动、手柄不能操作”为对象：在相同连接方式和游戏设置下对比隔离前后，重新连接手柄并重启游戏，确认鼠标维持可用且手柄恢复操作；同时记录 Steam Input、DS4Windows、游戏内振动和实际 HidHide 规则。
 
 ## 尚未完成
 
@@ -183,7 +190,7 @@ Haptics Lab 与诊断都复用现有 backend 和只读运行时快照；R11 不�
 - XInput bridge 不接收游戏 rumble，也没有多手柄、Xbox One target、GameInput impulse trigger、触摸板滑动/手势或原生 sensor target。当前陀螺仪只能按 Steam Input 风格转换为叠加的 X360 摇杆输出，不是游戏可枚举的原生体感设备；普通摇杆/L2/R2 仍不提供自定义曲线或交换层。触摸板点击继续按横坐标把左右半区作为两个可配置数字来源，默认 Back/View 与 Start/Menu。
 - Bluetooth 弱信号下仍可能出现短时输入延迟或最终触发约 3 秒物理连接 watchdog；撤销 350 ms 永久降级避免了靠近主机后仍停留在 compatible rumble，但真实 Xbox App、不同蓝牙适配器和 DualSense Edge 的长期稳定性仍待实机验证。
 - ViGEm 上游 EOL；固定哈希不能替代未来安全维护。
-- HidHide 不是随程序提供的依赖，当前集成要求用户另外安装 1.7+；游戏在启用隔离前已经打开物理 handle 时需要重启。异常退出由 driver 清理 session device entries，但 FHDS 自己的 application whitelist 会保留到下次版本迁移或用户关闭开关。
+- HidHide 安装器不随 EXE 打包；用户点击后从固定官方 Release 下载、校验并安装 1.5.230。游戏在启用隔离前已经打开物理 handle 时需要重启；真实 Xbox App 游戏中的手柄恢复仍待验收。1.5 异常退出后 FHDS 添加的持久设备规则会暂留到下次启动清理；已启用隔离时 FHDS 自己的 application whitelist 可保留到版本迁移或关闭开关。
 - 更新检查仍在每次启动约 10 秒后执行，没有跨启动 24 小时节流，也没有代码签名信任链。
 - Linux build script 已改为锁定依赖并显式跳过 PyGObject/pycairo，但尚未在真实 Linux 主机生成 ELF；R7 的 Windows updater、Shell Link 和 DPI 改动明确只支持 Windows。
 

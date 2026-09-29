@@ -33,6 +33,7 @@ from .input_state import (
     DualSenseInputState,
     InputReportError,
     InputTransport,
+    digital_input_changed,
     parse_input_report,
 )
 from .motion import (
@@ -336,6 +337,7 @@ class DualSense:
         self._input_idle_timeout = 3.0
         self._last_input_at = 0.0
         self._input_consumer: Callable[[DualSenseInputState, float], None] | None = None
+        self._last_xinput_state: DualSenseInputState | None = None
         self._motion_calibration = DEFAULT_MOTION_CALIBRATION
         self._device_visibility_observer: Callable[[dict[str, Any]], bool] | None = None
         self._input_parse_errors = 0
@@ -591,11 +593,12 @@ class DualSense:
         """Hot-switch the nonblocking consumer used by the XInput bridge.
 
         The callback runs on this object's existing HID I/O thread.  It must
-        only publish a latest snapshot and return; ViGEm calls belong to the
-        bridge worker.
+        publish state snapshots and return; ViGEm calls belong to the bridge
+        worker.
         """
         with self._lock:
             self._input_consumer = consumer
+            self._last_xinput_state = None
         self._wake.set()
 
     def _write_startup_pulse(self) -> None:
@@ -641,10 +644,11 @@ class DualSense:
             log.warning("DualSense visibility observer failed: %s", exc)
             return False
 
-    def _publish_input(self, data, received_at: float) -> bool:
-        transport = (
-            InputTransport.BLUETOOTH if self.lay["bt"] else InputTransport.USB
-        )
+    def _decode_input(
+        self,
+        data,
+        transport: InputTransport,
+    ) -> DualSenseInputState | None:
         try:
             state = replace(
                 parse_input_report(data, transport),
@@ -661,7 +665,7 @@ class DualSense:
                     self._input_parse_errors,
                     exc,
                 )
-            return False
+            return None
         with self._diagnostics_lock:
             self._valid_input_report_count += 1
         if self._input_parse_error_streak >= 8:
@@ -670,6 +674,14 @@ class DualSense:
                 self._input_parse_error_streak,
             )
         self._input_parse_error_streak = 0
+        return state
+
+    def _publish_decoded_input(
+        self,
+        state: DualSenseInputState,
+        transport: InputTransport,
+        received_at: float,
+    ) -> None:
         self._last_input_at = received_at
         self._ever_connected = True
         self._transport_recovery_identity = ""
@@ -685,13 +697,22 @@ class DualSense:
         with self._lock:
             consumer = self._input_consumer
         if consumer is None:
-            return True
+            return
         try:
             consumer(state, received_at)
         except Exception as exc:
             self._input_consumer_errors += 1
             if self._input_consumer_errors == 1:
                 log.warning("DualSense input consumer failed: %s", exc)
+
+    def _publish_input(self, data, received_at: float) -> bool:
+        transport = (
+            InputTransport.BLUETOOTH if self.lay["bt"] else InputTransport.USB
+        )
+        state = self._decode_input(data, transport)
+        if state is None:
+            return False
+        self._publish_decoded_input(state, transport, received_at)
         return True
 
     def _drain_input_queue(
@@ -707,10 +728,9 @@ class DualSense:
         off.  Reading one report per UI tick makes those stale reports look
         alive.  Draining in one I/O iteration bounds that stale period while
         retaining the existing contract that every valid report reaches the
-        optional XInput consumer.  Xbox bridge mode can opt into
-        ``publish_latest_only`` so an old Bluetooth backlog is collapsed to
-        the newest valid controller state instead of being replayed as fresh
-        input.
+        optional XInput consumer in ordinary mode. Xbox bridge mode keeps
+        digital button transitions plus the newest state, while coalescing
+        repeated analog-only reports from an old Bluetooth backlog.
 
         Returns ``True`` when the safety limit was reached, which tells the I/O
         loop to run again immediately instead of sleeping with more input
@@ -735,11 +755,30 @@ class DualSense:
 
         if publish_latest_only and queued:
             received_at = time.monotonic()
-            # A malformed tail report must not hide the newest valid state
-            # immediately before it.
-            for data in reversed(queued):
-                if self._publish_input(data, received_at):
-                    break
+            transport = (
+                InputTransport.BLUETOOTH if self.lay["bt"] else InputTransport.USB
+            )
+            with self._lock:
+                consumer = self._input_consumer
+                previous = self._last_xinput_state
+            selected: list[DualSenseInputState] = []
+            latest_valid: DualSenseInputState | None = None
+            for data in queued:
+                state = self._decode_input(data, transport)
+                if state is None:
+                    continue
+                if digital_input_changed(previous, state):
+                    selected.append(state)
+                previous = state
+                latest_valid = state
+            if latest_valid is not None:
+                if not selected or selected[-1] is not latest_valid:
+                    selected.append(latest_valid)
+                for state in selected:
+                    self._publish_decoded_input(state, transport, received_at)
+                with self._lock:
+                    if self._input_consumer is consumer:
+                        self._last_xinput_state = latest_valid
         return count >= limit
 
     def set_selection(self, lock_serial: str) -> None:
@@ -1301,6 +1340,8 @@ class DualSense:
         self.dev_path = None
         self.dev_serial = None
         self._current_info = None
+        with self._lock:
+            self._last_xinput_state = None
         self._motion_calibration = DEFAULT_MOTION_CALIBRATION
         self._handover_retries.clear()
         self._handover_settle_deadlines.clear()
@@ -1416,7 +1457,8 @@ class DualSense:
             try:
                 with self._lock:
                     input_consumer_enabled = self._input_consumer is not None
-                # The Xbox bridge consumes only the newest controller state.
+                # The Xbox bridge coalesces analog reports but keeps digital
+                # changes and the newest controller state.
                 # Continuous Bluetooth 0x36 haptics must not reduce this to a
                 # one-report drain and turn the Windows HID queue into latency.
                 read_limit = (

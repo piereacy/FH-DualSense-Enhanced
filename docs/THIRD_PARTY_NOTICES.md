@@ -121,21 +121,27 @@ SOFTWARE.
 
 ## HidHide
 
-The optional Windows physical-controller isolation interoperates with an
-already-installed HidHide 1.7 or newer driver through its published control
-device and IOCTL contract:
+The optional Windows physical-controller isolation uses HidHide's published
+control device and IOCTL contract. The official HidHide 1.5 release uses FHDS-owned persistent
+device rules with a recovery journal; HidHide 1.7 or newer supports temporary
+session hiding:
 
 - Source: <https://github.com/nefarius/HidHide>
-- Reference version: `v1.7.346.0`
+- On-demand installer: `HidHide_1.5.230_x64.exe`, version `1.5.230`,
+  `8,078,016` bytes, SHA-256
+  `F4BBBCB82E6258641B887C74BC81C4C5F66E4AA811808DFC304347687B7605F6`
+- Reference version for the session API: `v1.7.346.0`
 - Reference commit: `22a1ff5fdce550ec789f7b229ad4c59d6709ab61`
 - Copyright: Copyright (c) 2020 Eric Korff de Gidts
 - Copyright: Copyright (c) 2021-2024 Benjamin Höglinger-Stelzer
 - License: MIT
 
-FH-DualSense-Enhanced does not bundle, install, elevate, update, or
-redistribute the HidHide driver or configuration client. The integration is
-off by default. It uses the process-lifetime session blacklist introduced in
-HidHide 1.7 and does not write the user's persistent device blacklist.
+FH-DualSense-Enhanced does not bundle or redistribute the HidHide driver or
+configuration client. After a user clicks Install HidHide, it downloads the
+pinned official installer, verifies its hash and Authenticode signature, and
+opens it through Windows UAC. Isolation remains off by default. FHDS preserves
+pre-existing user rules, journals its own HidHide 1.5 additions, and removes
+them on normal exit or the next launch after a crash.
 
 ```text
 MIT License

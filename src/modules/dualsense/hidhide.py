@@ -1,12 +1,8 @@
-"""Safe, opt-in HidHide integration for the Windows Xbox App bridge.
+"""HidHide isolation for the Windows Xbox App bridge.
 
-The application allow-list is persistent because HidHide identifies feeder
-programs by their full NT image path.  Physical controller entries use the
-HidHide 1.7 process-lifetime session blacklist: the driver removes them if
-FHDS exits, crashes, or is killed, so this module never writes the user's
-persistent device blacklist. FHDS also never changes HidHide's persistent
-global ``Active`` switch; users enable device hiding once in the official
-Configuration Client, avoiding crash leftovers and cross-process ownership.
+HidHide 1.7+ supports FHDS-owned process-lifetime device entries. The official
+1.5 driver requires persistent device rules. FHDS journals its own additions
+and removes them on normal exit or the next launch after an interrupted exit.
 """
 
 from __future__ import annotations
@@ -15,6 +11,7 @@ import ctypes
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import threading
@@ -43,6 +40,10 @@ _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _VOLUME_NAME_NT = 0x00000002
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 _OWNERSHIP_SCHEMA = 1
+_DUALSENSE_HARDWARE_ID = re.compile(
+    r"(?:^VID_054C&PID_(?:0CE6|0DF2)|_VID&0002054C_PID&(?:0CE6|0DF2))(?=&|$)",
+    re.IGNORECASE,
+)
 
 
 def _ctl_code(function: int) -> int:
@@ -57,6 +58,7 @@ def _ctl_code(function: int) -> int:
 IOCTL_GET_WHITELIST = _ctl_code(2048)
 IOCTL_SET_WHITELIST = _ctl_code(2049)
 IOCTL_GET_BLACKLIST = _ctl_code(2050)
+IOCTL_SET_BLACKLIST = _ctl_code(2051)
 IOCTL_GET_ACTIVE = _ctl_code(2052)
 IOCTL_SET_ACTIVE = _ctl_code(2053)
 IOCTL_GET_WLINVERSE = _ctl_code(2054)
@@ -78,6 +80,8 @@ class HidHideSnapshot:
     hidden_device_count: int = 0
     last_error: str = ""
     game_restart_recommended: bool = False
+    manual_configuration: bool = False
+    automatic_configuration: bool = False
 
 
 class HidHideError(RuntimeError):
@@ -98,6 +102,8 @@ class HidHideApi(Protocol):
     def set_whitelist(self, entries: tuple[str, ...]) -> None: ...
 
     def get_blacklist(self) -> tuple[str, ...]: ...
+
+    def set_blacklist(self, entries: tuple[str, ...]) -> None: ...
 
     def get_active(self) -> bool: ...
 
@@ -139,7 +145,13 @@ def _decode_multi_sz(payload: bytes) -> tuple[str, ...]:
         raise HidHideError("HidHide returned invalid UTF-16 data") from exc
     if not text.endswith("\0\0"):
         raise HidHideError("HidHide returned an unterminated MULTI_SZ")
-    values = text[:-2].split("\0") if text[:-2] else []
+    # HidHide 1.5 reports a buffer larger than the actual collection. Its
+    # unwritten suffix is zero-filled, so find the first list terminator while
+    # still rejecting any nonzero data after it.
+    end = text.find("\0\0")
+    if end < 0 or text[end:].strip("\0"):
+        raise HidHideError("HidHide returned data after the MULTI_SZ terminator")
+    values = text[:end].split("\0") if end else []
     if any(not value for value in values):
         raise HidHideError("HidHide returned an invalid empty MULTI_SZ entry")
     return tuple(values)
@@ -191,8 +203,13 @@ class _WindowsDriverSession(AbstractContextManager["_WindowsDriverSession"]):
         )
         if handle in (None, _INVALID_HANDLE_VALUE):
             error = ctypes.WinError(ctypes.get_last_error())
+            if getattr(error, "winerror", None) in {5, 32}:
+                raise HidHideUnavailableError(
+                    "HidHide control device is busy or access was denied; "
+                    "close the Configuration Client and FHDS will retry"
+                ) from error
             raise HidHideUnavailableError(
-                "HidHide 1.7 or newer is not installed or its control device is unavailable"
+                "HidHide is not installed or its control device is unavailable"
             ) from error
         self._handle = int(handle)
         return self
@@ -265,6 +282,9 @@ class _WindowsDriverSession(AbstractContextManager["_WindowsDriverSession"]):
 
     def get_blacklist(self) -> tuple[str, ...]:
         return self._get_multi_sz(IOCTL_GET_BLACKLIST)
+
+    def set_blacklist(self, entries: tuple[str, ...]) -> None:
+        self._set_multi_sz(IOCTL_SET_BLACKLIST, entries)
 
     def get_active(self) -> bool:
         return self._get_boolean(IOCTL_GET_ACTIVE)
@@ -376,6 +396,15 @@ def _canonical(entries: tuple[str, ...] | list[str]) -> frozenset[str]:
     return frozenset(str(entry).casefold() for entry in entries)
 
 
+def _is_dualsense_device_rule(instance_id: str) -> bool:
+    parts = instance_id.split("\\")
+    return bool(
+        len(parts) >= 3
+        and parts[0].upper() in {"HID", "BTHENUM"}
+        and _DUALSENSE_HARDWARE_ID.search(parts[1])
+    )
+
+
 def _load_owned_whitelist(path: Path) -> tuple[str, ...]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -422,8 +451,71 @@ def _write_owned_whitelist(path: Path, entries: tuple[str, ...]) -> None:
             pass
 
 
+def _load_owned_devices(path: Path) -> tuple[tuple[str, ...], bool, tuple[str, ...] | None]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return (), False, None
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HidHideSafetyError(f"Cannot read FHDS HidHide device journal: {exc}") from exc
+    entries = payload.get("device_instance_ids") if isinstance(payload, dict) else None
+    active_owned = payload.get("active_owned") if isinstance(payload, dict) else None
+    baseline = payload.get("active_baseline") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != 1
+        or not isinstance(entries, list)
+        or not all(isinstance(entry, str) and entry and "\0" not in entry for entry in entries)
+        or not isinstance(active_owned, bool)
+        or (
+            baseline is not None
+            and (
+                not isinstance(baseline, list)
+                or not all(
+                    isinstance(entry, str) and entry and "\0" not in entry
+                    for entry in baseline
+                )
+            )
+        )
+        or (not active_owned and baseline is not None)
+    ):
+        raise HidHideSafetyError("FHDS HidHide device journal is invalid; manual recovery is required")
+    return tuple(entries), active_owned, tuple(baseline) if baseline is not None else None
+
+
+def _write_owned_devices(
+    path: Path,
+    entries: tuple[str, ...],
+    active_owned: bool,
+    active_baseline: tuple[str, ...] | None = None,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        {
+            "schema": 1,
+            "device_instance_ids": list(entries),
+            "active_owned": active_owned,
+            "active_baseline": list(active_baseline) if active_baseline is not None else None,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n"
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 class HidHideService:
-    """Own one process-lifetime hiding session without owning user config."""
+    """Own only FHDS-added rules while preserving pre-existing user rules."""
 
     def __init__(
         self,
@@ -431,16 +523,25 @@ class HidHideService:
         api_factory: ApiFactory = _open_driver,
         application_path: Path | None = None,
         ownership_path: Path | None = None,
+        device_ownership_path: Path | None = None,
         full_image_resolver: Callable[[Path], str] = application_full_image_name,
         standalone_supported: Callable[[], bool] = _standalone_supported,
+        automatic_legacy: bool = True,
     ):
         self._api_factory = api_factory
         self._application_path = application_path
         self._ownership_path = ownership_path or (paths.DATA / "hidhide_owned.json")
+        self._device_ownership_path = device_ownership_path or (
+            paths.DATA / "hidhide_device_owned.json"
+        )
         self._full_image_resolver = full_image_resolver
         self._standalone_supported = standalone_supported
+        self._automatic_legacy = automatic_legacy
         self._lock = threading.RLock()
         self._started = False
+        self._manual_configuration = False
+        self._auto_legacy_session = False
+        self._manual_image_name = ""
         self._hidden: dict[str, str] = {}
         self._snapshot = HidHideSnapshot()
 
@@ -452,6 +553,55 @@ class HidHideService:
     def started(self) -> bool:
         with self._lock:
             return self._started
+
+    def prepare_application_access(self) -> HidHideSnapshot:
+        """Allow this EXE to read HID before a hidden controller is enumerated.
+
+        This stage never changes Device hiding or adds a physical device rule.
+        The virtual target must be connected before ``start`` does either.
+        """
+        with self._lock:
+            if self._started:
+                return self._snapshot
+            if not self._standalone_supported():
+                self._snapshot = HidHideSnapshot(
+                    phase=HidHidePhase.UNAVAILABLE,
+                    last_error="HidHide integration requires the Windows standalone EXE",
+                )
+                return self._snapshot
+            try:
+                image_name = self._full_image_resolver(
+                    Path(self._application_path or sys.executable)
+                )
+                previous_owned = _load_owned_whitelist(self._ownership_path)
+                with self._api_factory() as api:
+                    if api.get_inverse():
+                        raise HidHideSafetyError(
+                            "Turn off inverse application cloak in the HidHide Configuration Client"
+                        )
+                    current = api.get_whitelist()
+                    desired, new_owned = self._desired_whitelist(
+                        current, previous_owned, image_name, inverse=False
+                    )
+                    if _canonical(desired) != _canonical(current):
+                        # Keep both old and new owned paths in the journal until
+                        # the driver write is verified, including on a crash.
+                        _write_owned_whitelist(
+                            self._ownership_path,
+                            tuple(dict.fromkeys((*previous_owned, *new_owned))),
+                        )
+                        api.set_whitelist(desired)
+                        if _canonical(api.get_whitelist()) != _canonical(desired):
+                            raise HidHideError("HidHide did not retain the FHDS application rule")
+                    _write_owned_whitelist(self._ownership_path, new_owned)
+            except Exception as exc:
+                phase, message = self._classify_error(exc)
+                self._snapshot = HidHideSnapshot(phase=phase, last_error=message)
+                log.warning("HidHide could not allow FHDS to read HID: %s", message)
+                return self._snapshot
+            self._snapshot = HidHideSnapshot(phase=HidHidePhase.READY)
+            log.info("HidHide allows the current FHDS executable to read HID")
+            return self._snapshot
 
     def start(self) -> HidHideSnapshot:
         with self._lock:
@@ -466,55 +616,173 @@ class HidHideService:
 
             application_path = Path(self._application_path or sys.executable)
             previous_owned = _load_owned_whitelist(self._ownership_path)
+            manual_configuration = False
             try:
                 full_image_name = self._full_image_resolver(application_path)
                 with self._api_factory() as api:
-                    original_whitelist: tuple[str, ...] | None = None
-                    original_active: bool | None = None
                     try:
-                        # A no-op clear is also the feature probe that separates
-                        # HidHide 1.7+ from older persistent-blacklist-only builds.
                         api.clear_session_blacklist()
-                        original_whitelist = api.get_whitelist()
-                        original_active = api.get_active()
-                        if not original_active:
-                            raise HidHideSafetyError(
-                                "HidHide device hiding is disabled; enable it in the "
-                                "HidHide Configuration Client first"
+                    except OSError as exc:
+                        if not self._session_ioctl_unavailable(exc):
+                            raise
+                        manual_configuration = True
+                    if manual_configuration:
+                        if self._automatic_legacy:
+                            self._prepare_legacy(api, full_image_name, previous_owned)
+                        else:
+                            self._verify_manual_application(api, full_image_name)
+                    else:
+                        original_whitelist: tuple[str, ...] | None = None
+                        try:
+                            self._cleanup_owned_devices(api)
+                            original_whitelist = api.get_whitelist()
+                            inverse = api.get_inverse()
+                            if inverse:
+                                raise HidHideSafetyError(
+                                    "Turn off inverse application cloak in the HidHide Configuration Client"
+                                )
+                            self._inactive_rule_baseline(api)
+                            desired, new_owned = self._desired_whitelist(
+                                original_whitelist,
+                                previous_owned,
+                                full_image_name,
+                                inverse=inverse,
                             )
-                        inverse = api.get_inverse()
-                        desired, new_owned = self._desired_whitelist(
-                            original_whitelist,
-                            previous_owned,
-                            full_image_name,
-                            inverse=inverse,
-                        )
-                        if _canonical(desired) != _canonical(original_whitelist):
-                            api.set_whitelist(desired)
-                            if _canonical(api.get_whitelist()) != _canonical(desired):
-                                raise HidHideError("HidHide did not retain the FHDS application rule")
-
-                        _write_owned_whitelist(self._ownership_path, new_owned)
-                    except Exception:
-                        self._rollback_start(
-                            api,
-                            original_whitelist=original_whitelist,
-                            previous_owned=previous_owned,
-                        )
-                        raise
+                            if _canonical(desired) != _canonical(original_whitelist):
+                                api.set_whitelist(desired)
+                                if _canonical(api.get_whitelist()) != _canonical(desired):
+                                    raise HidHideError(
+                                        "HidHide did not retain the FHDS application rule"
+                                    )
+                            _write_owned_whitelist(self._ownership_path, new_owned)
+                            self._enable_active_if_safe(api)
+                        except Exception:
+                            self._rollback_start(
+                                api,
+                                original_whitelist=original_whitelist,
+                                previous_owned=previous_owned,
+                            )
+                            raise
             except Exception as exc:
                 self._started = False
+                self._manual_configuration = manual_configuration
+                self._auto_legacy_session = manual_configuration and self._automatic_legacy
+                self._manual_image_name = ""
                 self._hidden.clear()
                 phase, message = self._classify_error(exc)
-                self._snapshot = HidHideSnapshot(phase=phase, last_error=message)
+                self._snapshot = HidHideSnapshot(
+                    phase=phase,
+                    last_error=message,
+                    manual_configuration=manual_configuration,
+                    automatic_configuration=self._auto_legacy_session,
+                )
                 log.warning("HidHide isolation unavailable: %s", message)
                 return self._snapshot
 
             self._started = True
+            self._manual_configuration = manual_configuration
+            self._auto_legacy_session = manual_configuration and self._automatic_legacy
+            self._manual_image_name = full_image_name if manual_configuration else ""
             self._hidden.clear()
-            self._snapshot = HidHideSnapshot(phase=HidHidePhase.READY)
-            log.info("HidHide session isolation is ready for the current FHDS executable")
+            self._snapshot = HidHideSnapshot(
+                phase=HidHidePhase.READY,
+                manual_configuration=manual_configuration,
+                automatic_configuration=self._auto_legacy_session,
+            )
+            log.info(
+                "HidHide %s isolation is ready for the current FHDS executable",
+                "manual" if manual_configuration else "session",
+            )
             return self._snapshot
+
+    @staticmethod
+    def _session_ioctl_unavailable(exc: OSError) -> bool:
+        return getattr(exc, "winerror", None) in {1, 50, 87}
+
+    @staticmethod
+    def _verify_manual_application(api: HidHideApi, image_name: str) -> None:
+        if not api.get_active():
+            raise HidHideSafetyError(
+                "Enable Device hiding in the HidHide Configuration Client"
+            )
+        if api.get_inverse():
+            raise HidHideSafetyError(
+                "Turn off inverse application cloak in the HidHide Configuration Client"
+            )
+        if image_name.casefold() not in _canonical(api.get_whitelist()):
+            raise HidHideSafetyError(
+                "Add this FHDS executable to Applications in the HidHide Configuration Client"
+            )
+
+    def _prepare_legacy(
+        self,
+        api: HidHideApi,
+        image_name: str,
+        previous_owned: tuple[str, ...],
+    ) -> None:
+        self._cleanup_owned_devices(api)
+        if api.get_inverse():
+            raise HidHideSafetyError(
+                "Turn off inverse application cloak in the HidHide Configuration Client"
+            )
+        self._inactive_rule_baseline(api)
+        current_whitelist = api.get_whitelist()
+        desired, newly_owned = self._desired_whitelist(
+            current_whitelist, previous_owned, image_name, inverse=False
+        )
+        _write_owned_whitelist(self._ownership_path, newly_owned)
+        if _canonical(desired) != _canonical(current_whitelist):
+            api.set_whitelist(desired)
+            if _canonical(api.get_whitelist()) != _canonical(desired):
+                raise HidHideError("HidHide did not retain the FHDS application rule")
+        self._enable_active_if_safe(api)
+
+    @staticmethod
+    def _inactive_rule_baseline(api: HidHideApi) -> tuple[str, ...] | None:
+        if api.get_active():
+            return None
+        baseline = api.get_blacklist()
+        if not all(_is_dualsense_device_rule(entry) for entry in baseline):
+            raise HidHideSafetyError(
+                "HidHide has non-DualSense device rules while Device hiding is off; "
+                "review them in the Configuration Client before enabling Xbox App isolation"
+            )
+        return baseline
+
+    def _enable_active_if_safe(self, api: HidHideApi) -> None:
+        baseline = self._inactive_rule_baseline(api)
+        if baseline is None:
+            return
+        _write_owned_devices(self._device_ownership_path, (), True, baseline)
+        api.set_active(True)
+        if not api.get_active():
+            raise HidHideError("HidHide did not enable Device hiding")
+
+    def _cleanup_owned_devices(self, api: HidHideApi) -> None:
+        owned, active_owned, active_baseline = _load_owned_devices(self._device_ownership_path)
+        if not owned and not active_owned:
+            return
+        current = api.get_blacklist()
+        desired = tuple(entry for entry in current if entry.casefold() not in _canonical(owned))
+        if _canonical(desired) != _canonical(current):
+            api.set_blacklist(desired)
+            if _canonical(api.get_blacklist()) != _canonical(desired):
+                raise HidHideError("HidHide did not remove FHDS-owned device rules")
+        if active_owned and api.get_active():
+            unchanged = (
+                not desired
+                if active_baseline is None
+                else _canonical(desired) == _canonical(active_baseline)
+            )
+            if unchanged:
+                api.set_active(False)
+                if api.get_active():
+                    raise HidHideError("HidHide did not restore Device hiding")
+            else:
+                log.warning(
+                    "Leaving HidHide Device hiding enabled because its device rules changed"
+                )
+        _write_owned_devices(self._device_ownership_path, (), False)
 
     @staticmethod
     def _desired_whitelist(
@@ -553,6 +821,10 @@ class HidHideService:
             api.clear_session_blacklist()
         except Exception:
             pass
+        try:
+            self._cleanup_owned_devices(api)
+        except Exception:
+            log.exception("Could not restore FHDS-owned HidHide Device hiding state")
         if original_whitelist is not None:
             try:
                 if _canonical(api.get_whitelist()) != _canonical(original_whitelist):
@@ -575,10 +847,40 @@ class HidHideService:
             if not self._started:
                 return False
             if key in self._hidden:
-                return True
+                checked = self.verify_active()
+                if checked.phase is HidHidePhase.ACTIVE and key in self._hidden:
+                    return True
+                if checked.phase not in {HidHidePhase.READY, HidHidePhase.ACTIVE}:
+                    return False
             try:
                 with self._api_factory() as api:
-                    api.add_session_blacklist((instance_id,))
+                    if self._manual_configuration:
+                        if self._auto_legacy_session:
+                            if not api.get_active():
+                                raise HidHideSafetyError("HidHide Device hiding was turned off")
+                            current = api.get_blacklist()
+                            if key not in _canonical(current):
+                                owned, active_owned, active_baseline = _load_owned_devices(
+                                    self._device_ownership_path
+                                )
+                                _write_owned_devices(
+                                    self._device_ownership_path,
+                                    (*owned, instance_id),
+                                    active_owned,
+                                    active_baseline,
+                                )
+                                desired = (*current, instance_id)
+                                api.set_blacklist(desired)
+                                if key not in _canonical(api.get_blacklist()):
+                                    raise HidHideError("HidHide did not retain the DualSense rule")
+                        else:
+                            self._verify_manual_application(api, self._manual_image_name)
+                            if key not in _canonical(api.get_blacklist()):
+                                raise HidHideSafetyError(
+                                    "Hide this DualSense in Devices in the HidHide Configuration Client"
+                                )
+                    else:
+                        api.add_session_blacklist((instance_id,))
             except Exception as exc:
                 _phase, message = self._classify_error(exc)
                 self._snapshot = HidHideSnapshot(
@@ -586,6 +888,8 @@ class HidHideService:
                     hidden_device_count=len(self._hidden),
                     last_error=message,
                     game_restart_recommended=bool(self._hidden),
+                    manual_configuration=self._manual_configuration,
+                    automatic_configuration=self._auto_legacy_session,
                 )
                 log.warning("HidHide could not hide %s: %s", instance_id, message)
                 return False
@@ -594,21 +898,110 @@ class HidHideService:
                 phase=HidHidePhase.ACTIVE,
                 hidden_device_count=len(self._hidden),
                 game_restart_recommended=True,
+                manual_configuration=self._manual_configuration,
+                automatic_configuration=self._auto_legacy_session,
             )
-            log.info("HidHide session-cloaked %s", instance_id)
+            log.info("HidHide verified %s", instance_id)
             return True
+
+    def verify_active(self) -> HidHideSnapshot:
+        """Read back global hiding and the current 1.5 device rules.
+
+        HidHide 1.7 does not expose a read API for this process's session
+        blacklist. There we verify the global switch and FHDS allowlist; the
+        session rule itself was accepted by the driver's add IOCTL.
+        """
+        with self._lock:
+            if not self._started or not self._hidden:
+                return self._snapshot
+            try:
+                with self._api_factory() as api:
+                    if not api.get_active():
+                        raise HidHideSafetyError("HidHide Device hiding was turned off")
+                    if api.get_inverse():
+                        raise HidHideSafetyError("HidHide inverse application cloak is on")
+                    image_name = self._full_image_resolver(
+                        Path(self._application_path or sys.executable)
+                    )
+                    if image_name.casefold() not in _canonical(api.get_whitelist()):
+                        raise HidHideSafetyError("FHDS is no longer in HidHide Applications")
+                    if self._manual_configuration and not set(self._hidden).issubset(
+                        _canonical(api.get_blacklist())
+                    ):
+                        self._hidden.clear()
+                        self._snapshot = HidHideSnapshot(
+                            phase=HidHidePhase.READY,
+                            manual_configuration=True,
+                            automatic_configuration=self._auto_legacy_session,
+                            last_error="Physical DualSense hiding rule was removed",
+                        )
+                        return self._snapshot
+            except Exception as exc:
+                phase, message = self._classify_error(exc)
+                self._snapshot = HidHideSnapshot(
+                    phase=phase,
+                    last_error=message,
+                    manual_configuration=self._manual_configuration,
+                    automatic_configuration=self._auto_legacy_session,
+                )
+                return self._snapshot
+            self._snapshot = HidHideSnapshot(
+                phase=HidHidePhase.ACTIVE,
+                hidden_device_count=len(self._hidden),
+                game_restart_recommended=True,
+                manual_configuration=self._manual_configuration,
+                automatic_configuration=self._auto_legacy_session,
+            )
+            return self._snapshot
 
     def stop(self, *, remove_allowlist: bool = False) -> HidHideSnapshot:
         with self._lock:
+            if self._manual_configuration:
+                if self._auto_legacy_session:
+                    try:
+                        with self._api_factory() as api:
+                            self._cleanup_owned_devices(api)
+                    except Exception as exc:
+                        _phase, message = self._classify_error(exc)
+                        self._snapshot = HidHideSnapshot(
+                            phase=HidHidePhase.ERROR,
+                            hidden_device_count=len(self._hidden),
+                            last_error=message,
+                            manual_configuration=True,
+                            automatic_configuration=True,
+                        )
+                        return self._snapshot
+                    self._started = False
+                    self._manual_configuration = False
+                    self._auto_legacy_session = False
+                    self._manual_image_name = ""
+                    self._hidden.clear()
+                    if not remove_allowlist:
+                        self._snapshot = HidHideSnapshot()
+                        return self._snapshot
+                else:
+                    self._started = False
+                    self._manual_configuration = False
+                    self._manual_image_name = ""
+                    self._hidden.clear()
+                    self._snapshot = HidHideSnapshot()
+                    return self._snapshot
             owned = (
                 _load_owned_whitelist(self._ownership_path)
                 if remove_allowlist
                 else ()
             )
-            if not self._started and owned and not self._standalone_supported():
+            if not self._started and not self._standalone_supported():
                 self._snapshot = HidHideSnapshot()
                 return self._snapshot
-            if not self._started and not owned:
+            try:
+                owned_devices, active_owned, _baseline = _load_owned_devices(
+                    self._device_ownership_path
+                )
+            except HidHideSafetyError as exc:
+                self._snapshot = HidHideSnapshot(phase=HidHidePhase.ERROR, last_error=str(exc))
+                return self._snapshot
+            if not self._started and not owned and not owned_devices and not active_owned:
                 self._snapshot = HidHideSnapshot()
                 return self._snapshot
             error = ""
@@ -616,6 +1009,7 @@ class HidHideService:
                 with self._api_factory() as api:
                     if self._started:
                         api.clear_session_blacklist()
+                    self._cleanup_owned_devices(api)
                     if owned:
                         desired = tuple(
                             entry
@@ -644,6 +1038,9 @@ class HidHideService:
                 )
                 return self._snapshot
             self._started = False
+            self._manual_configuration = False
+            self._auto_legacy_session = False
+            self._manual_image_name = ""
             self._hidden.clear()
             self._snapshot = HidHideSnapshot()
             return self._snapshot
@@ -656,7 +1053,7 @@ class HidHideService:
         if winerror in {1, 50, 87}:
             return (
                 HidHidePhase.UNAVAILABLE,
-                "HidHide 1.7 or newer is required for crash-safe session hiding",
+                "HidHide control request is unavailable or incompatible",
             )
         message = str(exc).strip() or type(exc).__name__
         return HidHidePhase.ERROR, message
@@ -665,6 +1062,19 @@ class HidHideService:
 def _detect() -> bool:
     if sys.platform != "win32":
         return False
+    # HidHide 1.5 may install the driver without HidHideCLI.exe. The service
+    # registration is the installation marker; opening the control device is
+    # a separate readiness check and can fail while the client holds it.
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Services\HidHide",
+        ):
+            return True
+    except (ImportError, OSError):
+        pass
     env = os.environ.get("HIDHIDE_CLI")
     if env and Path(env).is_file():
         return True

@@ -11,6 +11,16 @@ import customtkinter as ctk
 
 from lang import t
 from modules.config import preferences, profiles
+from modules.dualsense.hidhide_installer import (
+    HIDHIDE_DRIVER_UNAVAILABLE,
+    HidHideDetection,
+    HidHideInstallProgress,
+    HidHideInstallStage,
+    detect_hidhide,
+    find_hidhide_client,
+    install_and_probe as install_hidhide,
+    open_hidhide_client,
+)
 from modules.forzahorizon import (
     DEFAULT_FORZA_GAME_KEY,
     FORZA_GAME_KEYS,
@@ -24,10 +34,12 @@ from modules.forzahorizon import (
     launch_forza_via_xbox_app,
 )
 from modules.xinput.bridge import BridgeStatus
-from modules.xinput.driver import InstallStatus
+from modules.xinput.driver import InstallResult, InstallStatus
 from modules.xinput.service import (
     STEAM_PLATFORM,
     XBOX_APP_PLATFORM,
+    HidHidePresentation,
+    hidhide_presentation,
     normalize_forza_platform,
 )
 from . import theme as T
@@ -75,10 +87,27 @@ class OverviewTab(ctk.CTkFrame):
             tuple[str, str, str, bool]
         ] = queue.SimpleQueue()
         self._driver_install_busy = False
+        self._hidhide_installing = False
+        self._hidhide_install_thread: threading.Thread | None = None
+        self._hidhide_events: queue.SimpleQueue[
+            HidHideDetection | HidHideInstallProgress | InstallResult | Exception
+        ] = (
+            queue.SimpleQueue()
+        )
+        self._hidhide_installed: bool | None = None
+        self._hidhide_driver_ready: bool | None = None
+        self._hidhide_install_message: str | None = None
+        self._hidhide_progress_mode: str | None = None
+        self._hidhide_presentation: HidHidePresentation | None = None
         self._status_render_cache: dict[str, tuple[str, str]] = {}
         self._bridge_render_cache = None
         self._launch_render_cache = None
         self._build()
+        threading.Thread(
+            target=self._probe_hidhide_async,
+            name="fhds-hidhide-probe",
+            daemon=True,
+        ).start()
         app.register_refresh(self.refresh)
         self.refresh()
 
@@ -102,8 +131,12 @@ class OverviewTab(ctk.CTkFrame):
     def _validated_preferred_platform(self) -> str:
         raw = getattr(self.settings, "preferred_forza_platform", STEAM_PLATFORM)
         platform = normalize_forza_platform(raw)
-        if platform != raw:
+        if platform != raw or (
+            platform == XBOX_APP_PLATFORM and not self.settings.enable_hidhide
+        ):
             self.settings.preferred_forza_platform = platform
+            if platform == XBOX_APP_PLATFORM:
+                self.settings.enable_hidhide = True
             preferences.save(self.settings)
         return platform
 
@@ -142,7 +175,7 @@ class OverviewTab(ctk.CTkFrame):
         row = ctk.CTkFrame(quick, fg_color="transparent")
         row.pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD))
         row.grid_columnconfigure((0, 1), weight=1, uniform="quick")
-        W.PrimaryButton(
+        W.SecondaryButton(
             row, text=t("Trigger feedback"), command=lambda: self.app._select_nav("Driving")
         ).grid(row=0, column=0, sticky="ew", padx=(0, T.PAD_XS), pady=(0, T.PAD_XS))
         W.SecondaryButton(
@@ -151,7 +184,7 @@ class OverviewTab(ctk.CTkFrame):
         W.SecondaryButton(
             row, text=t("System and updates"), command=lambda: self.app._select_nav("System")
         ).grid(row=1, column=0, sticky="ew", padx=(0, T.PAD_XS), pady=(T.PAD_XS, 0))
-        W.DangerButton(
+        W.SecondaryButton(
             row, text=t("Restore defaults"), command=self.app.request_factory_reset
         ).grid(row=1, column=1, sticky="ew", padx=(T.PAD_XS, 0), pady=(T.PAD_XS, 0))
         self._platform_label_to_key = {
@@ -176,11 +209,57 @@ class OverviewTab(ctk.CTkFrame):
             sticky="ew",
             pady=(T.PAD_SM, 0),
         )
+        self._hidhide_actions = ctk.CTkFrame(row, fg_color="transparent")
+        self._hidhide_actions.grid_columnconfigure((0, 1), weight=1, uniform="hidhide")
+        self._hidhide_actions.grid(
+            row=3, column=0, columnspan=2, sticky="ew", pady=(T.PAD_SM, 0)
+        )
+        W.Hint(self._hidhide_actions, t("HidHide is required for Xbox App")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, T.PAD_XS)
+        )
+        self._hidhide_install_button = W.SecondaryButton(
+            self._hidhide_actions,
+            t("Install HidHide and enable isolation"),
+            self._on_hidhide_install,
+        )
+        self._hidhide_install_button.grid(
+            row=1, column=0, sticky="ew", padx=(0, T.PAD_XS)
+        )
+        self._hidhide_open_button = W.SecondaryButton(
+            self._hidhide_actions,
+            t("Open HidHide Configuration Client"),
+            self._on_hidhide_open,
+        )
+        self._hidhide_open_button.grid(
+            row=1, column=1, sticky="ew", padx=(T.PAD_XS, 0)
+        )
+        self._hidhide_progress = ctk.CTkProgressBar(
+            self._hidhide_actions,
+            height=8,
+            fg_color=T.BG_INPUT,
+            progress_color=T.ACCENT,
+        )
+        self._hidhide_progress.grid(
+            row=2, column=0, columnspan=2, sticky="ew", pady=(T.PAD_SM, 0)
+        )
+        self._hidhide_progress.grid_remove()
+        self._hidhide_status = W.Body(row, "")
+        self._hidhide_status.grid(
+            row=4, column=0, columnspan=2, sticky="w", pady=(T.PAD_SM, 0)
+        )
+        self._hidhide_detail = W.Hint(row, "", wrap=self.app.px(640))
+        self._hidhide_detail.grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=(T.PAD_XS, 0)
+        )
+        self._hidhide_install_notice = W.Hint(row, "", wrap=self.app.px(640))
+        self._hidhide_install_notice.grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(T.PAD_XS, 0)
+        )
         launch_group = ctk.CTkFrame(row, fg_color="transparent")
         launch_group.grid_columnconfigure(0, weight=1)
         launch_group.grid_columnconfigure(1, weight=0)
         launch_group.grid(
-            row=3,
+            row=7,
             column=0,
             columnspan=2,
             sticky="ew",
@@ -192,6 +271,7 @@ class OverviewTab(ctk.CTkFrame):
                 game=FORZA_GAMES[self._selected_game_key].short_name
             ),
             command=self._launch_selected_game,
+            text_color_disabled=T.TEXT_MUTED,
         )
         self._game_launch_button.grid(row=0, column=0, sticky="ew", padx=(0, 2))
         self._game_launch_button.configure(state="disabled")
@@ -224,7 +304,7 @@ class OverviewTab(ctk.CTkFrame):
             )
         self._bridge_status = W.Body(row, "")
         self._bridge_status.grid(
-            row=4,
+            row=8,
             column=0,
             columnspan=2,
             sticky="w",
@@ -232,7 +312,7 @@ class OverviewTab(ctk.CTkFrame):
         )
         self._bridge_hint = W.Hint(row, "", wrap=self.app.px(640))
         self._bridge_hint.grid(
-            row=5,
+            row=9,
             column=0,
             columnspan=2,
             sticky="w",
@@ -243,6 +323,7 @@ class OverviewTab(ctk.CTkFrame):
             text=t("Install ViGEmBus"),
             command=self._on_bridge_action,
         )
+        self._set_hidhide_visibility()
 
     @staticmethod
     def _status_card(parent, index, title, value, hint):
@@ -295,6 +376,8 @@ class OverviewTab(ctk.CTkFrame):
             value_widget.configure(text=status.value)
             hint_widget.configure(text=status.hint)
         self._refresh_platform_status()
+        self._poll_hidhide_events()
+        self._refresh_hidhide_status()
         self._refresh_forza_launch()
 
     def _refresh_platform_status(self):
@@ -338,12 +421,199 @@ class OverviewTab(ctk.CTkFrame):
             self._bridge_action.configure(text=action_label, state=action_state)
         if not previous_kind:
             self._bridge_action.grid(
-                row=6,
+                row=10,
                 column=0,
                 columnspan=2,
                 sticky="w",
                 pady=(T.PAD_SM, 0),
             )
+
+    def _set_hidhide_visibility(self):
+        widgets = (
+            self._hidhide_actions,
+            self._hidhide_status,
+            self._hidhide_detail,
+            self._hidhide_install_notice,
+        )
+        for widget in widgets:
+            if self._selected_platform == XBOX_APP_PLATFORM:
+                widget.grid()
+            else:
+                widget.grid_remove()
+
+    def _probe_hidhide_async(self):
+        self._hidhide_events.put(detect_hidhide())
+
+    def _poll_hidhide_events(self):
+        while True:
+            try:
+                event = self._hidhide_events.get_nowait()
+            except queue.Empty:
+                break
+            if isinstance(event, HidHideDetection):
+                if self._hidhide_installed is None:
+                    self._hidhide_installed = event.installed
+                    self._hidhide_driver_ready = event.driver_ready
+            elif isinstance(event, HidHideInstallProgress):
+                self._show_hidhide_progress(event)
+            elif isinstance(event, InstallResult):
+                self._on_hidhide_install_done(event)
+            else:
+                self._on_hidhide_install_error(str(event))
+        if (
+            self._hidhide_installing
+            and self._hidhide_install_thread is not None
+            and not self._hidhide_install_thread.is_alive()
+        ):
+            self._on_hidhide_install_error(t("HidHide installation failed"))
+
+    def _on_hidhide_install(self):
+        if self._hidhide_installing or self._selected_platform != XBOX_APP_PLATFORM:
+            return
+        self._hidhide_installing = True
+        self._show_hidhide_progress(
+            HidHideInstallProgress(HidHideInstallStage.CHECKING)
+        )
+        self._refresh_hidhide_status()
+
+        def install() -> None:
+            try:
+                self._hidhide_events.put(
+                    install_hidhide(on_progress=self._hidhide_events.put)
+                )
+            except Exception as exc:
+                log.exception("HidHide installation failed")
+                self._hidhide_events.put(exc)
+
+        self._hidhide_install_thread = threading.Thread(
+            target=install, name="fhds-hidhide-install", daemon=True
+        )
+        self._hidhide_install_thread.start()
+        self.app.root.after(100, self._poll_hidhide_install_progress)
+
+    def _poll_hidhide_install_progress(self) -> None:
+        if self.app._tearing_down:
+            return
+        self._poll_hidhide_events()
+        self._refresh_hidhide_status()
+        if self._hidhide_installing:
+            self.app.root.after(100, self._poll_hidhide_install_progress)
+
+    def _show_hidhide_progress(self, progress: HidHideInstallProgress) -> None:
+        if not self._hidhide_installing:
+            return
+        if progress.stage is HidHideInstallStage.DOWNLOADING:
+            if self._hidhide_progress_mode != "determinate":
+                self._hidhide_progress.stop()
+                self._hidhide_progress.configure(mode="determinate")
+                self._hidhide_progress_mode = "determinate"
+            fraction = max(0.0, min(1.0, progress.fraction or 0.0))
+            self._hidhide_progress.set(fraction)
+            self._hidhide_install_message = t("Downloading HidHide: {percent}%").format(
+                percent=round(fraction * 100)
+            )
+        else:
+            if self._hidhide_progress_mode != "indeterminate":
+                self._hidhide_progress.stop()
+                self._hidhide_progress.configure(mode="indeterminate")
+                self._hidhide_progress.start()
+                self._hidhide_progress_mode = "indeterminate"
+            label = {
+                HidHideInstallStage.CHECKING: "Checking HidHide installation...",
+                HidHideInstallStage.VERIFYING: "Verifying HidHide installer...",
+                HidHideInstallStage.INSTALLING: "Approve UAC; installing HidHide...",
+                HidHideInstallStage.PROBING: "Checking HidHide driver...",
+            }[progress.stage]
+            self._hidhide_install_message = t(label)
+        self._hidhide_progress.grid()
+        self._hidhide_install_notice.configure(text=self._hidhide_install_message)
+
+    def _finish_hidhide_progress(self) -> None:
+        self._hidhide_progress.stop()
+        self._hidhide_progress.grid_remove()
+        self._hidhide_progress_mode = None
+
+    def _on_hidhide_open(self):
+        try:
+            open_hidhide_client()
+        except OSError as exc:
+            self._hidhide_install_message = str(exc)
+            self._refresh_hidhide_status()
+
+    def _on_hidhide_install_error(self, message: str):
+        self._hidhide_installing = False
+        self._finish_hidhide_progress()
+        self._hidhide_install_message = message
+        self._refresh_hidhide_status()
+
+    def _on_hidhide_install_done(self, result: InstallResult):
+        self._hidhide_installing = False
+        self._finish_hidhide_progress()
+        if result.status in {InstallStatus.SUCCESS, InstallStatus.RESTART_REQUIRED}:
+            self.settings.enable_hidhide = True
+            preferences.save(self.settings)
+            self._hidhide_installed = True
+            if result.status is InstallStatus.SUCCESS:
+                self._hidhide_driver_ready = True
+                self._hidhide_install_message = None
+                threading.Thread(
+                    target=self.app._xinput_service.sync_hidhide,
+                    name="fhds-hidhide-installed-sync",
+                    daemon=True,
+                ).start()
+            else:
+                self._hidhide_driver_ready = False
+                self._hidhide_install_message = (
+                    t("HidHide installed; close its client or restart Windows")
+                    if result.error == HIDHIDE_DRIVER_UNAVAILABLE
+                    else t("Restart Windows to finish HidHide setup")
+                )
+        else:
+            self._hidhide_install_message = result.error or t("HidHide installation failed")
+        self._refresh_hidhide_status()
+
+    def _refresh_hidhide_status(self):
+        client_available = find_hidhide_client() is not None
+        if self._hidhide_installed is None:
+            install_label = t("Detecting HidHide...")
+        elif self._hidhide_installed:
+            install_label = t("Check HidHide and enable isolation")
+        else:
+            install_label = t("Install HidHide and enable isolation")
+        self._hidhide_install_button.configure(
+            state="disabled" if self._hidhide_installing or self._hidhide_installed is None else "normal",
+            text=install_label,
+        )
+        self._hidhide_open_button.configure(
+            state="normal" if client_available else "disabled",
+            text=(
+                t("Open HidHide Configuration Client")
+                if client_available
+                else t("HidHide Configuration Client not found")
+            ),
+        )
+        notice = self._hidhide_install_message
+        if notice is None:
+            if self._hidhide_installed and self._hidhide_driver_ready is False:
+                notice = t("HidHide installed; driver currently unavailable")
+            elif self._hidhide_installed:
+                notice = t("HidHide installed")
+            elif self._hidhide_installed is False and client_available:
+                notice = t("HidHide client found; driver not ready")
+            else:
+                notice = ""
+        self._hidhide_install_notice.configure(text=notice)
+        current = hidhide_presentation(
+            self.settings,
+            self.app._xinput_service.snapshot(),
+            self.app._xinput_service.hidhide_snapshot(),
+            t,
+            controller_connected=bool(getattr(getattr(self.app, "_ds", None), "connected", False)),
+        )
+        if current != self._hidhide_presentation:
+            self._hidhide_presentation = current
+            self._hidhide_status.configure(text=current.title)
+            self._hidhide_detail.configure(text=current.detail)
 
     def _render_forza_launch(self, label: str, enabled: bool):
         selector_state = "disabled" if self._launch_request_busy else "normal"
@@ -362,6 +632,7 @@ class OverviewTab(ctk.CTkFrame):
             self._game_launch_button.configure(
                 text=label,
                 state="normal" if enabled else "disabled",
+                fg_color=T.ACCENT if enabled else T.BG_HOVER,
             )
         if previous is None or previous[4] != selector_state:
             self._game_selector_button.configure(state=selector_state)
@@ -398,6 +669,9 @@ class OverviewTab(ctk.CTkFrame):
                 enabled = False
             elif launching:
                 label = t("Launching {game}...").format(game=game.short_name)
+                enabled = False
+            elif not self.app._xinput_service.isolation_confirmed():
+                label = t("HidHide required: hide the physical DualSense")
                 enabled = False
             else:
                 label = t("Launch {game} with Xbox App").format(
@@ -576,10 +850,16 @@ class OverviewTab(ctk.CTkFrame):
             return
         self._selected_platform = platform
         self.settings.preferred_forza_platform = platform
+        if platform == XBOX_APP_PLATFORM:
+            self.settings.enable_hidhide = True
         preferences.save(self.settings)
         self.app._xinput_service.sync(getattr(self.app, "_ds", None))
         log.info("Forza platform = %s", platform)
+        if platform == XBOX_APP_PLATFORM:
+            self.app.toast(t("HidHide is required for Xbox App"))
+        self._set_hidhide_visibility()
         self._refresh_platform_status()
+        self._refresh_hidhide_status()
         self._refresh_forza_launch()
 
     def _on_bridge_action(self):
@@ -641,6 +921,9 @@ class OverviewTab(ctk.CTkFrame):
             or self.app._tearing_down
         ):
             return
+        if platform == XBOX_APP_PLATFORM and not self.app._xinput_service.isolation_confirmed():
+            self.app.toast(t("HidHide required: hide the physical DualSense"))
+            return
         self._launching_game_key = key
         self._launch_request_busy = True
         self._game_launch_deadline = time.monotonic() + FORZA_LAUNCH_TIMEOUT_S
@@ -651,6 +934,8 @@ class OverviewTab(ctk.CTkFrame):
             direct = True
             try:
                 if platform == XBOX_APP_PLATFORM:
+                    if not self.app._xinput_service.verify_isolation():
+                        raise RuntimeError(t("HidHide required: hide the physical DualSense"))
                     result = launch_forza_via_xbox_app(game)
                     direct = result.direct
                 else:

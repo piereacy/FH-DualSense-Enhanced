@@ -70,6 +70,23 @@ def test_default_profile_persists_across_restart(tmp_path, monkeypatch):
     assert reloaded.xinput_gyro_output_stick == "left"
 
 
+def test_xbox_app_preferences_force_hidhide_on_save_and_upgrade(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    settings = Settings(preferred_forza_platform="xbox_app", enable_hidhide=False)
+    assert preferences.save(settings)
+    assert settings.enable_hidhide is True
+
+    raw = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+    raw["globals"]["enable_hidhide"] = False
+    preferences.PATH.write_text(json.dumps(raw), encoding="utf-8")
+    loaded = Settings()
+    preferences.load(loaded)
+    assert loaded.preferred_forza_platform == "xbox_app"
+    assert loaded.enable_hidhide is True
+    stored = json.loads(preferences.PATH.read_text(encoding="utf-8"))
+    assert stored["globals"]["enable_hidhide"] is True
+
+
 def test_original_profile_is_seeded_from_upstream_v162_defaults(
     tmp_path, monkeypatch
 ):

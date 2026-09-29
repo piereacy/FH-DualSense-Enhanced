@@ -215,11 +215,18 @@ _SEE_MASK_NOCLOSEPROCESS = 0x00000040
 _SW_SHOWNORMAL = 1
 _INFINITE = 0xFFFFFFFF
 _WAIT_OBJECT_0 = 0x00000000
+_WAIT_TIMEOUT = 0x00000102
 _WAIT_FAILED = 0xFFFFFFFF
 _ERROR_CANCELLED = 1223
 
 
-def run_installer_elevated(path: Path) -> InstallResult:
+def run_installer_elevated(
+    path: Path,
+    *,
+    parameters: str | None = None,
+    product_name: str = "ViGEmBus",
+    timeout_ms: int | None = None,
+) -> InstallResult:
     """Show the official installer via UAC and wait for its process exit."""
     if sys.platform != "win32":
         return InstallResult(InstallStatus.FAILED, error="Windows is required")
@@ -243,7 +250,7 @@ def run_installer_elevated(path: Path) -> InstallResult:
         hwnd=None,
         lpVerb="runas",
         lpFile=str(path),
-        lpParameters=None,
+        lpParameters=parameters,
         lpDirectory=str(path.parent),
         nShow=_SW_SHOWNORMAL,
         hInstApp=None,
@@ -265,7 +272,14 @@ def run_installer_elevated(path: Path) -> InstallResult:
     if not info.hProcess:
         return InstallResult(InstallStatus.FAILED, error="installer process handle is missing")
     try:
-        wait_result = int(wait_for_single_object(info.hProcess, _INFINITE))
+        wait_result = int(wait_for_single_object(
+            info.hProcess, _INFINITE if timeout_ms is None else timeout_ms
+        ))
+        if wait_result == _WAIT_TIMEOUT:
+            return InstallResult(
+                InstallStatus.FAILED,
+                error=f"{product_name} installer did not finish within the time limit",
+            )
         if wait_result != _WAIT_OBJECT_0:
             error = ctypes.get_last_error() if wait_result == _WAIT_FAILED else wait_result
             return InstallResult(
@@ -289,7 +303,7 @@ def run_installer_elevated(path: Path) -> InstallResult:
     return InstallResult(
         InstallStatus.FAILED,
         exit_code=code,
-        error=f"ViGEmBus installer exited with code {code}",
+        error=f"{product_name} installer exited with code {code}",
     )
 
 

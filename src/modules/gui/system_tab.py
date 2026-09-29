@@ -16,7 +16,6 @@ from modules.update.presentation import (
     UpdateStatusPresentation,
     update_status_presentation,
 )
-from modules.xinput.service import HidHidePresentation, hidhide_presentation
 from . import theme as T
 from . import widgets as W
 from .haptics_lab_tab import HapticsLabCard
@@ -49,11 +48,6 @@ class SystemTab(SettingsTab):
         self._update_presentation: UpdateStatusPresentation | None = None
         self._controller_card: "W.Card | None" = None
         self._dsx_note: "W.Hint | None" = None
-        self._hidhide_card: "W.Card | None" = None
-        self._hidhide_switch: ctk.CTkSwitch | None = None
-        self._hidhide_status: ctk.CTkLabel | None = None
-        self._hidhide_detail: "W.Hint | None" = None
-        self._hidhide_presentation: HidHidePresentation | None = None
         self._display_card: "W.Card | None" = None
         self._dpi_status: ctk.CTkLabel | None = None
         self._dpi_warning: ctk.CTkLabel | None = None
@@ -69,7 +63,6 @@ class SystemTab(SettingsTab):
     def _build(self):
         self._build_controller_card()
         self._build_dsx_note()
-        self._build_hidhide_card()
         self._build_display_card()
         self._build_diagnostics_card()
         self._build_haptics_lab_card()
@@ -121,7 +114,7 @@ class SystemTab(SettingsTab):
         controller card for an explanatory note when DSX is on."""
         if self._controller_card is None or self._dsx_note is None:
             return
-        anchor = self._hidhide_card or self._display_card or self._updates_card
+        anchor = self._display_card or self._updates_card
         if anchor is None:
             anchor = next(
                 (widget for widget in self._scroll.pack_slaves()
@@ -137,73 +130,6 @@ class SystemTab(SettingsTab):
         else:
             self._dsx_note.pack_forget()
             self._controller_card.pack(**pack_options)
-
-    def _build_hidhide_card(self):
-        card = self._hidhide_card = W.Card(self._scroll)
-        card.pack(fill="x", pady=(0, T.PAD_MD))
-        W.H2(card, t("Physical controller isolation")).pack(
-            anchor="w", padx=T.PAD_MD, pady=(T.PAD_MD, T.PAD_XS)
-        )
-        self._hidhide_switch = ctk.CTkSwitch(
-            card,
-            text=t("Hide the physical DualSense from games with HidHide"),
-            command=self._on_hidhide_toggle,
-        )
-        if self.settings.enable_hidhide:
-            self._hidhide_switch.select()
-        self._hidhide_switch.pack(
-            anchor="w", padx=T.PAD_MD, pady=(0, T.PAD_XS)
-        )
-        W.Hint(
-            card,
-            t(
-                "Requires HidHide 1.7 or newer and Xbox App mode. Before enabling "
-                "this option, turn on Device hiding in the official HidHide "
-                "Configuration Client. FHDS does not install the driver, change "
-                "HidHide's global Active switch, or edit the permanent device list; "
-                "it only manages its own application whitelist entry and "
-                "process-lifetime session blacklist."
-            ),
-            wrap=self.app.px(640),
-        ).pack(fill="x", padx=T.PAD_MD, pady=(0, T.PAD_SM))
-        self._hidhide_status = W.Body(card, "")
-        self._hidhide_status.pack(
-            fill="x", padx=T.PAD_MD, pady=(0, T.PAD_XS)
-        )
-        self._hidhide_detail = W.Hint(card, "", wrap=self.app.px(640))
-        self._hidhide_detail.pack(
-            fill="x", padx=T.PAD_MD, pady=(0, T.PAD_MD)
-        )
-        self._refresh_hidhide_status()
-
-    def _on_hidhide_toggle(self):
-        if self._hidhide_switch is None:
-            return
-        value = bool(self._hidhide_switch.get())
-        if self.settings.enable_hidhide != value:
-            self.settings.enable_hidhide = value
-            preferences.save(self.settings)
-            log.info("enable_hidhide = %s", value)
-        threading.Thread(
-            target=self.app._xinput_service.sync_hidhide,
-            name="fhds-hidhide-toggle",
-            daemon=True,
-        ).start()
-
-    def _refresh_hidhide_status(self):
-        if self._hidhide_status is None or self._hidhide_detail is None:
-            return
-        current = hidhide_presentation(
-            self.settings,
-            self.app._xinput_service.snapshot(),
-            self.app._xinput_service.hidhide_snapshot(),
-            t,
-        )
-        if current == self._hidhide_presentation:
-            return
-        self._hidhide_presentation = current
-        self._hidhide_status.configure(text=current.title)
-        self._hidhide_detail.configure(text=current.detail)
 
     def _build_diagnostics_card(self):
         card = self._diagnostics_card = W.Card(self._scroll)
@@ -514,7 +440,6 @@ class SystemTab(SettingsTab):
     def _refresh_update_status(self):
         if self.app._tearing_down:
             return
-        self._refresh_hidhide_status()
         snapshot = self.app._update_service.snapshot()
         current = update_status_presentation(snapshot, t)
         previous = self._update_presentation

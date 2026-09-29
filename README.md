@@ -12,7 +12,7 @@
 
 > Supports Windows Steam and Xbox App workflows for Forza Horizon 4, Forza Horizon 5, and Forza Horizon 6.
 
-FH-DualSense-Enhanced reads Forza Horizon Data Out telemetry and turns braking, throttle, engine, road, tire, and impact data into DualSense feedback.
+FH-DualSense-Enhanced turns Forza Horizon Data Out telemetry into DualSense feedback.
 
 This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6.2`, with haptics work informed by `HorizonHaptics 1.3.0`.
 
@@ -21,9 +21,9 @@ This is an unofficial enhanced fork based on `Forza-Horizon-DualSense-Python 1.6
 - Telemetry-driven grip haptics combine engine, road, suspension, water, tire slip, ABS, directional impacts, and dynamic redline learning shared with the tachometer lightbar.
 - Expanded adaptive-trigger behavior adds dynamic traction and wheelspin, surface-aware frequency bands, zoned ABS, and optional telemetry layers.
 - USB and Bluetooth use the same stereo haptic mix; Bluetooth adds HD transport and falls back only when that transport actually fails.
-- R11's community-tuned `Default` enables ABS; `Default before R11` preserves prior tuning, while `Original`, autosave, profiles, and factory restore remain. System and updates also includes a collapsed-by-default Haptics Lab card for bounded trigger/grip previews and local sanitized diagnostics.
-- The multilingual high-DPI interface shows live transport, battery, and charging state and includes FH4/FH5/FH6 Steam/Xbox App launching, an integrated DualSense-to-XInput bridge with optional Steam Input-style Camera/Deflection motion-to-stick mapping, and reversible FH6 DualSense button icons. Motion mapping requires the custom Xbox mapping master switch plus its own gyro switch and is off by default because X360 has no native gyro channel.
-- The standalone EXE uses verified transactional updates, preserves settings, migrates matching shortcuts, and can recover or roll back an interrupted replacement.
+- R11's community-tuned `Default` enables ABS; earlier tuning remains as `Default before R11`. Profiles, factory restore, Haptics Lab previews, and local diagnostics are available.
+- The multilingual interface supports FH4/FH5/FH6 launching, Xbox App XInput, optional motion-to-stick mapping, and reversible FH6 DualSense icons. Motion mapping is off by default and requires custom mapping and gyro switches.
+- The EXE verifies updates, preserves settings and matching shortcuts, and recovers interrupted replacements.
 
 ## Download
 
@@ -43,7 +43,8 @@ Other launch options:
 ### 1. Choose the game platform
 
 - **Steam:** Keep Steam Input enabled in **Game Properties -> Controller**, including DualSense vibration support.
-- **Xbox App:** Select Xbox App in FH-DualSense-Enhanced. The integrated XInput bridge replaces DS4Windows or Steam Input; first use may ask you to install the bundled ViGEmBus driver through Windows UAC. The driver installation works offline.
+- **Xbox App:** Select Xbox App. FHDS uses its XInput bridge instead of DS4Windows or Steam Input. First use may require offline ViGEmBus installation through UAC.
+  HidHide is required. **Overview -> Quick access** installs it on demand with verified download, UAC, and progress. Once virtual Xbox input is ready, FHDS enables hiding automatically if existing rules only target DualSense. The official client can be opened there. Xbox input stays neutral and game launch is disabled until the physical controller is hidden. Reconnect or restart if prompted. FHDS removes its own rules on exit.
 
 ### 2. Enable Forza Data Out
 

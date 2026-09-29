@@ -19,6 +19,12 @@ from textual.widgets import (
 
 from lang import t
 from modules.config import preferences
+from modules.dualsense.hidhide_installer import (
+    find_hidhide_client,
+    install_and_probe as install_hidhide,
+    open_hidhide_client,
+    probe_hidhide,
+)
 from modules.dualsense.main import (
     _is_bluetooth,
     _raw_dualsense_interfaces,
@@ -61,6 +67,8 @@ class SystemTab(SettingsTab):
     def __init__(self, settings):
         super().__init__(settings)
         self._driver_confirm_deadline = 0.0
+        self._hidhide_installed: bool | None = None
+        self._hidhide_installing = False
 
     def compose(self) -> ComposeResult:
         updater_supported = self.app._update_service.supported
@@ -94,24 +102,15 @@ class SystemTab(SettingsTab):
         )
 
         yield Label(t("Physical controller isolation"), classes="section")
-        with Horizontal(classes="row"):
-            yield Switch(
-                value=self.settings.enable_hidhide,
-                id="enable_hidhide",
-            )
-            yield Label(t("Hide the physical DualSense from games with HidHide"))
+        yield Label(t("HidHide is required for Xbox App"), classes="hint")
         yield Label(
-            t(
-                "Requires HidHide 1.7 or newer and Xbox App mode. Before enabling "
-                "this option, turn on Device hiding in the official HidHide "
-                "Configuration Client. FHDS does not install the driver, change "
-                "HidHide's global Active switch, or edit the permanent device list; "
-                "it only manages its own application whitelist entry and "
-                "process-lifetime session blacklist."
-            ),
+            t("Xbox App only. Install HidHide to download the signed driver and enable isolation; FHDS configures the current DualSense automatically. A Windows or game restart may be required."),
             classes="hint",
             markup=False,
         )
+        yield Button(t("Install HidHide and enable isolation"), id="hidhide-install")
+        yield Button(t("Open HidHide Configuration Client"), id="hidhide-open")
+        yield Label("", id="hidhide-install-status", classes="hint", markup=False)
         yield Label("", id="hidhide-status", markup=False)
         yield Label("", id="hidhide-detail", classes="hint", markup=False)
 
@@ -193,6 +192,19 @@ class SystemTab(SettingsTab):
         self._sync_controller_visibility()
         self._refresh_update_status()
         self._update_timer = self.set_interval(0.5, self._refresh_update_status)
+        asyncio.create_task(self._probe_hidhide_status())
+
+    async def _probe_hidhide_status(self) -> None:
+        ready = await asyncio.to_thread(probe_hidhide)
+        if not self.is_mounted or self._hidhide_installing or self._hidhide_installed:
+            return
+        self._hidhide_installed = ready
+        if ready:
+            self.query_one("#hidhide-install-status", Label).update(t("HidHide installed"))
+        elif find_hidhide_client() is not None:
+            self.query_one("#hidhide-install-status", Label).update(
+                t("HidHide client found; driver not ready")
+            )
 
     def _refresh_update_status(self) -> None:
         snapshot = self.app._update_service.snapshot()
@@ -220,11 +232,18 @@ class SystemTab(SettingsTab):
         self._refresh_xinput_status()
 
     def _refresh_hidhide_status(self) -> None:
+        client_available = find_hidhide_client() is not None
+        self.query_one("#hidhide-open", Button).disabled = not client_available
+        self.query_one("#hidhide-install", Button).label = t(
+            "Check HidHide and enable isolation" if client_available
+            else "Install HidHide and enable isolation"
+        )
         presentation = hidhide_presentation(
             self.settings,
             self.app._xinput_service.snapshot(),
             self.app._xinput_service.hidhide_snapshot(),
             t,
+            controller_connected=bool(getattr(getattr(self.app, "_ds", None), "connected", False)),
         )
         self.query_one("#hidhide-status", Label).update(presentation.title)
         self.query_one("#hidhide-detail", Label).update(presentation.detail)
@@ -306,8 +325,12 @@ class SystemTab(SettingsTab):
         if platform == self.settings.preferred_forza_platform:
             return
         self.settings.preferred_forza_platform = platform
+        if platform == XBOX_APP_PLATFORM:
+            self.settings.enable_hidhide = True
         preferences.save(self.settings)
         self.app._xinput_service.sync(getattr(self.app, "_ds", None))
+        if platform == XBOX_APP_PLATFORM:
+            self.app.notify(t("HidHide is required for Xbox App"))
         self._driver_confirm_deadline = 0.0
         self._refresh_xinput_status()
 
@@ -428,7 +451,43 @@ class SystemTab(SettingsTab):
         await self._rerender_controller()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "xinput-action":
+        if event.button.id == "hidhide-install":
+            if self.settings.preferred_forza_platform != XBOX_APP_PLATFORM:
+                self.app.notify(t("Select Xbox App mode before installing HidHide"), severity="error")
+                return
+            event.button.disabled = True
+            self._hidhide_installing = True
+            install_status = self.query_one("#hidhide-install-status", Label)
+            install_status.update(t("Checking HidHide installation; approve UAC if prompted"))
+            try:
+                result = await asyncio.to_thread(install_hidhide)
+            except Exception as exc:
+                self.app.notify(str(exc), severity="error")
+                install_status.update(str(exc))
+                return
+            finally:
+                self._hidhide_installing = False
+                event.button.disabled = False
+            if result.status in {InstallStatus.SUCCESS, InstallStatus.RESTART_REQUIRED}:
+                self.settings.enable_hidhide = True
+                preferences.save(self.settings)
+                if result.status is InstallStatus.SUCCESS:
+                    self._hidhide_installed = True
+                    install_status.update(t("HidHide installed"))
+                    await asyncio.to_thread(self.app._xinput_service.sync_hidhide)
+                else:
+                    install_status.update(t("Restart Windows to finish HidHide setup"))
+                    self.app.notify(t("Restart Windows to finish HidHide setup"))
+            else:
+                install_status.update(result.error or t("HidHide installation failed"))
+                self.app.notify(result.error or t("HidHide installation failed"), severity="error")
+            self._refresh_hidhide_status()
+        elif event.button.id == "hidhide-open":
+            try:
+                open_hidhide_client()
+            except OSError as exc:
+                self.app.notify(str(exc), severity="error")
+        elif event.button.id == "xinput-action":
             snapshot = self.app._xinput_service.snapshot()
             if snapshot.status is BridgeStatus.ERROR:
                 self.app._xinput_service.retry()
@@ -504,9 +563,3 @@ class SystemTab(SettingsTab):
         if event.switch.id == "use_dsx":
             self._sync_controller_visibility()
             log.info("DSX %s", "enabled" if event.value else "disabled")
-        elif event.switch.id == "enable_hidhide":
-            threading.Thread(
-                target=self.app._xinput_service.sync_hidhide,
-                name="fhds-hidhide-toggle",
-                daemon=True,
-            ).start()

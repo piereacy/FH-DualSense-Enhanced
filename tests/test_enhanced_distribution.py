@@ -13,8 +13,8 @@ from modules.config import preferences
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "FH-DualSense-Enhanced"
 ZUV_NAME = f"{APP_NAME}.zuv.py"
-CURRENT_INTERNAL_VERSION = "11"
-CURRENT_RELEASE_VERSION = "R11"
+CURRENT_INTERNAL_VERSION = "12"
+CURRENT_RELEASE_VERSION = "R12"
 
 
 def _source(path: str) -> str:
@@ -202,29 +202,23 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "ZUV / Linux 备用方式" in workflow
     assert "FH-DualSense-Enhanced-{0}.exe" in workflow
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
-    assert "Enhanced R11 中文说明" in workflow
-    assert "Enhanced R11 English notes" in workflow
+    assert "Enhanced R12 中文说明" in workflow
+    assert "Enhanced R12 English notes" in workflow
     assert "generate_release_notes: false" in workflow
-    assert "手柄占用范围" in workflow
-    assert "切到桌面或其他游戏不会自动释放" in workflow
-    assert "Controller usage scope" in workflow
-    assert "Switching to the desktop or another game does not release the controller" in workflow
+    assert "一键安装并隔离" in workflow
+    assert "One-click installation and isolation" in workflow
+    assert "下次启动时清理" in workflow
+    assert "cleaned up on the next launch" in workflow
     assert "旧 R10 监听版" not in workflow
     assert "old R10 listener build" not in workflow
     assert "仅在地平线位于前台时占用手柄" not in workflow
     assert "experimental foreground-Forza-only ownership behavior" not in workflow
     assert "本版不包含" not in workflow
     assert "this release does not include" not in workflow
-    assert "体感到摇杆" in workflow
-    assert "Motion-to-stick" in workflow
-    assert "Haptics Lab" in workflow
-    assert "系统与更新页新增默认折叠" in workflow
-    assert "collapsed by default under System and updates" in workflow
-    assert "诊断" in workflow
-    assert "diagnostics" in workflow
-    assert "HidHide 1.7+" in workflow
-    assert "默认关闭" in workflow
-    assert "off by default" in workflow
+    assert "Xbox App 模式必须使用 HidHide" in workflow
+    assert "Xbox App mode requires HidHide" in workflow
+    assert "无需在官方配置界面手动勾选" in workflow
+    assert "No manual checkbox is needed" in workflow
     assert "TCR / 抓地力反馈保持独立" not in workflow
     assert "TCR / grip feedback remains independent" not in workflow
     assert "R7/R8 用户" not in workflow

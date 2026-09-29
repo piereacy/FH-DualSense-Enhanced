@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from modules.config.settings import Settings
 from modules.dualsense.hidhide import HidHidePhase, HidHideSnapshot
+from modules.dualsense.input_state import DPad, DualSenseButton, DualSenseInputState
 from modules.xinput.bridge import BridgeSnapshot, BridgeStatus
 from modules.xinput.driver import InstallResult, InstallStatus
 from modules.xinput.mapping import DEFAULT_BUTTON_MAPPING
@@ -14,6 +15,7 @@ from modules.xinput.service import (
     custom_xinput_mapping_available,
     hidhide_presentation,
     normalize_forza_platform,
+    xbox_isolation_ready,
 )
 
 
@@ -27,6 +29,7 @@ def test_custom_mapping_is_available_only_for_the_xbox_app_platform():
 class _Bridge:
     def __init__(self, *, target_connected=False):
         self.calls = []
+        self.published = []
         self.mappings = []
         self.gyro_mappings = []
         self._snapshot = BridgeSnapshot(
@@ -52,7 +55,7 @@ class _Bridge:
         self.calls.append("stop")
 
     def publish_latest(self, _state, _received_at):
-        pass
+        self.published.append((_state, _received_at))
 
     def snapshot(self):
         return self._snapshot
@@ -77,6 +80,7 @@ class _Bridge:
 
 class _Backend:
     def __init__(self):
+        self.connected = True
         self.consumers = []
         self.visibility_observers = []
         self.lifecycle = []
@@ -97,14 +101,22 @@ class _HidHide:
     def __init__(self):
         self.calls = []
         self._snapshot = HidHideSnapshot()
+        self.started = False
 
     def start(self):
         self.calls.append("start")
+        self.started = True
+        self._snapshot = HidHideSnapshot(phase=HidHidePhase.READY)
+        return self._snapshot
+
+    def prepare_application_access(self):
+        self.calls.append("prepare_access")
         self._snapshot = HidHideSnapshot(phase=HidHidePhase.READY)
         return self._snapshot
 
     def stop(self, *, remove_allowlist=False):
         self.calls.append(("stop", remove_allowlist))
+        self.started = False
         self._snapshot = HidHideSnapshot()
         return self._snapshot
 
@@ -118,6 +130,25 @@ class _HidHide:
             hidden_device_count=1,
         )
         return True
+
+
+class _RetryTimer:
+    def __init__(self, delay, callback):
+        self.delay = delay
+        self.callback = callback
+        self.daemon = False
+        self.started = False
+        self.cancelled = False
+
+    def start(self):
+        self.started = True
+
+    def cancel(self):
+        self.cancelled = True
+
+    def fire(self):
+        # Also exercises a timer callback that was already queued at cancel.
+        self.callback()
 
 
 class _InputActivityMonitor:
@@ -173,9 +204,66 @@ def test_xbox_app_mode_starts_bridge_and_attaches_latest_publisher():
     service.sync(backend)
 
     assert bridge.calls == ["stop", "start"]
-    assert backend.consumers == [bridge.publish_latest]
+    assert len(backend.consumers) == 1 and callable(backend.consumers[0])
     assert bridge.mappings[-1] == DEFAULT_BUTTON_MAPPING
     assert bridge.gyro_mappings[-1] == DEFAULT_GYRO_MAPPING
+
+
+def test_xbox_input_stays_neutral_until_the_current_dualsense_is_hidden():
+    settings = Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True)
+    bridge = _Bridge(target_connected=True)
+    backend = _Backend()
+    isolation = _HidHide()
+    service = XInputBridgeService(
+        settings,
+        bridge=bridge,
+        hidhide_service=isolation,
+        hidhide_driver_ready=lambda: True,
+        platform_supported=lambda: True,
+    )
+    service.sync(backend)
+    publisher = backend.consumers[-1]
+    state = DualSenseInputState(
+        left_x=190,
+        left_y=128,
+        right_x=128,
+        right_y=128,
+        left_trigger=30,
+        right_trigger=0,
+        dpad=DPad.NORTH,
+        buttons=frozenset({DualSenseButton.CROSS}),
+    )
+
+    publisher(state, 1.0)
+    neutral = bridge.published[-1][0]
+    assert neutral.left_x == 128
+    assert neutral.left_trigger == 0
+    assert neutral.dpad is DPad.NEUTRAL
+    assert not neutral.buttons
+    assert not service.isolation_confirmed()
+
+    assert backend.visibility_observers[-1]({"path": b"controller"})
+    assert service.isolation_confirmed()
+    publisher(state, 2.0)
+    assert bridge.published[-1][0] is state
+
+    isolation._snapshot = HidHideSnapshot(phase=HidHidePhase.READY)
+    publisher(state, 3.0)
+    assert bridge.published[-1][0] == neutral
+    assert not service.verify_isolation()
+
+
+def test_xbox_isolation_requires_a_live_target_controller_and_hidden_rule():
+    settings = Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True)
+    bridge = BridgeSnapshot(status=BridgeStatus.ACTIVE, target_connected=True)
+    isolation = HidHideSnapshot(phase=HidHidePhase.ACTIVE, hidden_device_count=1)
+    assert xbox_isolation_ready(settings, bridge, isolation, controller_connected=True)
+    assert not xbox_isolation_ready(settings, bridge, isolation, controller_connected=False)
+    assert not xbox_isolation_ready(
+        settings, bridge, HidHideSnapshot(phase=HidHidePhase.READY), controller_connected=True
+    )
+    settings.enable_hidhide = False
+    assert not xbox_isolation_ready(settings, bridge, isolation, controller_connected=True)
 
 
 def test_custom_mapping_refresh_does_not_restart_the_bridge():
@@ -339,7 +427,7 @@ def test_confirmed_driver_install_exposes_installing_then_restarts_bridge():
     assert observed == [BridgeStatus.INSTALLING]
     assert result.status is InstallStatus.SUCCESS
     assert bridge.calls[-1] == "start"
-    assert backend.consumers[-1] == bridge.publish_latest
+    assert callable(backend.consumers[-1])
 
 
 def test_cancelled_and_restart_required_installs_keep_explicit_status():
@@ -383,7 +471,8 @@ def test_hidhide_session_starts_only_after_vigem_is_ready_in_direct_hid_mode():
     service.sync(backend)
 
     assert isolation.calls
-    assert all(call == ("stop", False) for call in isolation.calls)
+    assert "prepare_access" in isolation.calls
+    assert "start" not in isolation.calls
     assert not any(observer is not None for observer in backend.visibility_observers)
 
     bridge.set_target_connected(True)
@@ -394,6 +483,27 @@ def test_hidhide_session_starts_only_after_vigem_is_ready_in_direct_hid_mode():
     assert observer.__self__ is isolation
     assert observer({"path": b"controller"}) is True
     assert isolation.calls[-1] == ("register", {"path": b"controller"})
+
+
+def test_hidhide_application_access_precedes_hid_open_without_a_virtual_target():
+    settings = Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True)
+    backend = _Backend()
+    isolation = _HidHide()
+    service = XInputBridgeService(
+        settings,
+        bridge=_Bridge(),
+        hidhide_service=isolation,
+        platform_supported=lambda: True,
+    )
+
+    assert service.prepare_controller_access(backend).phase is HidHidePhase.READY
+    assert isolation.calls == ["prepare_access"]
+    assert backend.visibility_observers == []
+    assert "start" not in isolation.calls
+
+    settings.preferred_forza_platform = STEAM_PLATFORM
+    service.prepare_controller_access(backend)
+    assert isolation.calls == ["prepare_access"]
 
 
 def test_hidhide_session_is_cleared_when_the_actual_virtual_target_is_lost():
@@ -418,7 +528,7 @@ def test_hidhide_session_is_cleared_when_the_actual_virtual_target_is_lost():
     service.sync_hidhide()
 
     assert backend.visibility_observers[-1] is None
-    assert isolation.calls[-1] == ("stop", False)
+    assert isolation.calls[-2:] == [("stop", False), "prepare_access"]
 
 
 def test_hidhide_does_not_hide_without_a_ready_virtual_controller_driver():
@@ -442,7 +552,8 @@ def test_hidhide_does_not_hide_without_a_ready_virtual_controller_driver():
     service.sync_hidhide()
 
     assert isolation.calls
-    assert all(call == ("stop", False) for call in isolation.calls)
+    assert "prepare_access" in isolation.calls
+    assert "start" not in isolation.calls
     assert not any(observer is not None for observer in backend.visibility_observers)
 
 
@@ -466,6 +577,127 @@ def test_hidhide_enable_retries_after_a_transient_driver_probe_failure():
     driver_ready[0] = True
     service.sync_hidhide()
     assert isolation.calls[-1] == "start"
+
+
+def test_hidhide_retries_automatically_after_configuration_client_releases_driver():
+    class BusyHidHide(_HidHide):
+        busy = True
+
+        def start(self):
+            if self.busy:
+                self.calls.append("busy_start")
+                self._snapshot = HidHideSnapshot(
+                    phase=HidHidePhase.UNAVAILABLE,
+                    last_error="HidHide control device is busy",
+                )
+                return self._snapshot
+            return super().start()
+
+    timers = []
+
+    def make_timer(delay, callback):
+        timer = _RetryTimer(delay, callback)
+        timers.append(timer)
+        return timer
+
+    settings = Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True)
+    backend = _Backend()
+    isolation = BusyHidHide()
+    service = XInputBridgeService(
+        settings,
+        bridge=_Bridge(target_connected=True),
+        hidhide_service=isolation,
+        hidhide_driver_ready=lambda: True,
+        platform_supported=lambda: True,
+        hidhide_retry_timer_factory=make_timer,
+    )
+
+    service.sync(backend)
+    assert isolation.calls[-1] == "busy_start"
+    assert len(timers) == 1 and timers[0].started and timers[0].daemon
+    assert timers[0].delay == 5.0
+    assert not any(observer is not None for observer in backend.visibility_observers)
+
+    isolation.busy = False
+    timers[0].fire()
+    assert isolation.calls[-1] == "start"
+    assert backend.visibility_observers[-1].__self__ is isolation
+    assert len(timers) == 2 and timers[1].started
+
+
+def test_hidhide_access_retry_stops_when_isolation_is_switched_off():
+    class BusyAccess(_HidHide):
+        def prepare_application_access(self):
+            self.calls.append("busy_access")
+            self._snapshot = HidHideSnapshot(phase=HidHidePhase.UNAVAILABLE)
+            return self._snapshot
+
+    timers = []
+
+    def make_timer(delay, callback):
+        timer = _RetryTimer(delay, callback)
+        timers.append(timer)
+        return timer
+
+    settings = Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True)
+    isolation = BusyAccess()
+    service = XInputBridgeService(
+        settings,
+        bridge=_Bridge(),
+        hidhide_service=isolation,
+        platform_supported=lambda: True,
+        hidhide_retry_timer_factory=make_timer,
+    )
+    service.sync(_Backend())
+    assert len(timers) == 1 and timers[0].started
+
+    settings.enable_hidhide = False
+    service.sync_hidhide()
+    assert timers[0].cancelled is True
+    before = list(isolation.calls)
+    timers[0].fire()
+    assert isolation.calls == before
+    assert service.hidhide_snapshot().phase is HidHidePhase.DISABLED
+
+
+def test_hidhide_access_retries_without_hiding_before_target_connects():
+    class BusyAccess(_HidHide):
+        busy = True
+
+        def prepare_application_access(self):
+            if self.busy:
+                self.calls.append("busy_access")
+                self._snapshot = HidHideSnapshot(phase=HidHidePhase.UNAVAILABLE)
+                return self._snapshot
+            return super().prepare_application_access()
+
+    timers = []
+
+    def make_timer(delay, callback):
+        timer = _RetryTimer(delay, callback)
+        timers.append(timer)
+        return timer
+
+    isolation = BusyAccess()
+    backend = _Backend()
+    service = XInputBridgeService(
+        Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True),
+        bridge=_Bridge(),
+        hidhide_service=isolation,
+        platform_supported=lambda: True,
+        hidhide_retry_timer_factory=make_timer,
+    )
+    service.sync(backend)
+    assert isolation.calls[-1] == "busy_access"
+    assert len(timers) == 1
+
+    isolation.busy = False
+    timers[0].fire()
+    assert isolation.calls[-1] == "prepare_access"
+    assert service.hidhide_snapshot().phase is HidHidePhase.READY
+    assert "start" not in isolation.calls
+    assert not any(observer is not None for observer in backend.visibility_observers)
+    assert len(timers) == 1
 
 
 def test_hidhide_requires_a_healthy_connected_bridge_snapshot():
@@ -598,6 +830,19 @@ def test_hidhide_presentation_distinguishes_hidden_and_paused_states():
     assert hidden.title == "Physical DualSense hidden from games"
     assert "2" in hidden.detail
 
+    manual = hidhide_presentation(
+        settings,
+        bridge,
+        HidHideSnapshot(
+            phase=HidHidePhase.ACTIVE,
+            hidden_device_count=1,
+            manual_configuration=True,
+        ),
+        translate,
+    )
+    assert manual.title == "Manual HidHide rules verified"
+    assert "restart" in manual.detail
+
     waiting = hidhide_presentation(
         settings,
         BridgeSnapshot(status=BridgeStatus.WAITING_CONTROLLER),
@@ -605,7 +850,7 @@ def test_hidhide_presentation_distinguishes_hidden_and_paused_states():
         translate,
     )
     assert waiting.title == "HidHide isolation is waiting"
-    assert "Xbox App bridge" in waiting.detail
+    assert "Connect or reconnect" in waiting.detail
 
     settings.preferred_forza_platform = STEAM_PLATFORM
     paused = hidhide_presentation(settings, bridge, HidHideSnapshot(), translate)

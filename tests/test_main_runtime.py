@@ -24,6 +24,9 @@ def test_headless_startup_failure_still_closes_controller_and_xinput(
         def __init__(self, _settings):
             pass
 
+        def prepare_controller_access(self, controller):
+            events.append("prepare")
+
         def sync(self, controller):
             events.append("sync")
             if failure == "sync":
@@ -38,6 +41,7 @@ def test_headless_startup_failure_still_closes_controller_and_xinput(
     with pytest.raises(RuntimeError):
         app_main.run(Settings())
 
+    assert events[0] == "prepare"
     assert events[-2:] == ["stop", "close"]
 
 
@@ -56,6 +60,9 @@ def test_headless_health_boundary_follows_controller_xinput_and_udp_initializati
     class XInput:
         def __init__(self, _settings):
             pass
+
+        def prepare_controller_access(self, controller):
+            events.append("prepare")
 
         def sync(self, controller):
             events.append("xinput")
@@ -84,7 +91,7 @@ def test_headless_health_boundary_follows_controller_xinput_and_udp_initializati
 
     app_main.run(Settings(), on_ready=lambda: events.append("healthy"))
 
-    assert events[:5] == ["controller", "xinput", "udp", "healthy", "loop"]
+    assert events[:6] == ["prepare", "controller", "xinput", "udp", "healthy", "loop"]
     assert events[-3:] == ["udp-close", "xinput-stop", "controller-close"]
 
 
@@ -182,6 +189,9 @@ def test_gui_udp_conflict_is_healthy_once_the_error_ui_is_usable(monkeypatch):
             events.append("controller")
 
     class XInput:
+        def prepare_controller_access(self, controller):
+            events.append("prepare")
+
         def sync(self, controller):
             events.append("xinput")
 
@@ -211,7 +221,7 @@ def test_gui_udp_conflict_is_healthy_once_the_error_ui_is_usable(monkeypatch):
 
     gui_main.TriggerGUI._start_backend(app)
 
-    assert events[:2] == ["controller", "xinput"]
+    assert events[:3] == ["prepare", "controller", "xinput"]
     assert events.count("healthy") == 1
     assert app._udp_error == "port occupied"
 
@@ -231,6 +241,9 @@ def test_tui_udp_conflict_is_healthy_but_controller_failure_is_not(monkeypatch):
                 raise OSError("controller unavailable")
 
     class XInput:
+        def prepare_controller_access(self, controller):
+            events.append("prepare")
+
         def sync(self, controller):
             events.append("xinput")
 

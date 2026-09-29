@@ -44,6 +44,7 @@ FH-DualSense-Enhanced 读取《极限竞速：地平线》的 Data Out 遥测，
 
 - **Steam：**在**游戏属性 -> 控制器**中，Steam Input 必须保持开启，同时开启 Steam 的 DualSense 振动支持。
 - **Xbox App：**在 FH-DualSense-Enhanced 中选择 Xbox App。内置 XInput 连接桥代替 DS4Windows 或 Steam Input；首次使用可能需要通过 Windows UAC 安装内置 ViGEmBus 驱动，安装不需要联网。
+  Xbox App 模式必须使用 HidHide。“总览 → 快速入口”在缺少驱动时显示安装，已安装时显示检查与启用；FHDS 按需下载并校验官方签名安装器，经 Windows UAC 批准后，在虚拟 Xbox 手柄就绪且已有隐藏规则只针对 DualSense 时自动开启设备隐藏并配置当前实体手柄，无需打开官方客户端手动勾选。快速入口显示真实下载进度、驱动状态和实体隐藏状态；只有找到官方配置客户端时才能打开它。校验签名和等待 UAC/安装期间显示不定进度。驱动尚未确认开启 Device hiding 并隐藏当前 DS5 时，虚拟手柄仅发送中立输入，应用内启动游戏按钮禁用并提示原因。按提示重连手柄；Windows 或已运行的游戏可能需要重启。FHDS 正常退出时清理自己添加的设备规则，异常退出后的残留在下次启动时恢复。
 
 ### 2. 开启 Forza Data Out
 

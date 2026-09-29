@@ -584,6 +584,8 @@ def load(s) -> None:
     _migrate_r3_redline_split(raw, s)
     _migrate_r3_grip_gear_shift(raw, s)
     _migrate_r11_default_profile(raw, s, first_run=first_run)
+    if raw["globals"].get("preferred_forza_platform") == "xbox_app":
+        raw["globals"]["enable_hidhide"] = True
     _write(raw)
     snap = dict(raw["globals"])
     snap.update(raw["profiles"][raw["active_profile"]])
@@ -637,6 +639,9 @@ def save(s) -> bool:
         raw = _ensure_active(_read_raw(), s)
         raw["profiles"][raw["active_profile"]] = _profile_fields(s)
         raw["globals"].update(_global_fields(s))
+        if raw["globals"].get("preferred_forza_platform") == "xbox_app":
+            raw["globals"]["enable_hidhide"] = True
+            s.enable_hidhide = True
         return _write(raw)
     except Exception as e:
         log.warning("preferences.save failed: %s", e)

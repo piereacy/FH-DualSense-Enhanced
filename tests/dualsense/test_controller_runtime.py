@@ -11,13 +11,13 @@ from modules.dualsense.input_state import BatteryStatus, InputTransport
 from modules.dualsense.topology import path_key
 
 
-def _report(transport, *, level=6, charging=0, left_x=0):
+def _report(transport, *, level=6, charging=0, left_x=0, face_buttons=0):
     bluetooth = transport is InputTransport.BLUETOOTH
     report = bytearray(78 if bluetooth else 64)
     report[0] = 0x31 if bluetooth else 0x01
     base = 2 if bluetooth else 1
     report[base] = left_x
-    report[base + 7] = 8
+    report[base + 7] = 8 | face_buttons
     report[base + 52] = (charging << 4) | level
     if bluetooth:
         crc = zlib.crc32(memoryview(report)[:74], zlib.crc32(b"\xA1"))
@@ -209,6 +209,25 @@ def test_input_drain_can_publish_only_the_newest_state_for_xinput():
     assert device.read_count == 4
     assert [state.left_x for state in published] == [255]
     assert controller._bt_haptics_pending == bytes(64)
+
+
+def test_xinput_drain_preserves_short_bluetooth_face_button_press():
+    device = _QueuedDevice(
+        [
+            _report(InputTransport.BLUETOOTH),
+            _report(InputTransport.BLUETOOTH, face_buttons=0x20),
+            _report(InputTransport.BLUETOOTH),
+        ]
+    )
+    controller = dualsense_main.DualSense(enable_startup_pulse=False)
+    controller.dev = device
+    controller.lay = dualsense_main.BT
+    published = []
+    controller.set_input_consumer(lambda state, _received_at: published.append(state))
+
+    controller._drain_input_queue(publish_latest_only=True)
+
+    assert [bool(state.buttons) for state in published] == [True, False]
 
 
 def test_latest_only_drain_falls_back_from_a_malformed_tail_report():

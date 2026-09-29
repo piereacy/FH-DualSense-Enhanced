@@ -232,6 +232,7 @@ class TriggerTUI(App):
                 s,
                 s.enable_startup_pulse and s.enable_trigger_feedback,
             )
+            self._xinput_service.prepare_controller_access(self._ds)
             self._ds.open()
             self._xinput_service.sync(self._ds)
             self._backend_error = ""
@@ -340,6 +341,7 @@ class TriggerTUI(App):
             try:
                 # MARK: suppress pulse on hot-swap - avoid confusing the user mid-session
                 self._ds = make_backend(s, False)
+                self._xinput_service.prepare_controller_access(self._ds)
                 self._ds.open()
                 self._xinput_service.sync(self._ds)
                 self._backend_error = ""

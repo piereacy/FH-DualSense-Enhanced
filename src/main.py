@@ -43,6 +43,7 @@ def run(s: Settings, *, on_ready=None) -> None:
     ds = make_backend(s, s.enable_startup_pulse and s.enable_trigger_feedback)
     xinput = XInputBridgeService(s)
     try:
+        xinput.prepare_controller_access(ds)
         ds.open()
         xinput.sync(ds)
         with forzahorizon.UDPListener(s.udp_host, s.udp_port, s.udp_timeout,
@@ -148,6 +149,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--headless", action="store_true", help="Disable UI, use console logs")
     parser.add_argument("--gui", action="store_true", help="Use the CustomTkinter GUI instead of the TUI")
     parser.add_argument("--tui", action="store_true", help="Force the Textual TUI (overrides UI env var)")
+    parser.add_argument("--fhds-gui-smoke", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--fhds-update-transaction", default="", help=argparse.SUPPRESS)
     parser.add_argument("--fhds-update-token", default="", help=argparse.SUPPRESS)
     return parser
@@ -156,6 +158,16 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     bootstrap_windows_dpi()
     args = _parser().parse_args(argv)
+    if args.fhds_gui_smoke:
+        # Exercise the packaged GUI constructor without opening HID or UDP.
+        from modules.gui import TriggerGUI
+
+        app = TriggerGUI(Settings())
+        try:
+            app.root.update_idletasks()
+        finally:
+            app.root.destroy()
+        return 0
     try:
         legacy_plan = launch_legacy_bootstrap(argv=list(argv) if argv is not None else None)
     except Exception:

@@ -1,6 +1,7 @@
-"""Latest-state DualSense to ViGEm Xbox 360 bridge worker."""
+"""DualSense to ViGEm Xbox 360 bridge with bounded digital-edge delivery."""
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, replace
 from enum import Enum
 import logging
@@ -8,7 +9,7 @@ import threading
 import time
 from typing import Callable, Protocol
 
-from ..dualsense.input_state import DualSenseInputState
+from ..dualsense.input_state import DualSenseInputState, digital_input_changed
 from .hot_switch import controller_input_changed, controller_input_is_active
 from .gyro import (
     DEFAULT_GYRO_MAPPING,
@@ -27,6 +28,8 @@ STALE_AFTER_S = 0.100
 KEYBOARD_MOUSE_POLL_S = 0.050
 RECOVERY_DELAYS_S = (0.25, 1.0, 5.0)
 WORKER_STOP_TIMEOUT_S = 2.0
+MIN_DIGITAL_EDGE_HOLD_S = 0.035
+MAX_PENDING_DIGITAL_EDGES = 32
 
 
 class BridgeStatus(str, Enum):
@@ -83,7 +86,7 @@ _DRIVER_UNAVAILABLE_CODES = frozenset(
 
 
 class XInputBridge:
-    """Own a ViGEm client/target on one worker and discard input backlog."""
+    """Own one ViGEm target, coalescing analog input while keeping short taps."""
 
     def __init__(
         self,
@@ -106,6 +109,9 @@ class XInputBridge:
         self._keyboard_mouse_activity = keyboard_mouse_activity
         self._lock = threading.Lock()
         self._latest: _PublishedInput | None = None
+        self._pending_digital_edges: deque[_PublishedInput] = deque(
+            maxlen=MAX_PENDING_DIGITAL_EDGES
+        )
         self._sequence = 0
         self._button_mapping = DEFAULT_BUTTON_MAPPING
         self._gyro_mapping = DEFAULT_GYRO_MAPPING
@@ -166,6 +172,7 @@ class XInputBridge:
         self._publisher = self._publisher_for_generation(generation)
         self._running = True
         self._latest = None
+        self._pending_digital_edges.clear()
         self._input_owner = InputOwner.CONTROLLER
         self._controller_resume_baseline = None
         self._controller_resume_motion_active = False
@@ -226,12 +233,19 @@ class XInputBridge:
             if not self._running or generation != self._session_generation:
                 return
             self._sequence += 1
-            self._latest = _PublishedInput(
+            published = _PublishedInput(
                 state,
                 timestamp,
                 self._sequence,
                 generation,
             )
+            previous = self._latest
+            if digital_input_changed(
+                None if previous is None else previous.state,
+                state,
+            ):
+                self._pending_digital_edges.append(published)
+            self._latest = published
             self._snapshot = replace(
                 self._snapshot,
                 received_reports=self._snapshot.received_reports + 1,
@@ -273,6 +287,7 @@ class XInputBridge:
             if not self._running and (thread is None or not thread.is_alive()):
                 self._thread = None
                 self._latest = None
+                self._pending_digital_edges.clear()
                 notify_disconnected = self._snapshot.target_connected
                 self._snapshot = replace(
                     self._snapshot,
@@ -284,6 +299,7 @@ class XInputBridge:
             else:
                 self._running = False
                 self._latest = None
+                self._pending_digital_edges.clear()
         if notify_disconnected:
             self._notify_target_state(False)
         if thread is None:
@@ -342,9 +358,17 @@ class XInputBridge:
     def _read_latest_mapping(
         self,
         generation: int,
-    ) -> tuple[_PublishedInput | None, XInputButtonMapping, XInputGyroMapping, int]:
+    ) -> tuple[
+        _PublishedInput | None,
+        XInputButtonMapping,
+        XInputGyroMapping,
+        int,
+        bool,
+    ]:
         with self._lock:
-            latest = self._latest
+            pending = self._pending_digital_edges
+            has_edge = bool(pending and pending[0].generation == generation)
+            latest = pending[0] if has_edge else self._latest
             if latest is not None and latest.generation != generation:
                 latest = None
             return (
@@ -352,7 +376,16 @@ class XInputBridge:
                 self._button_mapping,
                 self._gyro_mapping,
                 self._mapping_revision,
+                has_edge,
             )
+
+    def _discard_digital_edge(self, sequence: int, generation: int) -> None:
+        with self._lock:
+            if not self._session_is_running_locked(generation):
+                return
+            pending = self._pending_digital_edges
+            if pending and pending[0].sequence == sequence:
+                pending.popleft()
 
     def _replace_snapshot_for_generation(self, generation: int, **changes) -> bool:
         with self._lock:
@@ -450,21 +483,26 @@ class XInputBridge:
         """Forward one ViGEm session while retaining its player slot on input gaps."""
         target = None
         last_applied_sequence = 0
+        last_applied_state: DualSenseInputState | None = None
         last_mapping_revision = -1
+        last_digital_edge_at = 0.0
         stale_sent = False
         gyro_processor = GyroToJoystickProcessor()
         try:
             while self._is_running(generation):
                 now = self._clock()
-                latest, mapping, gyro_mapping, mapping_revision = (
+                latest, mapping, gyro_mapping, mapping_revision, is_digital_edge = (
                     self._read_latest_mapping(generation)
                 )
                 gyro_processor.set_mapping(gyro_mapping)
                 age = float("inf") if latest is None else max(0.0, now - latest.received_at)
+                if is_digital_edge and age >= self._stale_after:
+                    self._discard_digital_edge(latest.sequence, generation)
+                    continue
 
                 if self._poll_keyboard_mouse_activity():
                     if not self._activate_keyboard_mouse(
-                        latest,
+                        last_applied_state,
                         target,
                         generation,
                     ):
@@ -483,6 +521,17 @@ class XInputBridge:
                     )
                     and age < self._stale_after
                 )
+                hold_remaining = max(
+                    0.0,
+                    MIN_DIGITAL_EDGE_HOLD_S
+                    - (time.monotonic() - last_digital_edge_at),
+                )
+                if (
+                    should_forward
+                    and hold_remaining > 0.0
+                    and digital_input_changed(last_applied_state, latest.state)
+                ):
+                    should_forward = False
                 if (
                     should_forward
                     and input_owner is InputOwner.KEYBOARD_MOUSE
@@ -507,7 +556,11 @@ class XInputBridge:
                         )
                     )
                     last_applied_sequence = latest.sequence
+                    last_applied_state = latest.state
                     last_mapping_revision = mapping_revision
+                    if is_digital_edge:
+                        self._discard_digital_edge(latest.sequence, generation)
+                        last_digital_edge_at = time.monotonic()
                     stale_sent = False
                     with self._lock:
                         # stop() may have timed out while a native target update
@@ -539,6 +592,7 @@ class XInputBridge:
                     and not stale_sent
                 ):
                     target.update(XUSBReport())
+                    last_applied_state = None
                     with self._lock:
                         if not self._session_is_running_locked(generation):
                             continue
@@ -555,12 +609,20 @@ class XInputBridge:
                 self._wake.clear()
                 if not self._is_running(generation):
                     break
-                current_latest, _current_mapping, _current_gyro, current_revision = (
+                current_latest, _current_mapping, _current_gyro, current_revision, _ = (
                     self._read_latest_mapping(generation)
                 )
                 if current_latest is not latest or current_revision != mapping_revision:
                     continue
-                self._wake.wait(self._next_wait(age, target is not None, stale_sent))
+                wait = self._next_wait(age, target is not None, stale_sent)
+                hold_remaining = max(
+                    0.0,
+                    MIN_DIGITAL_EDGE_HOLD_S
+                    - (time.monotonic() - last_digital_edge_at),
+                )
+                if hold_remaining > 0.0:
+                    wait = min(wait, max(0.001, hold_remaining))
+                self._wake.wait(wait)
         finally:
             if target is not None:
                 try:
@@ -598,7 +660,7 @@ class XInputBridge:
 
     def _activate_keyboard_mouse(
         self,
-        latest: _PublishedInput | None,
+        last_applied_state: DualSenseInputState | None,
         target,
         generation: int,
     ) -> bool:
@@ -606,15 +668,18 @@ class XInputBridge:
             if not self._session_is_running_locked(generation):
                 return False
             changed = self._input_owner is not InputOwner.KEYBOARD_MOUSE
-            self._input_owner = InputOwner.KEYBOARD_MOUSE
-            self._controller_resume_baseline = (
-                latest.state if latest is not None else None
-            )
-            self._controller_resume_motion_active = bool(
-                latest is not None
-                and gyro_input_is_active(latest.state, self._gyro_mapping)
-            )
             if changed:
+                self._input_owner = InputOwner.KEYBOARD_MOUSE
+                # Repeated mouse reports must not advance this baseline to
+                # each new controller sample and starve a deliberate reclaim.
+                # A button press may reach the latest slot in the same worker
+                # turn as the mouse event. Use the state the target actually
+                # carried before this turn, so that first press can reclaim.
+                self._controller_resume_baseline = last_applied_state
+                self._controller_resume_motion_active = bool(
+                    last_applied_state is not None
+                    and gyro_input_is_active(last_applied_state, self._gyro_mapping)
+                )
                 self._snapshot = replace(
                     self._snapshot,
                     input_owner=InputOwner.KEYBOARD_MOUSE,

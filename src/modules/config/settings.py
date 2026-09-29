@@ -227,8 +227,8 @@ class Settings:
     fh6_xbox_install_path: str = ""
 
     # MARK: System - crash-safe HidHide isolation for the Xbox App bridge
-    # Requires an installed HidHide 1.7+ driver. FHDS never installs it and
-    # never writes the user's persistent device blacklist.
+    # Windows EXE can install the official HidHide driver on explicit action;
+    # on HidHide 1.5, journals and removes only FHDS-added device rules.
     enable_hidhide: bool = False
 
     # MARK: System - experimental Xbox App mapping

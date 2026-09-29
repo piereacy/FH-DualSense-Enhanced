@@ -44,11 +44,13 @@ class _Target:
     def __init__(self, events, *, fail_update_at=None):
         self.events = events
         self.reports = []
+        self.update_times = []
         self.closed = False
         self.fail_update_at = fail_update_at
 
     def update(self, report):
         self.reports.append(bytes(report))
+        self.update_times.append(time.monotonic())
         self.events.append(("update", bytes(report)))
         if self.fail_update_at == len(self.reports):
             raise ViGEmError("synthetic update failure", ViGEmErrorCode.INVALID_TARGET)
@@ -210,6 +212,73 @@ def test_latest_slot_discards_backlog_before_worker_starts():
     assert bridge.snapshot().forwarded_reports == 1
 
 
+def test_short_button_press_and_release_survive_latest_slot_coalescing():
+    connect_entered = threading.Event()
+    release_connect = threading.Event()
+
+    class _BlockedClient(_Client):
+        def connect(self):
+            connect_entered.set()
+            assert release_connect.wait(1.0)
+            super().connect()
+
+    client = _BlockedClient()
+    bridge = XInputBridge(client_factory=lambda: client)
+    bridge.start()
+    assert connect_entered.wait(1.0)
+    try:
+        bridge.publish_latest(_state())
+        bridge.publish_latest(_state(buttons=frozenset({DualSenseButton.CROSS})))
+        bridge.publish_latest(_state())
+    finally:
+        release_connect.set()
+
+    _wait(lambda: bridge.snapshot().forwarded_reports >= 2)
+    bridge.stop()
+
+    reports = [XUSBReport.from_buffer_copy(raw) for raw in client.targets[0].reports]
+    assert any(report.wButtons & XUSBButton.A for report in reports)
+    assert reports[-2].wButtons == 0
+    press_index = next(
+        index for index, report in enumerate(reports) if report.wButtons & XUSBButton.A
+    )
+    assert (
+        client.targets[0].update_times[press_index + 1]
+        - client.targets[0].update_times[press_index]
+        >= bridge_module.MIN_DIGITAL_EDGE_HOLD_S - 0.005
+    )
+
+
+def test_expired_button_edges_are_not_replayed_after_bridge_connects():
+    connect_entered = threading.Event()
+    release_connect = threading.Event()
+
+    class _BlockedClient(_Client):
+        def connect(self):
+            connect_entered.set()
+            assert release_connect.wait(1.0)
+            super().connect()
+
+    clock = _Clock()
+    client = _BlockedClient()
+    bridge = XInputBridge(client_factory=lambda: client, clock=clock)
+    bridge.start()
+    assert connect_entered.wait(1.0)
+    try:
+        bridge.publish_latest(_state(buttons=frozenset({DualSenseButton.CROSS})))
+        bridge.publish_latest(_state())
+        clock.advance(0.2)
+        bridge.publish_latest(_state())
+    finally:
+        release_connect.set()
+
+    _wait(lambda: bridge.snapshot().forwarded_reports == 1)
+    bridge.stop()
+
+    reports = [XUSBReport.from_buffer_copy(raw) for raw in client.targets[0].reports]
+    assert all(not report.wButtons & XUSBButton.A for report in reports)
+
+
 def test_stale_input_is_neutralized_at_100ms_without_removing_player_slot():
     clock = _Clock()
     client = _Client()
@@ -284,6 +353,67 @@ def test_keyboard_mouse_input_neutralizes_target_until_deliberate_controller_cha
     _wait(lambda: bridge.snapshot().forwarded_reports == 2)
     assert len(client.targets) == 1
     assert client.targets[0].reports[-1] != bytes(12)
+    bridge.stop()
+
+
+def test_repeated_mouse_activity_does_not_advance_controller_resume_baseline():
+    clock = _Clock()
+    activity = _Activity()
+    client = _Client()
+    bridge = XInputBridge(
+        client_factory=lambda: client,
+        clock=clock,
+        keyboard_mouse_activity=activity,
+    )
+    bridge.start()
+    bridge.publish_latest(_state(left_x=128))
+    _wait(lambda: bridge.snapshot().forwarded_reports == 1)
+
+    activity.trigger()
+    bridge._wake.set()
+    _wait(lambda: bridge.snapshot().input_owner is InputOwner.KEYBOARD_MOUSE)
+    bridge.publish_latest(_state(left_x=135))
+    _wait(lambda: bridge.snapshot().received_reports == 2)
+    assert bridge.snapshot().input_owner is InputOwner.KEYBOARD_MOUSE
+
+    activity.trigger()
+    bridge._wake.set()
+    _wait(lambda: not activity.pending)
+    bridge.publish_latest(_state(left_x=140))
+    _wait(lambda: bridge.snapshot().input_owner is InputOwner.CONTROLLER)
+    _wait(lambda: bridge.snapshot().forwarded_reports == 2)
+    assert client.targets[0].reports[-1] != bytes(12)
+    bridge.stop()
+
+
+def test_button_press_arriving_with_mouse_activity_is_not_used_as_resume_baseline():
+    connect_entered = threading.Event()
+    release_connect = threading.Event()
+
+    class _BlockedClient(_Client):
+        def connect(self):
+            connect_entered.set()
+            assert release_connect.wait(1.0)
+            super().connect()
+
+    activity = _Activity()
+    client = _BlockedClient()
+    bridge = XInputBridge(
+        client_factory=lambda: client,
+        keyboard_mouse_activity=activity,
+    )
+    bridge.start()
+    assert connect_entered.wait(1.0)
+    try:
+        activity.trigger()
+        bridge.publish_latest(_state(buttons=frozenset({DualSenseButton.CROSS})))
+    finally:
+        release_connect.set()
+
+    _wait(lambda: bridge.snapshot().forwarded_reports == 1)
+    pressed = XUSBReport.from_buffer_copy(client.targets[0].reports[-1])
+    assert pressed.wButtons & XUSBButton.A
+    assert bridge.snapshot().input_owner is InputOwner.CONTROLLER
     bridge.stop()
 
 

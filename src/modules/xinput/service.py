@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from ..dualsense.hidhide import HidHidePhase, HidHideService, HidHideSnapshot
+from ..dualsense.input_state import DPad, DualSenseInputState
 from .bridge import BridgeSnapshot, BridgeStatus, XInputBridge
 from .driver import (
     DriverProbeStatus,
@@ -56,11 +57,58 @@ def _vigem_ready_for_isolation() -> bool:
     return probe_vigem_bus().status is DriverProbeStatus.AVAILABLE
 
 
+def xbox_isolation_ready(
+    settings,
+    bridge: BridgeSnapshot,
+    isolation: HidHideSnapshot,
+    *,
+    controller_connected: bool,
+) -> bool:
+    """Require the current physical controller's verified hiding before input."""
+    return bool(
+        normalize_forza_platform(
+            getattr(settings, "preferred_forza_platform", STEAM_PLATFORM)
+        ) == XBOX_APP_PLATFORM
+        and bool(getattr(settings, "enable_hidhide", False))
+        and not bool(getattr(settings, "use_dsx", False))
+        and controller_connected
+        and bridge.target_connected
+        and bridge.status in {BridgeStatus.ACTIVE, BridgeStatus.STALE}
+        and isolation.phase is HidHidePhase.ACTIVE
+        and isolation.hidden_device_count > 0
+    )
+
+
+def _neutral_input(state: DualSenseInputState) -> DualSenseInputState:
+    """Keep the virtual target alive without forwarding unisolated controls."""
+    return replace(
+        state,
+        left_x=128,
+        left_y=128,
+        right_x=128,
+        right_y=128,
+        left_trigger=0,
+        right_trigger=0,
+        dpad=DPad.NEUTRAL,
+        buttons=frozenset(),
+        touchpad_regions=frozenset(),
+        touchpad_touched=False,
+        gyro_x=0,
+        gyro_y=0,
+        gyro_z=0,
+        accel_x=0,
+        accel_y=0,
+        accel_z=0,
+    )
+
+
 def hidhide_presentation(
     settings,
     bridge: BridgeSnapshot,
     isolation: HidHideSnapshot,
     translate: Callable[[str], str],
+    *,
+    controller_connected: bool = True,
 ) -> HidHidePresentation:
     if isolation.phase is HidHidePhase.ERROR:
         return HidHidePresentation(
@@ -70,8 +118,12 @@ def hidhide_presentation(
         )
     if not bool(getattr(settings, "enable_hidhide", False)):
         return HidHidePresentation(
-            translate("HidHide isolation is off"),
-            translate("The physical DualSense remains visible to games"),
+            translate("HidHide is required for Xbox App")
+            if normalize_forza_platform(getattr(settings, "preferred_forza_platform", STEAM_PLATFORM)) == XBOX_APP_PLATFORM
+            else translate("HidHide isolation is off"),
+            translate("Enable HidHide before using Xbox App")
+            if normalize_forza_platform(getattr(settings, "preferred_forza_platform", STEAM_PLATFORM)) == XBOX_APP_PLATFORM
+            else translate("FHDS is not checking HidHide; manual device hiding may remain active"),
         )
     if normalize_forza_platform(
         getattr(settings, "preferred_forza_platform", STEAM_PLATFORM)
@@ -85,14 +137,49 @@ def hidhide_presentation(
             translate("HidHide isolation is paused"),
             translate("Direct HID mode is required; DSX owns the controller"),
         )
-    if isolation.phase is HidHidePhase.ACTIVE:
+    if isolation.phase is HidHidePhase.ACTIVE and (
+        isolation.hidden_device_count < 1 or not controller_connected
+    ):
         return HidHidePresentation(
-            translate("Physical DualSense hidden from games"),
-            translate("Hidden {count} device path(s); restart an already-running game").format(
-                count=isolation.hidden_device_count
+            translate("HidHide isolation is waiting"),
+            translate("Connect or reconnect the DualSense to apply isolation"),
+        )
+    if isolation.phase is HidHidePhase.ACTIVE:
+        if isolation.automatic_configuration:
+            detail = translate(
+                "FHDS configured {count} hidden DualSense device(s); restart an already-running game"
+            ).format(count=isolation.hidden_device_count)
+        elif isolation.manual_configuration:
+            detail = translate(
+                "Verified {count} manually hidden device(s); restart an already-running game"
+            ).format(count=isolation.hidden_device_count)
+        else:
+            detail = translate(
+                "Hidden {count} device path(s); restart an already-running game"
+            ).format(count=isolation.hidden_device_count)
+        return HidHidePresentation(
+            translate(
+                "FHDS-managed HidHide isolation active"
+                if isolation.automatic_configuration
+                else (
+                    "Manual HidHide rules verified"
+                    if isolation.manual_configuration
+                    else "Physical DualSense hidden from games"
+                )
             ),
+            detail,
         )
     if isolation.phase is HidHidePhase.READY:
+        if isolation.automatic_configuration:
+            return HidHidePresentation(
+                translate("HidHide isolation is ready"),
+                translate("FHDS configured HidHide; reconnect the DualSense to apply hiding"),
+            )
+        if isolation.manual_configuration:
+            return HidHidePresentation(
+                translate("HidHide isolation is ready"),
+                translate("Manual HidHide rules found; reconnect the DualSense to verify hiding"),
+            )
         return HidHidePresentation(
             translate("HidHide isolation is ready"),
             translate("Connect or reconnect the DualSense to apply isolation"),
@@ -101,7 +188,7 @@ def hidhide_presentation(
         return HidHidePresentation(
             translate("HidHide unavailable"),
             isolation.last_error
-            or translate("Install HidHide 1.7 or newer and restart FHDS"),
+            or translate("Install HidHide and restart FHDS"),
         )
     if bridge.status in {
         BridgeStatus.DRIVER_MISSING,
@@ -113,7 +200,7 @@ def hidhide_presentation(
         )
     else:
         detail = translate(
-            "Isolation remains active while the Xbox App bridge is running"
+            "Connect or reconnect the DualSense to apply isolation"
         )
     return HidHidePresentation(translate("HidHide isolation is waiting"), detail)
 
@@ -123,7 +210,7 @@ class XInputBridgeService:
 
     Steam mode leaves the bridge off. Xbox App direct-HID mode starts one
     virtual X360 worker plus the Raw Input activity monitor for the lifetime of
-    the selected backend. HidHide remains explicit and default-off.
+    the selected backend. Physical input stays neutral until HidHide is verified.
     """
 
     def __init__(
@@ -135,6 +222,9 @@ class XInputBridgeService:
         hidhide_service: HidHideService | None = None,
         hidhide_driver_ready: Callable[[], bool] = _vigem_ready_for_isolation,
         platform_supported: Callable[[], bool] = is_supported_platform,
+        hidhide_retry_timer_factory: Callable[
+            [float, Callable[[], None]], threading.Timer
+        ] = threading.Timer,
     ):
         self.settings = settings
         if bridge is None:
@@ -150,6 +240,8 @@ class XInputBridgeService:
         self._hidhide = hidhide_service or HidHideService()
         self._hidhide_driver_ready = hidhide_driver_ready
         self._platform_supported = platform_supported
+        self._hidhide_retry_timer_factory = hidhide_retry_timer_factory
+        self._hidhide_retry_timer: threading.Timer | None = None
         self._lock = threading.Lock()
         self._lifecycle_lock = threading.RLock()
         self._hidhide_callback_lock = threading.Lock()
@@ -182,7 +274,15 @@ class XInputBridgeService:
         with self._lifecycle_lock:
             self._sync(backend)
 
+    def prepare_controller_access(self, backend) -> HidHideSnapshot:
+        """Allow FHDS through HidHide before the HID worker first opens it."""
+        with self._lifecycle_lock:
+            if self._application_access_needed(backend):
+                return self._hidhide.prepare_application_access()
+            return self._hidhide.snapshot()
+
     def _sync(self, backend) -> None:
+        self._cancel_hidhide_retry()
         self.refresh_button_mapping()
         old_backend = self._detach_backend()
         self._bridge.stop()
@@ -221,7 +321,18 @@ class XInputBridgeService:
 
         self._start_input_activity_monitor()
         self._bridge.start()
-        setter(self._bridge.publish_latest)
+        bridge_publisher = self._bridge.publish_latest
+
+        def isolated_publish(
+            state: DualSenseInputState,
+            received_at: float | None = None,
+        ) -> None:
+            bridge_publisher(
+                state if self.isolation_confirmed() else _neutral_input(state),
+                received_at,
+            )
+
+        setter(isolated_publish)
         with self._lock:
             self._override = None
         self._reconcile_hidhide()
@@ -255,6 +366,24 @@ class XInputBridgeService:
     def hidhide_snapshot(self) -> HidHideSnapshot:
         return self._hidhide.snapshot()
 
+    def isolation_confirmed(self) -> bool:
+        with self._lock:
+            backend = self._backend
+        return xbox_isolation_ready(
+            self.settings,
+            self.snapshot(),
+            self._hidhide.snapshot(),
+            controller_connected=bool(getattr(backend, "connected", False)),
+        )
+
+    def verify_isolation(self) -> bool:
+        """Recheck the driver immediately before a programmatic game launch."""
+        with self._lifecycle_lock:
+            verifier = getattr(self._hidhide, "verify_active", None)
+            if callable(verifier):
+                verifier()
+            return self.isolation_confirmed()
+
     def _reconcile_hidhide(self, *, force: bool = False) -> None:
         del force
         with self._lock:
@@ -270,12 +399,62 @@ class XInputBridgeService:
             and self._bridge_ready_for_hidhide(bridge)
         )
         if not desired:
-            self._apply_hidhide_disabled(
+            cleaned = self._apply_hidhide_disabled(
                 backend=backend,
                 remove_allowlist=not self._hidhide_enabled(),
             )
+            if cleaned and self._application_access_needed(backend):
+                snapshot = self._hidhide.prepare_application_access()
+                if snapshot.phase in {HidHidePhase.ERROR, HidHidePhase.UNAVAILABLE}:
+                    self._schedule_hidhide_retry()
+                else:
+                    self._cancel_hidhide_retry()
+            elif self._application_access_needed(backend):
+                self._schedule_hidhide_retry()
+            else:
+                self._cancel_hidhide_retry()
             return
         self._apply_hidhide_enabled(backend)
+        # The same bounded timer also detects a rule or Device hiding switch
+        # removed in the official client while FHDS is running.
+        self._schedule_hidhide_retry()
+
+    def _schedule_hidhide_retry(self) -> None:
+        if self._hidhide_retry_timer is not None:
+            return
+
+        def retry() -> None:
+            with self._lifecycle_lock:
+                if self._hidhide_retry_timer is not timer:
+                    return
+                self._hidhide_retry_timer = None
+                try:
+                    self._reconcile_hidhide()
+                except Exception:
+                    log.exception("HidHide isolation retry failed")
+
+        timer = self._hidhide_retry_timer_factory(5.0, retry)
+        timer.daemon = True
+        self._hidhide_retry_timer = timer
+        try:
+            timer.start()
+        except Exception:
+            self._hidhide_retry_timer = None
+            log.exception("Could not schedule HidHide isolation retry")
+
+    def _cancel_hidhide_retry(self) -> None:
+        timer, self._hidhide_retry_timer = self._hidhide_retry_timer, None
+        if timer is not None:
+            timer.cancel()
+
+    def _application_access_needed(self, backend) -> bool:
+        return bool(
+            self._hidhide_enabled()
+            and self.platform == XBOX_APP_PLATFORM
+            and self._platform_supported()
+            and callable(getattr(backend, "set_input_consumer", None))
+            and callable(getattr(backend, "set_device_visibility_observer", None))
+        )
 
     @staticmethod
     def _bridge_ready_for_hidhide(snapshot: BridgeSnapshot) -> bool:
@@ -323,14 +502,17 @@ class XInputBridgeService:
             return False
 
         current = self._hidhide.snapshot()
-        if current.phase is HidHidePhase.ERROR:
+        if current.phase in {HidHidePhase.ERROR, HidHidePhase.UNAVAILABLE}:
             if not self._apply_hidhide_disabled(
                 backend=backend,
                 remove_allowlist=False,
             ):
                 return False
             current = self._hidhide.snapshot()
-        if current.phase in {HidHidePhase.READY, HidHidePhase.ACTIVE}:
+        if self._hidhide.started and current.phase in {
+            HidHidePhase.READY,
+            HidHidePhase.ACTIVE,
+        }:
             snapshot = current
         else:
             try:
@@ -387,6 +569,7 @@ class XInputBridgeService:
     ) -> InstallResult:
         """Run the already-confirmed installer flow; caller owns the UI prompt."""
         with self._lifecycle_lock:
+            self._cancel_hidhide_retry()
             with self._lock:
                 backend = self._backend
             self._detach_backend()
@@ -423,6 +606,7 @@ class XInputBridgeService:
 
     def stop(self) -> None:
         with self._lifecycle_lock:
+            self._cancel_hidhide_retry()
             backend = self._detach_backend()
             self._bridge.stop()
             self._stop_input_activity_monitor()
