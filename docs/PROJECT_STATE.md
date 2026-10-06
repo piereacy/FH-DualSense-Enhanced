@@ -4,6 +4,10 @@
 
 ## 2026-10-07 Git 同步与后续修复
 
+- 累计修复提交 `2d230a2` 已成功推送至 `origin/main`，通过 `git ls-remote` 核对远端 SHA。推送后继续修复首次更新健康观察遗漏应用进程、损坏健康记录和不可读候选的边界。
+- 最新全量 **1239 passed、3 skipped**；Pyrefly **0 errors、1 suppressed、147 warnings**。Ruff 无新增诊断，源码编译、锁文件、shell 语法及 diff 检查通过。
+
+
 - 用户授权同步 Git 并推送后继续。提交前已 fetch 并审阅 `origin/main`，与本地 `d151573` 基线一致；三份 README 没有远端差异。同步目标为 `origin/main`，版本仍为 Enhanced R12。
 - 新增更新服务安装/停止竞态修复、语言包外部变化检测与保守回滚、保存冲突后切换/退出保护及 Default 假提示修复。全部非英语语言已有失败提示翻译，见 `PROJECT_FIXES_2026-10-07.md`。
 - 本批提交前全量 `pytest -q -W error` 为 **1232 passed、3 skipped**；Pyrefly **0 errors、1 suppressed、147 warnings**。Ruff 基础规则通过，全规则基线 412 项、当前 404 项，无新增诊断；compileall、锁文件、shell 语法及 diff 检查通过。

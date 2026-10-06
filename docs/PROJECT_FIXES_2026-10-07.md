@@ -18,3 +18,7 @@
 - 限定源码 compileall、`uv lock --check`、Linux shell 语法和 `git diff --check` 通过。
 
 跳过项要求 Windows。真实冻结 EXE 更新事务、HidHide/ViGEmBus、USB/Bluetooth 和 Forza 现场验证未执行。语言文件保护是在检查点检测外部变化，不能阻止不遵守事务锁的更新器在任意时刻改写文件。版本保持 Enhanced R12，本批不创建发布标签或发布二进制。
+
+## 同步后继续审查
+
+累计修复已以 `2d230a2` 推送到 `origin/main`，远端 SHA 已独立查询确认。随后 6 个隔离复现揭示首次更新健康观察只看外层启动器，以及损坏记录/不可读候选抛异常的问题。现同时检查 ACK 应用进程和启动器，在观察期结束核对同一 ACK 与内容哈希，并把无效记录视为未确认。新增 7 项健康检查回归，全量为 **1239 passed、3 skipped**；Pyrefly 仍为 **0 errors、1 suppressed、147 warnings**。其余基础检查通过，Ruff 无新增诊断。真实 Windows 冻结包验证仍未执行。

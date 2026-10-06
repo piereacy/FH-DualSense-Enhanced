@@ -334,7 +334,7 @@ def _read_valid_health(
     health_path = plan_path.with_name("health.json")
     try:
         health = json.loads(health_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     if not isinstance(health, dict):
         return None
@@ -355,15 +355,19 @@ def _read_valid_health(
     if type(health.get("pid")) is not int or int(health["pid"]) <= 0:
         return None
     initialized_at = health.get("initialized_at")
-    if (
-        isinstance(initialized_at, bool)
-        or not isinstance(initialized_at, (int, float))
-        or not math.isfinite(float(initialized_at))
-        or float(initialized_at) <= 0.0
-    ):
+    if isinstance(initialized_at, bool) or not isinstance(initialized_at, (int, float)):
+        return None
+    try:
+        timestamp = float(initialized_at)
+    except (ValueError, OverflowError):
+        return None
+    if not math.isfinite(timestamp) or timestamp <= 0.0:
         return None
     new = Path(plan["new_path"])
-    if not new.is_file() or sha256(new).lower() != plan["new_sha256"]:
+    try:
+        if not new.is_file() or sha256(new).lower() != plan["new_sha256"]:
+            return None
+    except OSError:
         return None
     return health
 
@@ -422,21 +426,27 @@ def wait_for_health(
     health_path = plan_path.with_name("health.json")
     deadline = time.monotonic() + max(0.0, timeout)
     confirmed_at: float | None = None
+    health = None
     while time.monotonic() <= deadline:
         if not _process_running(process):
             raise RuntimeError("updated application exited before health confirmation")
         if confirmed_at is None and health_path.is_file():
             # A PyInstaller one-file launch has an outer bootloader PID and an
             # inner application PID. The unique transaction token authenticates
-            # the ACK; process survival below continues to monitor the outer
-            # process that owns the child lifetime.
+            # the ACK. Observe the actual application as well as its outer
+            # bootloader, which can remain alive while cleaning up a dead child.
             health = _read_valid_health(plan_path, plan)
             if health is not None:
                 confirmed_at = time.monotonic()
             if confirmed_at is None:
                 health_path.unlink(missing_ok=True)
-        if confirmed_at is not None and time.monotonic() - confirmed_at >= max(0.0, survival_seconds):
-            return
+        if confirmed_at is not None:
+            if not _health_process_is_running(plan_path, plan, health=health):
+                raise RuntimeError("updated application's health process exited before confirmation")
+            if time.monotonic() - confirmed_at >= max(0.0, survival_seconds):
+                if _read_valid_health(plan_path, plan) != health:
+                    raise RuntimeError("updated application health confirmation changed during observation")
+                return
         time.sleep(0.05)
     raise TimeoutError("updated application did not confirm a healthy startup")
 

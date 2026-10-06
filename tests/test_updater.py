@@ -35,6 +35,9 @@ def _load_helper():
     )
     # Transaction tests inject Popen on every platform. Native Job ownership is
     # exercised separately in test_update_process.py.
+    # Their acknowledgements also use synthetic child PIDs. Real health-process
+    # observation is exercised separately in test_update_health.py.
+    helper["apply"].__globals__["_health_process_is_running"] = lambda *_args, **_kwargs: True
     helper["apply"].__globals__["_launch_update"] = (
         lambda command, *, cwd: helper["subprocess"].Popen(command, cwd=cwd)
     )
