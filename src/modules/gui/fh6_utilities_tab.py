@@ -241,7 +241,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 running = False
                 log.exception("FH6 process check failed")
             try:
-                self.app.root.after(0, lambda: self._apply_runtime_refresh(running))
+                self.app.post_ui(lambda: self._apply_runtime_refresh(running))
             except Exception:
                 pass
 
@@ -374,8 +374,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 error = str(exc) or type(exc).__name__
                 log.exception("FH6 language status scan failed")
             try:
-                self.app.root.after(
-                    0,
+                self.app.post_ui(
                     lambda: self._apply_fh6_scan(
                         serial,
                         platform,
@@ -407,7 +406,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
             return
         current_platform = normalize_forza_platform(self.settings.preferred_forza_platform)
         current_hint = self._language_saved_path(current_platform)
-        if platform != current_platform or (not manual and context_hint != current_hint):
+        if platform != current_platform or context_hint != current_hint:
             self._fh6_platform = current_platform
             self._fh6_path_hint = current_hint
             self._invalidate_fh6()
@@ -520,7 +519,11 @@ class FH6UtilitiesTab(ctk.CTkFrame):
 
     def _request_fh6_action(self):
         view = self._fh6_view
-        if view is None or not view.action or not view.action_enabled:
+        context = self._fh6_action_context()
+        if (
+            view is None or not view.action or not view.action_enabled
+            or context is None or self._fh6_operation_busy or self._fh6_scan_busy
+        ):
             return
         headings = {
             "enable": t("Enable Chinese text + English voice?"),
@@ -553,20 +556,41 @@ class FH6UtilitiesTab(ctk.CTkFrame):
             confirm_label=view.action_label,
             on_confirm=lambda: self._run_fh6_action(
                 view.action,
+                context,
                 allow_unknown=view.unknown_language_warning,
             ),
         )
 
-    def _run_fh6_action(self, action: str, *, allow_unknown: bool):
-        if self._fh6_install is None or self._fh6_operation_busy:
+    def _fh6_action_context(self):
+        platform = normalize_forza_platform(self.settings.preferred_forza_platform)
+        hint = self._language_saved_path(platform)
+        if (
+            platform != self._fh6_platform
+            or hint != self._fh6_path_hint
+            or self._fh6_install is None
+            or self._fh6_inspection.install != self._fh6_install
+        ):
+            return None
+        return (platform, hint, self._fh6_scan_serial, self._fh6_install.root)
+
+    def _run_fh6_action(self, action: str, context, *, allow_unknown: bool):
+        if (
+            context is None or context != self._fh6_action_context()
+            or self._fh6_operation_busy or self._fh6_scan_busy
+        ):
             return
         install = self._fh6_install
+        if install is None:
+            return
         self._fh6_operation_busy = True
         self._fh6_error = ""
         self._fh6_render_cache = None
         self._render_fh6_status()
 
         def worker():
+            if context != self._fh6_action_context():
+                self.app.post_ui(lambda: self._finish_fh6_action(context, None, ""))
+                return
             try:
                 if action == "enable":
                     result = enable_chinese_text_english_voice(
@@ -585,14 +609,18 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 error = str(exc) or type(exc).__name__
                 log.exception("FH6 language action failed")
             try:
-                self.app.root.after(0, lambda: self._finish_fh6_action(result, error))
+                self.app.post_ui(lambda: self._finish_fh6_action(context, result, error))
             except Exception:
                 pass
 
         threading.Thread(target=worker, name="fhds-fh6-language-action", daemon=True).start()
 
-    def _finish_fh6_action(self, inspection: LanguageInspection, error: str):
+    def _finish_fh6_action(self, context, inspection: LanguageInspection | None, error: str):
         self._fh6_operation_busy = False
+        if inspection is None or context != self._fh6_action_context():
+            self._sync_context()
+            self._render_fh6_status()
+            return
         self._fh6_inspection = inspection
         self._fh6_game_running = False
         self._fh6_error = error
@@ -725,8 +753,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 error = str(exc) or type(exc).__name__
                 log.exception("FH6 controller-icon status scan failed")
             try:
-                self.app.root.after(
-                    0,
+                self.app.post_ui(
                     lambda: self._apply_icon_scan(
                         serial,
                         platform,
@@ -760,7 +787,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
             return
         current_platform = normalize_forza_platform(self.settings.preferred_forza_platform)
         current_hint = self._icon_saved_path(current_platform)
-        if not manual and (platform != current_platform or context_hint != current_hint):
+        if platform != current_platform or context_hint != current_hint:
             self._icon_platform = current_platform
             self._icon_path_hint = current_hint
             self._invalidate_icons()
@@ -862,7 +889,8 @@ class FH6UtilitiesTab(ctk.CTkFrame):
             self._start_icon_scan(rediscover=False, manual_path=selected)
 
     def _request_icon_action(self, action: str):
-        if self._icon_inspection.root is None or self._icon_operation_busy:
+        context = self._icon_action_context()
+        if context is None or self._icon_operation_busy or self._icon_scan_busy:
             return
         install = action == "install"
         ConfirmationDialog(
@@ -884,19 +912,38 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 if install
                 else t("Restore original icons")
             ),
-            on_confirm=lambda: self._run_icon_action(action),
+            on_confirm=lambda: self._run_icon_action(action, context),
         )
 
-    def _run_icon_action(self, action: str):
-        root = self._icon_inspection.root
-        if root is None or self._icon_operation_busy:
+    def _icon_action_context(self):
+        platform = normalize_forza_platform(self.settings.preferred_forza_platform)
+        hint = self._icon_saved_path(platform)
+        if (
+            platform != self._icon_platform
+            or hint != self._icon_path_hint
+            or self._icon_inspection.root is None
+        ):
+            return None
+        return (platform, hint, self._icon_scan_serial, self._icon_inspection.root)
+
+    def _run_icon_action(self, action: str, context):
+        if (
+            context is None
+            or context != self._icon_action_context()
+            or self._icon_operation_busy
+            or self._icon_scan_busy
+        ):
             return
+        root = context[3]
         self._icon_operation_busy = True
         self._icon_error = ""
         self._icon_render_cache = None
         self._render_icon_status()
 
         def worker():
+            if context != self._icon_action_context():
+                self.app.post_ui(lambda: self._finish_icon_action(context, None, ""))
+                return
             try:
                 if action == "install":
                     inspection = install_controller_icons(root)
@@ -910,7 +957,7 @@ class FH6UtilitiesTab(ctk.CTkFrame):
                 error = str(exc) or type(exc).__name__
                 log.exception("FH6 controller-icon action failed")
             try:
-                self.app.root.after(0, lambda: self._finish_icon_action(inspection, error))
+                self.app.post_ui(lambda: self._finish_icon_action(context, inspection, error))
             except Exception:
                 pass
 
@@ -920,8 +967,12 @@ class FH6UtilitiesTab(ctk.CTkFrame):
             daemon=True,
         ).start()
 
-    def _finish_icon_action(self, inspection: ControllerIconInspection, error: str):
+    def _finish_icon_action(self, context, inspection: ControllerIconInspection | None, error: str):
         self._icon_operation_busy = False
+        if inspection is None or context != self._icon_action_context():
+            self._sync_context()
+            self._render_icon_status()
+            return
         self._icon_inspection = inspection
         self._icon_game_running = False
         self._icon_error = error

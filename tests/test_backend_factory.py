@@ -4,6 +4,18 @@ from modules import make_backend
 from modules.config.settings import Settings
 
 
+def test_waiting_native_controller_rechecks_trigger_master_before_startup_pulse(monkeypatch):
+    settings = Settings(enable_trigger_feedback=True, enable_startup_pulse=True)
+    controller = make_backend(settings, True)
+    writes = []
+    monkeypatch.setattr(controller, "_safe_write", writes.append)
+    settings.enable_trigger_feedback = False
+
+    controller._write_startup_pulse()
+
+    assert writes == []
+
+
 def test_native_backend_uses_live_body_haptics_audio_gate(monkeypatch):
     captured = {}
     endpoint_checks = []

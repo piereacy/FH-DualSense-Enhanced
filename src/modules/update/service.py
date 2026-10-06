@@ -54,6 +54,8 @@ class UpdateService:
 
     def _start(self, target, *, name: str) -> bool:
         with self._lock:
+            if self._stop.is_set() or self._snapshot.phase is UpdatePhase.INSTALLING:
+                return False
             if self._worker is not None and self._worker.is_alive():
                 return False
             self._worker = threading.Thread(target=target, name=name, daemon=True)
@@ -82,7 +84,8 @@ class UpdateService:
         ).start()
 
     def stop(self) -> None:
-        self._stop.set()
+        with self._lock:
+            self._stop.set()
 
     def check_now(self) -> bool:
         if not self.supported:
@@ -90,32 +93,88 @@ class UpdateService:
         return self._start(lambda: self._check_impl(background=False), name="fhds-update-check")
 
     def _check_impl(self, *, background: bool) -> None:
-        self._set(phase=UpdatePhase.CHECKING, message="Checking for updates")
+        with self._lock:
+            cached = self._snapshot
+            if self._stop.is_set() or cached.phase is UpdatePhase.INSTALLING:
+                return
+            if cached.phase is not UpdatePhase.READY:
+                self._snapshot = replace(
+                    cached, phase=UpdatePhase.CHECKING, message="Checking for updates"
+                )
+
+        def publish(**changes):
+            # Installation may have been requested while the HTTP check ran.
+            with self._lock:
+                if not self._stop.is_set() and self._snapshot.phase is not UpdatePhase.INSTALLING:
+                    self._snapshot = replace(self._snapshot, **changes)
+
+        def keep_cached(release=None):
+            if not self._verified_cache(cached):
+                return False
+            if release is not None and not self._same_asset(cached.release, release):
+                return False
+            publish(
+                phase=UpdatePhase.READY,
+                message="Update ready to install",
+                release=release or cached.release,
+                last_checked_at=time.time(),
+            )
+            return True
+
         try:
             release = self.client.latest(current_version=_current_version())
         except Exception as exc:
             log.warning("Update check failed: %s", exc)
-            self._set(phase=UpdatePhase.ERROR, message=str(exc), last_checked_at=time.time())
+            if not keep_cached():
+                publish(phase=UpdatePhase.ERROR, message=str(exc), last_checked_at=time.time())
+            return
+        if keep_cached(release):
             return
         now = time.time()
         if release is None:
-            self._set(
+            publish(
                 phase=UpdatePhase.UP_TO_DATE,
                 message="You are up to date",
                 release=None,
+                staged_path="",
                 last_checked_at=now,
             )
             return
-        self._set(
+        publish(
             phase=UpdatePhase.AVAILABLE,
             message=f"{release.tag} is available",
             release=release,
             downloaded=0,
             total=release.asset_size,
+            staged_path="",
             last_checked_at=now,
         )
-        if background and bool(getattr(self.settings, "auto_download_updates", False)):
+        if (
+            self.snapshot().phase is UpdatePhase.AVAILABLE
+            and background
+            and bool(getattr(self.settings, "auto_download_updates", False))
+        ):
             self._download_impl()
+
+    @staticmethod
+    def _same_asset(left: UpdateRelease | None, right: UpdateRelease) -> bool:
+        fields = ("version", "tag", "asset_name", "asset_url", "asset_size", "checksum_url")
+        return left is not None and all(getattr(left, key) == getattr(right, key) for key in fields)
+
+    def _verified_cache(self, snapshot: UpdateSnapshot) -> bool:
+        if snapshot.phase is not UpdatePhase.READY or snapshot.release is None:
+            return False
+        if not snapshot.staged_path or not self._last_sha256:
+            return False
+        try:
+            staged = Path(snapshot.staged_path)
+            return (
+                snapshot.release.version > _current_version()
+                and staged.stat().st_size == snapshot.release.asset_size
+                and self._hash_file(staged) == self._last_sha256
+            )
+        except OSError:
+            return False
 
     def download(self) -> bool:
         if not self.supported:
@@ -126,34 +185,39 @@ class UpdateService:
         return self._start(self._download_impl, name="fhds-update-download")
 
     def _download_impl(self) -> None:
-        release = self.snapshot().release
-        if release is None:
-            return
+        with self._lock:
+            if self._stop.is_set() or self._snapshot.phase is UpdatePhase.INSTALLING:
+                return
+            release = self._snapshot.release
+            if release is None:
+                return
+            self._snapshot = replace(
+                self._snapshot,
+                phase=UpdatePhase.DOWNLOADING,
+                message="Downloading update",
+                downloaded=0,
+                total=release.asset_size,
+            )
         update_dir = paths.DATA / "updates"
         destination = update_dir / release.asset_name
-        self._set(
-            phase=UpdatePhase.DOWNLOADING,
-            message="Downloading update",
-            downloaded=0,
-            total=release.asset_size,
-        )
 
         def progress(downloaded, total):
             self._set(downloaded=downloaded, total=total or release.asset_size)
 
         try:
-            self._set(phase=UpdatePhase.DOWNLOADING)
             digest = self.client.download(release, destination, progress=progress)
             self._set(phase=UpdatePhase.VERIFYING, message="Verifying update")
-            self._last_sha256 = digest
             self._save_pending(release, destination, digest)
-            self._set(
-                phase=UpdatePhase.READY,
-                message="Update ready to install",
-                staged_path=str(destination),
-                downloaded=release.asset_size,
-                total=release.asset_size,
-            )
+            with self._lock:
+                self._last_sha256 = digest
+                self._snapshot = replace(
+                    self._snapshot,
+                    phase=UpdatePhase.READY,
+                    message="Update ready to install",
+                    staged_path=str(destination),
+                    downloaded=release.asset_size,
+                    total=release.asset_size,
+                )
         except Exception as exc:
             log.warning("Update download failed: %s", exc)
             self._set(phase=UpdatePhase.ERROR, message=str(exc))
@@ -266,15 +330,23 @@ class UpdateService:
     def install_on_exit(self) -> Path:
         if not self.supported:
             raise RuntimeError("built-in updates require the Windows standalone EXE")
-        snapshot = self.snapshot()
-        if snapshot.phase is not UpdatePhase.READY or not snapshot.staged_path:
-            raise RuntimeError("no verified update is ready")
-        if not self._last_sha256:
-            raise RuntimeError("verified update digest is missing")
-        self._set(phase=UpdatePhase.INSTALLING, message="Restarting to install")
+        # Claim the path, digest and phase together. A background check may
+        # otherwise replace the ready release and begin another download here.
+        with self._lock:
+            if self._stop.is_set():
+                raise RuntimeError("update service is stopped")
+            snapshot = self._snapshot
+            if snapshot.phase is not UpdatePhase.READY or not snapshot.staged_path:
+                raise RuntimeError("no verified update is ready")
+            digest = self._last_sha256
+            if not digest:
+                raise RuntimeError("verified update digest is missing")
+            self._snapshot = replace(
+                snapshot, phase=UpdatePhase.INSTALLING, message="Restarting to install"
+            )
         try:
             return launch_update_helper(
-                Path(snapshot.staged_path), expected_sha256=self._last_sha256
+                Path(snapshot.staged_path), expected_sha256=digest
             )
         except Exception:
             # The GUI/TUI deliberately stays open when the helper cannot be

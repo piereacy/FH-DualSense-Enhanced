@@ -121,7 +121,7 @@ class ProfilesTab(ctk.CTkFrame):
     # MARK: list helpers ----------------------------------------------------
 
     def _refresh_list(self):
-        store = profiles.load_profiles()
+        store = profiles.load_profiles(self.settings)
         active = store.get("active", "")
         self.lbl_active.configure(
             text=t("Active: {name}").format(name=active or t("(none)"))
@@ -158,6 +158,9 @@ class ProfilesTab(ctk.CTkFrame):
             log.warning("Profile name is empty.")
             return
         final = profiles.save_profile(name, self.settings)
+        if not final:
+            self.app.report_save_failure()
+            return
         if final:
             self.app.mark_default_saved()
         self.entry_name.delete(0, "end")
@@ -176,6 +179,8 @@ class ProfilesTab(ctk.CTkFrame):
             self.app.refresh_setting_widgets()
             self._refresh_list()
             log.info("Loaded profile: %s", name)
+        else:
+            self.app.report_save_failure()
 
     def _on_delete(self):
         name = self._selected_name()
@@ -185,9 +190,12 @@ class ProfilesTab(ctk.CTkFrame):
         if profiles.is_builtin_profile(name):
             log.warning("Built-in profile cannot be deleted: %s", name)
             return
-        if profiles.delete_profile(name):
+        if profiles.delete_profile(name, self.settings):
+            self.app.refresh_setting_widgets()
             self._refresh_list()
             log.info("Deleted profile: %s", name)
+        else:
+            self.app.report_save_failure()
 
     def _on_rename(self):
         old = self._selected_name()
@@ -201,7 +209,7 @@ class ProfilesTab(ctk.CTkFrame):
         if not new:
             log.warning("Type the new name in the name field first.")
             return
-        final = profiles.rename_profile(old, new)
+        final = profiles.rename_profile(old, new, self.settings)
         if not final:
             log.warning("Rename failed.")
             return

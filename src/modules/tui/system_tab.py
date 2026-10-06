@@ -1,9 +1,9 @@
 """System tab: controller selection and ZUV-independent built-in updates."""
 import asyncio
 import logging
-import threading
 import time
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
@@ -27,8 +27,8 @@ from modules.dualsense.hidhide_installer import (
 )
 from modules.dualsense.main import (
     _is_bluetooth,
+    _normalise_identity,
     _raw_dualsense_interfaces,
-    identify_pulse,
 )
 from modules.update import UpdatePhase
 from modules.update.presentation import update_status_presentation
@@ -370,30 +370,43 @@ class SystemTab(SettingsTab):
         return getattr(ds, "dev_serial", "") or ""
 
     def _build_controller_buttons(self) -> list[RadioButton]:
-        attached_serial = self._attached_serial()
-        current_lock = self.settings.controller_lock_serial
+        attached_serial = _normalise_identity(self._attached_serial())
+        current_lock = _normalise_identity(self.settings.controller_lock_serial)
+        # A serial is a device identity, not a valid Textual widget identifier.
+        # Prefer USB when both transports enumerate the same physical device;
+        # enumeration stays read-only and never opens a second HID handle.
+        devices = {}
+        for index, info in enumerate(self._devices):
+            serial = _normalise_identity(info.get("serial_number"))
+            key = ("serial", serial) if serial else ("unidentified", index)
+            previous = devices.get(key)
+            if previous is None or (_is_bluetooth(previous) and not _is_bluetooth(info)):
+                devices[key] = info
+        self._controller_choices = {}
         buttons: list[RadioButton] = []
         buttons.append(RadioButton(
             t("Auto (first found)"),
             id="ctrl-auto",
             value=(current_lock == ""),
         ))
-        for d in self._devices:
-            sn = d.get("serial_number") or ""
+        for index, d in enumerate(devices.values()):
+            sn = _normalise_identity(d.get("serial_number"))
             transport = "BT" if _is_bluetooth(d) else "USB"
             if sn:
+                button_id = f"ctrl-device-{index}"
+                self._controller_choices[button_id] = (sn, d)
                 attached_now = t("attached now")
                 marker = f"  < {attached_now}" if sn == attached_serial else ""
                 buttons.append(RadioButton(
-                    f"\\[{transport}] {sn}{marker}",
-                    id=f"ctrl-{sn}",
+                    escape(f"[{transport}] {sn}{marker}"),
+                    id=button_id,
                     value=(sn == current_lock),
                 ))
             else:
                 no_serial = t("(no serial - not selectable)")
                 buttons.append(RadioButton(
                     f"\\[{transport}] {no_serial}",
-                    id=f"ctrl-noserial-{id(d)}",
+                    id=f"ctrl-noserial-{index}",
                     disabled=True,
                 ))
         return buttons
@@ -405,9 +418,8 @@ class SystemTab(SettingsTab):
             return None
         if button.id == "ctrl-auto":
             return ""
-        if button.id.startswith("ctrl-noserial-"):
-            return None
-        return button.id[len("ctrl-"):]
+        choice = self._controller_choices.get(button.id)
+        return choice[0] if choice is not None else None
 
     async def _rerender_controller(self) -> None:
         # Enumerate off-thread; HID discovery may block the Textual event loop.
@@ -429,15 +441,8 @@ class SystemTab(SettingsTab):
         new = self._selected_lock()
         if new is None:
             return
-        if pressed is not None and pressed.id is not None and pressed.id.startswith("ctrl-") \
-                and pressed.id != "ctrl-auto" and not pressed.id.startswith("ctrl-noserial-"):
-            serial = pressed.id[len("ctrl-"):]
-            info = next((d for d in self._devices
-                         if (d.get("serial_number") or "") == serial), None)
-            if info is not None:
-                threading.Thread(target=identify_pulse, args=(info,),
-                                 kwargs={"force": self.settings.startup_pulse_force},
-                                 daemon=True).start()
+        pulse = self.app._trigger_pulse
+        pulse.stop()
         current = self.settings.controller_lock_serial
         if new != current:
             self.settings.controller_lock_serial = new
@@ -446,8 +451,10 @@ class SystemTab(SettingsTab):
         ds = getattr(self.app, "_ds", None)
         if ds is not None:
             ds.set_selection(new)
-            if new and new != self._attached_serial():
+            if new and new != _normalise_identity(self._attached_serial()):
                 ds.force_reconnect()
+            elif new and self.settings.enable_trigger_feedback:
+                pulse.identify(ds, new, force=self.settings.startup_pulse_force)
         await self._rerender_controller()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:

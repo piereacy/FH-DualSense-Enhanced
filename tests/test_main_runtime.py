@@ -203,6 +203,7 @@ def test_gui_udp_conflict_is_healthy_once_the_error_ui_is_usable(monkeypatch):
             raise OSError("port occupied")
 
     app = gui_main.TriggerGUI.__new__(gui_main.TriggerGUI)
+    app._backend_generation = 0
     app.settings = Settings()
     app._ds = None
     app._xinput_service = XInput()
@@ -260,6 +261,7 @@ def test_tui_udp_conflict_is_healthy_but_controller_failure_is_not(monkeypatch):
 
     def make_app(controller):
         app = tui_main.TriggerTUI.__new__(tui_main.TriggerTUI)
+        app._backend_generation = 0
         app.settings = Settings()
         app._ds = None
         app._xinput_service = XInput()
@@ -274,7 +276,6 @@ def test_tui_udp_conflict_is_healthy_but_controller_failure_is_not(monkeypatch):
         monkeypatch.setattr(tui_main, "make_backend", lambda *_args: controller)
         return app
 
-    monkeypatch.setattr(tui_main.preferences, "load", lambda _settings: None)
     monkeypatch.setattr(tui_main.forzahorizon, "UDPListener", Listener)
     tui_main.TriggerTUI._start_backend(make_app(Controller()))
     assert events.count("healthy") == 1

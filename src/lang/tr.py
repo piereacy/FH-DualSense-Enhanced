@@ -715,3 +715,8 @@ STRINGS.update({
     "HidHide installed; close its client or restart Windows": "HidHide kurulu; yapılandırma istemcisini kapatın veya Windows'u yeniden başlatın",
     "HidHide Configuration Client not found": "HidHide yapılandırma istemcisi bulunamadı",
 })
+
+STRINGS.update({
+    "Settings could not be saved. Your changes are still open. Check file access or save a named profile before retrying.": "Ayarlar kaydedilemedi. Değişiklikleriniz açık pencerede korunuyor. Yeniden denemeden önce dosya erişimini kontrol edin veya adlandırılmış bir profil kaydedin.",
+    "Application settings could not be saved. Your changes are still open. Check file access or restore conflicting application settings before retrying. Saving a named profile only preserves tuning.": "Uygulama ayarları kaydedilemedi. Değişiklikleriniz açık pencerede korunuyor. Yeniden denemeden önce dosya erişimini kontrol edin veya çakışan uygulama ayarlarını geri alın. Adlandırılmış bir profil yalnızca ince ayarları korur.",
+})

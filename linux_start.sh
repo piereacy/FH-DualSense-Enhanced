@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP="$ROOT/app"
 BUNDLE="$APP/FH-DualSense-Enhanced.zuv.py"
+PART="$BUNDLE.part"
 MANUAL="$ROOT/FH-DualSense-Enhanced.zuv.py"
 REPO="piereacy/FH-DualSense-Enhanced"
 URL="https://github.com/$REPO/releases/latest/download/FH-DualSense-Enhanced.zuv.py"
@@ -16,12 +17,14 @@ if [[ ! -f "$BUNDLE" && -f "$MANUAL" ]]; then
 fi
 if [[ ! -f "$BUNDLE" ]]; then
     echo "Downloading FH-DualSense-Enhanced.zuv.py..."
-    curl -LsSf --fail "$URL" -o "$BUNDLE" || {
+    curl -LsSf --fail "$URL" -o "$PART" || {
+        rm -f "$PART"
         echo "Download failed. Download the ZUV manually from:" >&2
         echo "https://github.com/$REPO/releases" >&2
         echo "Then place it beside linux_start.sh and retry." >&2
         exit 1
     }
+    mv -f "$PART" "$BUNDLE"
 fi
 
 if ! command -v uv >/dev/null 2>&1; then

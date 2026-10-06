@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from itertools import islice
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import MappingProxyType
 
 from .process_watch import ProcessScanError, find_game_process
@@ -256,7 +256,8 @@ def _gaming_root_library(drive_root: Path) -> Path | None:
     value = _decode_gaming_root(payload)
     if not value or any(ord(character) < 32 for character in value):
         return None
-    relative = Path(value)
+    # The marker always stores a Windows path, including in portable tests.
+    relative = PureWindowsPath(value)
     if (
         relative.is_absolute()
         or relative.anchor
@@ -266,7 +267,7 @@ def _gaming_root_library(drive_root: Path) -> Path | None:
         return None
     try:
         resolved_drive = drive_root.resolve()
-        candidate = (resolved_drive / relative).resolve()
+        candidate = resolved_drive.joinpath(*relative.parts).resolve()
     except OSError:
         return None
     if candidate == resolved_drive or resolved_drive not in candidate.parents:
@@ -627,20 +628,18 @@ def is_forza_game_running(
     strict: bool = False,
 ) -> bool:
     definition = get_forza_game(game)
+    root = getattr(install, "root", None)
+    path_filter = (
+        {"exact_executable": Path(root) / definition.executable_name}
+        if root is not None else {}
+    )
     process = find_game_process(
         (),
         exact_name=definition.executable_name,
         strict=strict,
+        **path_filter,
     )
-    if process is None:
-        return False
-    root = getattr(install, "root", None)
-    if root is None or not process.exe:
-        return True
-    try:
-        return Path(process.exe).resolve() == (Path(root) / definition.executable_name).resolve()
-    except OSError:
-        return True
+    return process is not None
 
 
 def is_any_forza_game_running(*, strict: bool = False) -> bool:

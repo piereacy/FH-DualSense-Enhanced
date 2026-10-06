@@ -80,6 +80,49 @@ def test_strict_process_scan_distinguishes_os_failure_from_no_match(monkeypatch)
         )
 
 
+def test_root_filtered_scan_preserves_iteration_failure_after_a_mismatch(
+    tmp_path, monkeypatch
+):
+    executable = "ForzaHorizon6.exe"
+
+    def process_iter(_fields):
+        yield _process(1, executable, str(tmp_path / "Other" / executable))
+        raise OSError("process table interrupted")
+
+    monkeypatch.setattr(process_watch.psutil, "process_iter", process_iter)
+
+    with pytest.raises(process_watch.ProcessScanError, match="process table interrupted"):
+        process_watch.find_game_process(
+            (),
+            exact_name=executable,
+            exact_executable=tmp_path / "Selected" / executable,
+            strict=True,
+        )
+
+
+def test_root_filtered_scan_keeps_an_unresolvable_path_as_a_conservative_match(
+    tmp_path, monkeypatch
+):
+    executable = "ForzaHorizon6.exe"
+    processes = [_process(1, executable, str(tmp_path / executable))]
+    monkeypatch.setattr(process_watch.psutil, "process_iter", lambda _fields: processes)
+
+    def inaccessible_path(_path):
+        raise OSError("executable path unavailable")
+
+    monkeypatch.setattr(process_watch.Path, "resolve", inaccessible_path)
+
+    found = process_watch.find_game_process(
+        (),
+        exact_name=executable,
+        exact_executable=tmp_path / "Selected" / executable,
+        strict=True,
+    )
+
+    assert found is not None
+    assert found.pid == 1
+
+
 def test_process_watcher_does_not_exit_when_strict_scan_fails(monkeypatch):
     watcher = process_watch.ProcessWatcher(poll_interval_s=float("nan"))
     watcher._matched = "ForzaHorizon6.exe"

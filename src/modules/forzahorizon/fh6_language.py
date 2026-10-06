@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
 import zipfile
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 from . import game_launch
+from .file_transaction import FileTransactionError, game_file_transaction
 from .process_watch import ProcessScanError
 
 log = logging.getLogger("fhds.fh6_language")
@@ -346,31 +350,98 @@ def _rename(source: Path, destination: Path) -> None:
     source.rename(destination)
 
 
-def _perform_three_step_swap(install: FH6Install) -> None:
-    chs, en, temp = _archive_paths(install)
-    completed: list[tuple[Path, Path]] = []
-    steps = ((chs, temp), (en, chs), (temp, en))
+def _archive_hash(path: Path) -> str:
+    try:
+        if path.is_symlink():
+            raise FH6LanguageError(f"Language archive became a symbolic link: {path.name}")
+        with path.open("rb") as archive:
+            return hashlib.file_digest(archive, "sha256").hexdigest()
+    except OSError as exc:
+        raise FH6LanguageError(f"Could not verify {path.name}: {exc}") from exc
+
+
+def _check_archive_hashes(expected: dict[Path, str | None]) -> None:
+    for path, checksum in expected.items():
+        if checksum is None:
+            unchanged = not os.path.lexists(path)
+        else:
+            unchanged = _archive_hash(path) == checksum
+        if not unchanged:
+            raise FH6LanguageError(f"Language archive changed during operation: {path.name}")
+
+
+def _snapshot_archives(
+    paths: tuple[Path, Path, Path],
+) -> tuple[dict[Path, ArchiveLanguage], dict[Path, str | None]]:
+    identities: dict[Path, ArchiveLanguage] = {}
+    hashes: dict[Path, str | None] = {}
+    for path in paths:
+        if os.path.lexists(path):
+            hashes[path] = _archive_hash(path)
+            identities[path] = classify_archive(path, full_check=True)
+        else:
+            hashes[path] = None
+    # Bind content classification to the bytes used by the transaction.
+    _check_archive_hashes(hashes)
+    return identities, hashes
+
+
+def _perform_moves(
+    install: FH6Install,
+    steps: Sequence[tuple[Path, Path]],
+    hashes: dict[Path, str | None],
+    *,
+    operation: str,
+) -> None:
+    expected = hashes.copy()
+    completed: list[tuple[Path, Path, str]] = []
     try:
         for source, destination in steps:
             _guard_not_running(install)
-            if not source.is_file() or destination.exists():
+            _check_archive_hashes(expected)
+            checksum = expected[source]
+            if checksum is None or expected[destination] is not None:
                 raise FH6LanguageError(
-                    f"Unsafe swap state before {source.name} -> {destination.name}"
+                    f"Unsafe {operation} state before {source.name} -> {destination.name}"
                 )
             _rename(source, destination)
-            completed.append((source, destination))
+            completed.append((source, destination, checksum))
+            expected[source] = None
+            expected[destination] = checksum
+            _check_archive_hashes(expected)
     except Exception as exc:
         rollback_errors: list[str] = []
-        for source, destination in reversed(completed):
+        for source, destination, checksum in reversed(completed):
             try:
-                if destination.is_file() and not source.exists():
-                    _rename(destination, source)
+                # An external updater is outside our process lock. Only undo
+                # a move while its destination still contains our exact bytes.
+                _check_archive_hashes({destination: checksum, source: None})
+                _rename(destination, source)
             except Exception as rollback_exc:
                 rollback_errors.append(str(rollback_exc))
-        detail = f"Language archive swap failed: {exc}"
+        detail = f"Language archive {operation} failed: {exc}"
         if rollback_errors:
-            detail += "; rollback failed: " + "; ".join(rollback_errors)
+            detail += "; rollback left files unchanged: " + "; ".join(rollback_errors)
+            log.warning(detail)
         raise FH6LanguageError(detail) from exc
+
+
+def _perform_three_step_swap(install: FH6Install, hashes: dict[Path, str | None]) -> None:
+    chs, en, temp = _archive_paths(install)
+    _perform_moves(
+        install, ((chs, temp), (en, chs), (temp, en)), hashes, operation="swap",
+    )
+
+
+@contextmanager
+def _language_transaction(install: FH6Install) -> Generator[None]:
+    if not is_windows_steam_supported():
+        raise FH6LanguageError("FH6 integration supports Windows Steam only")
+    try:
+        with game_file_transaction(install.root, resource="fh6-language"):
+            yield
+    except FileTransactionError as exc:
+        raise FH6LanguageError(str(exc)) from exc
 
 
 def enable_chinese_text_english_voice(
@@ -378,92 +449,80 @@ def enable_chinese_text_english_voice(
     *,
     allow_unknown_steam_language: bool = False,
 ) -> LanguageInspection:
-    install = _validated_install(install)
-    if install.steam_language_state is SteamLanguageState.OTHER:
-        raise FH6LanguageError("Set the FH6 Steam language to English first")
-    if (
-        install.steam_language_state is SteamLanguageState.UNKNOWN
-        and not allow_unknown_steam_language
-    ):
-        raise FH6LanguageError("Steam language could not be verified as English")
-    _guard_not_running(install)
-    inspection = inspect_language_state(install)
-    if inspection.state is not FH6LanguageState.NATIVE:
-        raise FH6LanguageError(f"Expected native archive state, found {inspection.state.value}")
-    chs, en, _temp = _archive_paths(install)
-    if classify_archive(chs, full_check=True) is not ArchiveLanguage.CHINESE:
-        raise FH6LanguageError("CHS.zip could not be verified as Chinese")
-    if classify_archive(en, full_check=True) is not ArchiveLanguage.ENGLISH:
-        raise FH6LanguageError("EN.zip could not be verified as English")
-    _perform_three_step_swap(install)
-    result = inspect_language_state(install)
-    if result.state is not FH6LanguageState.SWAPPED:
-        raise FH6LanguageError("Archive swap completed but the resulting state is unknown")
-    return result
+    with _language_transaction(install):
+        install = _validated_install(install)
+        if install.steam_language_state is SteamLanguageState.OTHER:
+            raise FH6LanguageError("Set the FH6 Steam language to English first")
+        if (
+            install.steam_language_state is SteamLanguageState.UNKNOWN
+            and not allow_unknown_steam_language
+        ):
+            raise FH6LanguageError("Steam language could not be verified as English")
+        _guard_not_running(install)
+        inspection = inspect_language_state(install)
+        if inspection.state is not FH6LanguageState.NATIVE:
+            raise FH6LanguageError(f"Expected native archive state, found {inspection.state.value}")
+        chs, en, temp = _archive_paths(install)
+        identities, hashes = _snapshot_archives((chs, en, temp))
+        if identities.get(chs) is not ArchiveLanguage.CHINESE:
+            raise FH6LanguageError("CHS.zip could not be verified as Chinese")
+        if identities.get(en) is not ArchiveLanguage.ENGLISH:
+            raise FH6LanguageError("EN.zip could not be verified as English")
+        _perform_three_step_swap(install, hashes)
+        result = inspect_language_state(install)
+        if result.state is not FH6LanguageState.SWAPPED:
+            raise FH6LanguageError("Archive swap completed but the resulting state is unknown")
+        return result
 
 
 def restore_native_language(install: FH6Install) -> LanguageInspection:
-    install = _validated_install(install)
-    _guard_not_running(install)
-    inspection = inspect_language_state(install)
-    if inspection.state is not FH6LanguageState.SWAPPED:
-        raise FH6LanguageError(f"Expected swapped archive state, found {inspection.state.value}")
-    chs, en, _temp = _archive_paths(install)
-    if classify_archive(chs, full_check=True) is not ArchiveLanguage.ENGLISH:
-        raise FH6LanguageError("CHS.zip could not be verified as English")
-    if classify_archive(en, full_check=True) is not ArchiveLanguage.CHINESE:
-        raise FH6LanguageError("EN.zip could not be verified as Chinese")
-    _perform_three_step_swap(install)
-    result = inspect_language_state(install)
-    if result.state is not FH6LanguageState.NATIVE:
-        raise FH6LanguageError("Restore completed but the resulting state is unknown")
-    return result
+    with _language_transaction(install):
+        install = _validated_install(install)
+        _guard_not_running(install)
+        inspection = inspect_language_state(install)
+        if inspection.state is not FH6LanguageState.SWAPPED:
+            raise FH6LanguageError(f"Expected swapped archive state, found {inspection.state.value}")
+        chs, en, temp = _archive_paths(install)
+        identities, hashes = _snapshot_archives((chs, en, temp))
+        if identities.get(chs) is not ArchiveLanguage.ENGLISH:
+            raise FH6LanguageError("CHS.zip could not be verified as English")
+        if identities.get(en) is not ArchiveLanguage.CHINESE:
+            raise FH6LanguageError("EN.zip could not be verified as Chinese")
+        _perform_three_step_swap(install, hashes)
+        result = inspect_language_state(install)
+        if result.state is not FH6LanguageState.NATIVE:
+            raise FH6LanguageError("Restore completed but the resulting state is unknown")
+        return result
 
 
 def repair_native_language(install: FH6Install) -> LanguageInspection:
-    install = _validated_install(install)
-    _guard_not_running(install)
-    inspection = inspect_language_state(install)
-    if not inspection.can_repair:
-        raise FH6LanguageError("Interrupted swap cannot be repaired safely")
-    chs, en, temp = _archive_paths(install)
-    identities = {
-        path: classify_archive(path, full_check=True)
-        for path in (chs, en, temp)
-        if path.is_file()
-    }
-    chinese = next(path for path, language in identities.items() if language is ArchiveLanguage.CHINESE)
-    english = next(path for path, language in identities.items() if language is ArchiveLanguage.ENGLISH)
-    moves: list[tuple[Path, Path]] = []
-    if not chs.exists():
-        moves.append((chinese, chs))
-        if chinese == en:
-            moves.append((english, en))
-    elif not en.exists():
-        moves.append((english, en))
-        if english == chs:
+    with _language_transaction(install):
+        install = _validated_install(install)
+        _guard_not_running(install)
+        inspection = inspect_language_state(install)
+        if not inspection.can_repair:
+            raise FH6LanguageError("Interrupted swap cannot be repaired safely")
+        chs, en, temp = _archive_paths(install)
+        identities, hashes = _snapshot_archives((chs, en, temp))
+        if len(identities) != 2 or set(identities.values()) != {
+            ArchiveLanguage.CHINESE, ArchiveLanguage.ENGLISH,
+        }:
+            raise FH6LanguageError("Interrupted swap cannot be repaired safely")
+        chinese = next(path for path, language in identities.items() if language is ArchiveLanguage.CHINESE)
+        english = next(path for path, language in identities.items() if language is ArchiveLanguage.ENGLISH)
+        moves: list[tuple[Path, Path]] = []
+        if hashes[chs] is None:
             moves.append((chinese, chs))
-    else:
-        raise FH6LanguageError("Recovery temporary file is not in a safe two-file state")
-    completed: list[tuple[Path, Path]] = []
-    try:
-        for source, destination in moves:
-            _guard_not_running(install)
-            if not source.is_file() or destination.exists():
-                raise FH6LanguageError(
-                    f"Unsafe recovery state before {source.name} -> {destination.name}"
-                )
-            _rename(source, destination)
-            completed.append((source, destination))
-    except Exception as exc:
-        for source, destination in reversed(completed):
-            try:
-                if destination.is_file() and not source.exists():
-                    _rename(destination, source)
-            except Exception:
-                log.exception("FH6 language recovery rollback failed")
-        raise FH6LanguageError(f"Language archive recovery failed: {exc}") from exc
-    result = inspect_language_state(install)
-    if result.state is not FH6LanguageState.NATIVE:
-        raise FH6LanguageError("Recovery completed but native state was not restored")
-    return result
+            if chinese == en:
+                moves.append((english, en))
+        elif hashes[en] is None:
+            moves.append((english, en))
+            if english == chs:
+                moves.append((chinese, chs))
+        else:
+            raise FH6LanguageError("Recovery temporary file is not in a safe two-file state")
+        _perform_moves(install, moves, hashes, operation="recovery")
+        result = inspect_language_state(install)
+        if result.state is not FH6LanguageState.NATIVE:
+            raise FH6LanguageError("Recovery completed but native state was not restored")
+        return result

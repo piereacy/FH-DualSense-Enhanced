@@ -23,6 +23,7 @@ _ROLLING_EXIT_KMH = 0.2
 _ENGINE_ACCEL_ACTIVITY = 1.0
 _ENGINE_RPM_ACTIVITY_MIN = 100.0
 _ENGINE_RPM_ACTIVITY_RATIO = 0.05
+_COLLISION_UNSET = object()
 
 
 @dataclass(slots=True)
@@ -122,7 +123,7 @@ class HapticMixer:
         telemetry: Mapping[str, object],
         settings,
         now: float,
-        collision_signal=None,
+        collision_signal=_COLLISION_UNSET,
     ) -> HapticFrame:
         if not getattr(settings, "enable_body_haptics", False) or not telemetry.get("on", False):
             if self._redline_active:
@@ -389,7 +390,7 @@ class HapticMixer:
                 transient.right_low += impact_scale
         self._prev_suspension = suspension
 
-        if collision_signal is None:
+        if collision_signal is _COLLISION_UNSET:
             collision_signal = self._collision_detector.update(
                 telemetry, settings, now
             )

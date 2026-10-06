@@ -1,6 +1,8 @@
 import hashlib
 import json
 import os
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +15,54 @@ from modules.update.transaction import (
     set_phase,
     write_health_ack,
 )
+
+
+@pytest.mark.parametrize("confirm,backend_fails", [(False, False), (True, True), (True, False)])
+def test_preferences_recovery_only_confirms_health_after_backend_ready(
+    monkeypatch, confirm, backend_fails
+):
+    events = []
+    root = SimpleNamespace(withdraw=lambda: None, update_idletasks=lambda: None, destroy=lambda: None)
+
+    def askyesno(*_args, **_kwargs):
+        events.append("preferences-dialog")
+        return confirm
+
+    monkeypatch.setitem(sys.modules, "tkinter", SimpleNamespace(
+        Tk=lambda: root, messagebox=SimpleNamespace(askyesno=askyesno)
+    ))
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
+    monkeypatch.setattr(app_main, "bootstrap_windows_dpi", lambda: None)
+    monkeypatch.setattr(app_main, "launch_legacy_bootstrap", lambda **_kwargs: None)
+    monkeypatch.setattr(app_main, "recover_incomplete_updates", lambda **_kwargs: None)
+    monkeypatch.setattr(app_main, "acknowledge_update_health", lambda *_args: events.append("healthy"))
+    loads = []
+
+    def load(_settings):
+        loads.append(True)
+        if len(loads) == 1:
+            raise app_main.preferences.PreferencesError("corrupt preferences")
+
+    def run_gui(_settings, *, on_ready):
+        events.append("backend-start")
+        if backend_fails:
+            raise RuntimeError("backend initialization failed")
+        on_ready()
+
+    monkeypatch.setattr(app_main.preferences, "load", load)
+    monkeypatch.setattr(app_main.preferences, "reset_file", lambda: events.append("reset"))
+    monkeypatch.setattr(app_main, "run_gui", run_gui)
+    arguments = ["--fhds-update-transaction", "a" * 32, "--fhds-update-token", "test-token"]
+    if backend_fails:
+        with pytest.raises(RuntimeError, match="backend initialization failed"):
+            app_main.main(arguments)
+        assert "healthy" not in events
+    elif not confirm:
+        assert app_main.main(arguments) == 1
+        assert events == ["preferences-dialog"]
+    else:
+        assert app_main.main(arguments) == 0
+        assert events == ["preferences-dialog", "reset", "backend-start", "healthy"]
 
 
 def test_application_health_ack_is_written_only_for_matching_r7_binary(tmp_path, monkeypatch):

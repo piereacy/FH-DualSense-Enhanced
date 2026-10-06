@@ -721,3 +721,8 @@ STRINGS.update({
     "HidHide installed; close its client or restart Windows": "HidHide はインストール済みです。設定画面を閉じて再試行するか、Windows を再起動してください",
     "HidHide Configuration Client not found": "HidHide の公式設定クライアントが見つかりません",
 })
+
+STRINGS.update({
+    "Settings could not be saved. Your changes are still open. Check file access or save a named profile before retrying.": "設定を保存できませんでした。変更内容はウィンドウに保持されています。ファイルへのアクセスを確認するか、名前付きプロファイルとして保存してから再試行してください。",
+    "Application settings could not be saved. Your changes are still open. Check file access or restore conflicting application settings before retrying. Saving a named profile only preserves tuning.": "アプリ設定を保存できませんでした。変更内容は保持されています。ファイルへのアクセスを確認するか、競合するアプリ設定を元に戻してから再試行してください。名前付きプロファイルには調整値のみが保存されます。",
+})

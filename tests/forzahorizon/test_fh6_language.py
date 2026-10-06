@@ -1,9 +1,12 @@
+import multiprocessing
 from pathlib import Path
+from threading import Event, Thread
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
 from modules.forzahorizon import fh6_language as language
+from modules.forzahorizon import file_transaction
 from modules.config import preferences
 from modules.config.settings import Settings
 
@@ -257,6 +260,168 @@ def test_failed_second_rename_rolls_back_to_native_state(tmp_path, monkeypatch):
 
     assert language.inspect_language_state(install).state is language.FH6LanguageState.NATIVE
     assert not (install.string_tables / language.TEMP_NAME).exists()
+    monkeypatch.setattr(language, "_rename", real_rename)
+    assert language.enable_chinese_text_english_voice(install).state is language.FH6LanguageState.SWAPPED
+
+
+def test_active_swap_cannot_be_repaired_by_another_thread(tmp_path, monkeypatch):
+    install = _game(tmp_path)
+    monkeypatch.setattr(language, "is_fh6_running", lambda _install=None: False)
+    real_rename = language._rename
+    paused = Event()
+    resume = Event()
+    outcomes = []
+
+    def pause_after_first_move(source, destination):
+        real_rename(source, destination)
+        if destination.name == language.TEMP_NAME:
+            paused.set()
+            assert resume.wait(5), "Concurrent-operation test did not release the swap"
+
+    def enable():
+        try:
+            outcomes.append(language.enable_chinese_text_english_voice(install))
+        except Exception as exc:  # noqa: BLE001 - report worker failures to the parent test
+            outcomes.append(exc)
+
+    monkeypatch.setattr(language, "_rename", pause_after_first_move)
+    worker = Thread(target=enable)
+    worker.start()
+    try:
+        assert paused.wait(5)
+        assert language.inspect_language_state(install).can_repair
+        before = {path.name: path.read_bytes() for path in install.string_tables.iterdir()}
+        with pytest.raises(language.FH6LanguageError, match="in progress"):
+            language.repair_native_language(install)
+        assert {path.name: path.read_bytes() for path in install.string_tables.iterdir()} == before
+    finally:
+        resume.set()
+        worker.join(5)
+    assert not worker.is_alive()
+    assert len(outcomes) == 1
+    assert isinstance(outcomes[0], language.LanguageInspection)
+    assert outcomes[0].state is language.FH6LanguageState.SWAPPED
+
+
+def _swap_in_child_until_released(install, connection):
+    language.is_windows_steam_supported = lambda: True
+    language.is_fh6_running = lambda _install=None: False
+    real_rename = language._rename
+
+    def paused_rename(source, destination):
+        real_rename(source, destination)
+        if destination.name == language.TEMP_NAME:
+            connection.send("paused")
+            if not connection.poll(10):
+                raise RuntimeError("Concurrent-operation test did not release the child")
+            assert connection.recv() == "resume"
+
+    language._rename = paused_rename
+    try:
+        result = language.enable_chinese_text_english_voice(install)
+        connection.send(result.state.value)
+    except Exception as exc:  # noqa: BLE001 - report child failures through the pipe
+        connection.send(repr(exc))
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize("terminate_owner", [False, True])
+def test_language_transaction_excludes_processes_and_releases_on_exit(
+    tmp_path, monkeypatch, terminate_owner,
+):
+    install = _game(tmp_path)
+    monkeypatch.setattr(language, "is_fh6_running", lambda _install=None: False)
+    alias = language.FH6Install(
+        install.root / ".." / install.root.name,
+        install.string_tables,
+        install.source,
+        install.steam_language,
+    )
+    context = multiprocessing.get_context("spawn")
+    parent_connection, child_connection = context.Pipe()
+    owner = context.Process(
+        target=_swap_in_child_until_released, args=(install, child_connection),
+    )
+    owner.start()
+    child_connection.close()
+    try:
+        assert parent_connection.poll(10), "Child did not reach its first rename"
+        assert parent_connection.recv() == "paused"
+        before = {path.name: path.read_bytes() for path in install.string_tables.iterdir()}
+        for operation in (
+            language.enable_chinese_text_english_voice,
+            language.restore_native_language,
+            language.repair_native_language,
+        ):
+            with pytest.raises(language.FH6LanguageError, match="in progress"):
+                operation(alias)
+        assert {path.name: path.read_bytes() for path in install.string_tables.iterdir()} == before
+        if terminate_owner:
+            owner.terminate()
+        else:
+            parent_connection.send("resume")
+            assert parent_connection.poll(10)
+            assert parent_connection.recv() == language.FH6LanguageState.SWAPPED.value
+        owner.join(10)
+        assert not owner.is_alive()
+        if terminate_owner:
+            assert language.inspect_language_state(install).can_repair
+            result = language.repair_native_language(install)
+        else:
+            result = language.restore_native_language(install)
+        assert result.state is language.FH6LanguageState.NATIVE
+        assert not (install.string_tables / language.TEMP_NAME).exists()
+    finally:
+        if owner.is_alive():
+            owner.terminate()
+        owner.join(10)
+        parent_connection.close()
+
+
+def test_language_lock_starts_before_validation_and_allows_other_roots(tmp_path, monkeypatch):
+    install = _game(tmp_path)
+    other = _game(tmp_path / "other")
+    monkeypatch.setattr(language, "is_fh6_running", lambda _install=None: False)
+    validate = language._validated_install
+    outcomes = []
+
+    def try_concurrent_validation(candidate):
+        if candidate.root == install.root:
+            with pytest.raises(language.FH6LanguageError, match="in progress"):
+                language.enable_chinese_text_english_voice(candidate)
+            outcomes.append(language.enable_chinese_text_english_voice(other).state)
+        return validate(candidate)
+
+    monkeypatch.setattr(language, "_validated_install", try_concurrent_validation)
+    assert language.enable_chinese_text_english_voice(install).state is language.FH6LanguageState.SWAPPED
+    assert outcomes == [language.FH6LanguageState.SWAPPED]
+
+
+def test_language_lock_failure_does_not_change_archives(tmp_path, monkeypatch):
+    install = _game(tmp_path)
+    lock_parent = tmp_path / "unavailable-temp"
+    lock_parent.write_bytes(b"not a directory")
+    monkeypatch.setattr(file_transaction.tempfile, "gettempdir", lambda: str(lock_parent))
+    before = {path.name: path.read_bytes() for path in install.string_tables.iterdir()}
+
+    with pytest.raises(language.FH6LanguageError, match="transaction lock"):
+        language.enable_chinese_text_english_voice(install)
+
+    assert {path.name: path.read_bytes() for path in install.string_tables.iterdir()} == before
+
+
+def test_read_only_inspection_does_not_lock_or_repair_interrupted_swap(tmp_path, monkeypatch):
+    install = _game(tmp_path)
+    lock_parent = tmp_path / "unused-temp"
+    monkeypatch.setattr(file_transaction.tempfile, "gettempdir", lambda: str(lock_parent))
+    (install.string_tables / language.CHS_NAME).rename(install.string_tables / language.TEMP_NAME)
+    before = {path.name: path.read_bytes() for path in install.string_tables.iterdir()}
+
+    assert language.inspect_language_state(install).can_repair
+
+    assert not lock_parent.exists()
+    assert {path.name: path.read_bytes() for path in install.string_tables.iterdir()} == before
 
 
 @pytest.mark.parametrize("interrupted_after", [1, 2])

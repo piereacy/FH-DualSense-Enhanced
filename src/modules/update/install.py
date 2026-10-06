@@ -105,10 +105,6 @@ def _ensure_install_directory_writable(directory: Path) -> None:
 def _other_install_instances(directory: Path, *, current_pid: int) -> tuple[tuple[int, str], ...]:
     if not sys.platform.startswith("win"):
         return ()
-    try:
-        import psutil
-    except ImportError:
-        return ()
     expected = Path(directory).resolve()
     observed: list[tuple[int, int, Path]] = []
     for process in psutil.process_iter(("pid", "ppid", "exe")):
@@ -117,15 +113,13 @@ def _other_install_instances(directory: Path, *, current_pid: int) -> tuple[tupl
             parent_pid = int(process.info.get("ppid") or 0)
             executable = process.info.get("exe") or ""
             path = Path(executable).resolve() if executable else None
+            if pid <= 0 or path is None or path.parent != expected:
+                continue
+            release_version(path.name)
         except (OSError, ValueError, psutil.Error):
             continue
-        if pid <= 0 or path is None or path.parent != expected:
-            continue
-        try:
-            release_version(path.name)
-        except TransactionError:
-            continue
-        observed.append((pid, parent_pid, path))
+        else:
+            observed.append((pid, parent_pid, path))
 
     # A PyInstaller one-file executable normally runs as two processes: the
     # outer bootloader stays alive while its child executes Python.  Both PIDs

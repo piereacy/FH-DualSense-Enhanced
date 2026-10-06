@@ -23,6 +23,7 @@ rm -rf "$WORK" "$DIST"
 # The frozen build uses pystray's locked python-xlib backend. PyGObject and
 # pycairo are source-build dependencies on Linux and are not required inside
 # this one-file artifact.
+# Wayland keeps the GUI visible because this artifact has no AppIndicator tray.
 uv sync --project "$ROOT/src" --frozen \
     --no-install-package pygobject --no-install-package pycairo
 uv run --project "$ROOT/src" --frozen --no-sync \

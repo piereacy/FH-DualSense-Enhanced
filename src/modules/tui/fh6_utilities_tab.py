@@ -72,8 +72,12 @@ class FH6UtilitiesTab(VerticalScroll):
         self._fh6_inspection = inspect_language_state(None)
         self._fh6_game_running = False
         self._fh6_busy = False
+        self._fh6_operation_busy = False
+        self._fh6_scan_serial = 0
+        self._fh6_active_serial: int | None = None
         self._fh6_silent = False
         self._fh6_pending_action = ""
+        self._fh6_pending_context = None
         self._fh6_confirm_deadline = 0.0
         self._fh6_view: LanguageView | None = None
         self._fh6_platform = normalize_forza_platform(
@@ -87,8 +91,12 @@ class FH6UtilitiesTab(VerticalScroll):
         self._icon_path_hint = self._icon_saved_path(self._icon_platform)
         self._icon_game_running = False
         self._icon_busy = False
+        self._icon_operation_busy = False
+        self._icon_scan_serial = 0
+        self._icon_active_serial: int | None = None
         self._icon_silent = False
         self._icon_pending_action = ""
+        self._icon_pending_context = None
         self._icon_confirm_deadline = 0.0
         self._runtime_busy = False
 
@@ -208,9 +216,7 @@ class FH6UtilitiesTab(VerticalScroll):
         if language_changed:
             self._fh6_platform = platform
             self._fh6_path_hint = language_hint
-            self._fh6_install = None
-            self._fh6_inspection = inspect_language_state(None)
-            self._fh6_game_running = False
+            self._invalidate_fh6()
             if self.is_mounted:
                 self.query_one("#fh6-path", Input).value = language_hint
 
@@ -219,11 +225,31 @@ class FH6UtilitiesTab(VerticalScroll):
         if icon_changed:
             self._icon_platform = platform
             self._icon_path_hint = icon_hint
-            self._icon_inspection = inspect_controller_icons(None)
-            self._icon_game_running = False
+            self._invalidate_icons()
             if self.is_mounted:
                 self.query_one("#icon-path", Input).value = icon_hint
         return language_changed, icon_changed
+
+    def _invalidate_fh6(self) -> None:
+        self._fh6_scan_serial += 1
+        self._fh6_active_serial = None
+        self._fh6_busy = self._fh6_operation_busy
+        self._fh6_silent = False
+        self._fh6_pending_action = ""
+        self._fh6_pending_context = None
+        self._fh6_install = None
+        self._fh6_inspection = inspect_language_state(None)
+        self._fh6_game_running = False
+
+    def _invalidate_icons(self) -> None:
+        self._icon_scan_serial += 1
+        self._icon_active_serial = None
+        self._icon_busy = self._icon_operation_busy
+        self._icon_silent = False
+        self._icon_pending_action = ""
+        self._icon_pending_context = None
+        self._icon_inspection = inspect_controller_icons(None)
+        self._icon_game_running = False
 
     def _schedule_missing_refresh(self) -> None:
         if not self._visible:
@@ -301,11 +327,17 @@ class FH6UtilitiesTab(VerticalScroll):
         manual_path: str = "",
         silent: bool = False,
     ) -> None:
-        if self._fh6_busy:
+        manual_path = str(manual_path).strip()
+        self._sync_context()
+        if self._fh6_operation_busy or (self._fh6_busy and not manual_path):
             return
+        self._fh6_scan_serial += 1
+        serial = self._fh6_scan_serial
+        self._fh6_active_serial = serial
         self._fh6_busy = True
         self._fh6_silent = bool(silent and self._fh6_install is None)
         self._fh6_pending_action = ""
+        self._fh6_pending_context = None
         platform = normalize_forza_platform(self.settings.preferred_forza_platform)
         context_hint = self._language_saved_path(platform)
         self._render_fh6_status()
@@ -342,19 +374,22 @@ class FH6UtilitiesTab(VerticalScroll):
                 if install is not None
                 else False
             )
+            if serial != self._fh6_active_serial:
+                return
             current_platform = normalize_forza_platform(
                 self.settings.preferred_forza_platform
             )
             current_hint = self._language_saved_path(current_platform)
-            if platform != current_platform or (
-                not manual_path and context_hint != current_hint
-            ):
+            if platform != current_platform or context_hint != current_hint:
                 self._sync_context()
+                self._render_fh6_status()
                 return
             self._fh6_platform = platform
             self._fh6_install = install
             self._fh6_inspection = inspection
             self._fh6_game_running = running
+            if manual_path and install is None:
+                self.app.notify(t("FH6 installation not found"), severity="error")
             if install is not None:
                 field = (
                     "fh6_install_path"
@@ -369,15 +404,19 @@ class FH6UtilitiesTab(VerticalScroll):
                 self.query_one("#fh6-path", Input).value = resolved
         except Exception as exc:
             log.exception("FH6 language status scan failed")
-            self.app.notify(
-                str(exc) or type(exc).__name__,
-                title=t("FH6 language change failed"),
-                severity="error",
-            )
+            self._sync_context()
+            if serial == self._fh6_active_serial:
+                self.app.notify(
+                    str(exc) or type(exc).__name__,
+                    title=t("FH6 language change failed"),
+                    severity="error",
+                )
         finally:
-            self._fh6_busy = False
-            self._fh6_silent = False
-            self._render_fh6_status()
+            if serial == self._fh6_active_serial:
+                self._fh6_active_serial = None
+                self._fh6_busy = False
+                self._fh6_silent = False
+                self._render_fh6_status()
 
     def _render_fh6_status(self) -> None:
         if not self.is_mounted:
@@ -427,36 +466,63 @@ class FH6UtilitiesTab(VerticalScroll):
         ) or t("No safe action available")
         action_button.disabled = not view.action_enabled or self._fh6_busy
 
-    async def _run_fh6_action(self, action: str, *, allow_unknown: bool) -> None:
+    def _fh6_action_context(self):
+        platform = normalize_forza_platform(self.settings.preferred_forza_platform)
+        hint = self._language_saved_path(platform)
+        if (
+            platform != self._fh6_platform
+            or hint != self._fh6_path_hint
+            or self._fh6_install is None
+            or self._fh6_inspection.install != self._fh6_install
+        ):
+            return None
+        return (platform, hint, self._fh6_scan_serial, self._fh6_install.root)
+
+    async def _run_fh6_action(self, action: str, context, *, allow_unknown: bool) -> None:
+        if context is None or context != self._fh6_action_context() or self._fh6_busy:
+            return
         install = self._fh6_install
-        if install is None or self._fh6_busy:
+        if install is None:
             return
         self._fh6_busy = True
+        self._fh6_operation_busy = True
         self._render_fh6_status()
-        try:
+
+        def worker():
+            if context != self._fh6_action_context():
+                return None
             if action == "enable":
-                inspection = await asyncio.to_thread(
-                    enable_chinese_text_english_voice,
+                return enable_chinese_text_english_voice(
                     install,
                     allow_unknown_steam_language=allow_unknown,
                 )
-            elif action == "restore":
-                inspection = await asyncio.to_thread(restore_native_language, install)
-            else:
-                inspection = await asyncio.to_thread(repair_native_language, install)
-            self._fh6_inspection = inspection
-            self._fh6_game_running = False
-            self.app.notify(t("FH6 language files updated"))
+            if action == "restore":
+                return restore_native_language(install)
+            if action == "repair":
+                return repair_native_language(install)
+            raise ValueError(f"Unknown FH6 language action: {action}")
+
+        try:
+            inspection = await asyncio.to_thread(worker)
+            if inspection is not None and context == self._fh6_action_context():
+                self._fh6_inspection = inspection
+                self._fh6_game_running = False
+                self.app.notify(t("FH6 language files updated"))
         except Exception as exc:
-            self._fh6_inspection = await asyncio.to_thread(inspect_language_state, install)
-            self.app.notify(
-                str(exc) or type(exc).__name__,
-                title=t("FH6 language change failed"),
-                severity="error",
-            )
+            inspection = await asyncio.to_thread(inspect_language_state, install)
+            if context == self._fh6_action_context():
+                self._fh6_inspection = inspection
+                self.app.notify(
+                    str(exc) or type(exc).__name__,
+                    title=t("FH6 language change failed"),
+                    severity="error",
+                )
         finally:
             self._fh6_busy = False
+            self._fh6_operation_busy = False
             self._fh6_pending_action = ""
+            self._fh6_pending_context = None
+            self._sync_context()
             self._render_fh6_status()
 
     async def _scan_icons(
@@ -466,11 +532,17 @@ class FH6UtilitiesTab(VerticalScroll):
         manual_path: str = "",
         silent: bool = False,
     ) -> None:
-        if self._icon_busy:
+        manual_path = str(manual_path).strip()
+        self._sync_context()
+        if self._icon_operation_busy or (self._icon_busy and not manual_path):
             return
+        self._icon_scan_serial += 1
+        serial = self._icon_scan_serial
+        self._icon_active_serial = serial
         self._icon_busy = True
         self._icon_silent = bool(silent and self._icon_inspection.root is None)
         self._icon_pending_action = ""
+        self._icon_pending_context = None
         self._render_icon_status()
         platform = normalize_forza_platform(self.settings.preferred_forza_platform)
         cached_path = self._icon_saved_path(platform)
@@ -512,9 +584,18 @@ class FH6UtilitiesTab(VerticalScroll):
                 if root is not None
                 else False
             )
+            if serial != self._icon_active_serial:
+                return
+            current_platform = normalize_forza_platform(self.settings.preferred_forza_platform)
+            if platform != current_platform or cached_path != self._icon_saved_path(current_platform):
+                self._sync_context()
+                self._render_icon_status()
+                return
             self._icon_platform = platform
             self._icon_inspection = inspection
             self._icon_game_running = running
+            if manual_path and inspection.root is None:
+                self.app.notify(t("FH6 installation not found"), severity="error")
             if inspection.root is not None:
                 field = "fh6_install_path" if platform == STEAM_PLATFORM else "fh6_xbox_install_path"
                 resolved = str(inspection.root)
@@ -525,11 +606,14 @@ class FH6UtilitiesTab(VerticalScroll):
                 self.query_one("#icon-path", Input).value = resolved
         except Exception as exc:
             log.exception("FH6 controller-icon status scan failed")
-            self.app.notify(str(exc) or type(exc).__name__, severity="error")
+            if serial == self._icon_active_serial:
+                self.app.notify(str(exc) or type(exc).__name__, severity="error")
         finally:
-            self._icon_busy = False
-            self._icon_silent = False
-            self._render_icon_status()
+            if serial == self._icon_active_serial:
+                self._icon_active_serial = None
+                self._icon_busy = False
+                self._icon_silent = False
+                self._render_icon_status()
 
     def _render_icon_status(self) -> None:
         if not self.is_mounted:
@@ -602,27 +686,55 @@ class FH6UtilitiesTab(VerticalScroll):
             or state not in (ControllerIconState.INSTALLED, ControllerIconState.PARTIAL)
         )
 
-    async def _run_icon_action(self, action: str) -> None:
-        root = self._icon_inspection.root
-        if root is None or self._icon_busy:
+    def _icon_action_context(self):
+        platform = normalize_forza_platform(self.settings.preferred_forza_platform)
+        hint = self._icon_saved_path(platform)
+        if (
+            platform != self._icon_platform
+            or hint != self._icon_path_hint
+            or self._icon_inspection.root is None
+        ):
+            return None
+        return (platform, hint, self._icon_scan_serial, self._icon_inspection.root)
+
+    async def _run_icon_action(self, action: str, context) -> None:
+        if context is None or context != self._icon_action_context() or self._icon_busy:
             return
+        root = context[3]
         self._icon_busy = True
+        self._icon_operation_busy = True
         self._render_icon_status()
+
+        def worker():
+            if context != self._icon_action_context():
+                return None
+            if action == "install":
+                return install_controller_icons(root)
+            if action == "restore":
+                return restore_controller_icons(root)
+            raise ValueError(f"Unknown controller-icon action: {action}")
+
         try:
-            operation = install_controller_icons if action == "install" else restore_controller_icons
-            self._icon_inspection = await asyncio.to_thread(operation, root)
-            self._icon_game_running = False
-            self.app.notify(t("FH6 controller icons updated"))
+            inspection = await asyncio.to_thread(worker)
+            if inspection is not None and context == self._icon_action_context():
+                self._icon_inspection = inspection
+                self._icon_game_running = False
+                self.app.notify(t("FH6 controller icons updated"))
         except Exception as exc:
-            self._icon_inspection = await asyncio.to_thread(inspect_controller_icons, root)
-            self.app.notify(
-                str(exc) or type(exc).__name__,
-                title=t("FH6 controller icon change failed"),
-                severity="error",
-            )
+            inspection = await asyncio.to_thread(inspect_controller_icons, root)
+            if context == self._icon_action_context():
+                self._icon_inspection = inspection
+                self.app.notify(
+                    str(exc) or type(exc).__name__,
+                    title=t("FH6 controller icon change failed"),
+                    severity="error",
+                )
         finally:
             self._icon_busy = False
+            self._icon_operation_busy = False
             self._icon_pending_action = ""
+            self._icon_pending_context = None
+            self._sync_context()
             self._render_icon_status()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -633,16 +745,26 @@ class FH6UtilitiesTab(VerticalScroll):
             await self._scan_fh6(rediscover=False, manual_path=path)
         elif event.button.id == "fh6-action":
             view = self._fh6_view
-            if view is None or not view.action_enabled or not view.action:
+            context = self._fh6_action_context()
+            if (
+                view is None or not view.action_enabled or not view.action
+                or context is None or self._fh6_busy
+            ):
                 return
             now = time.monotonic()
-            if self._fh6_pending_action != view.action or now > self._fh6_confirm_deadline:
+            if (
+                self._fh6_pending_action != view.action
+                or self._fh6_pending_context != context
+                or now > self._fh6_confirm_deadline
+            ):
                 self._fh6_pending_action = view.action
+                self._fh6_pending_context = context
                 self._fh6_confirm_deadline = now + 10.0
                 self._render_fh6_status()
                 return
             await self._run_fh6_action(
                 view.action,
+                context,
                 allow_unknown=view.unknown_language_warning,
             )
         elif event.button.id == "icon-credit":
@@ -654,10 +776,18 @@ class FH6UtilitiesTab(VerticalScroll):
             await self._scan_icons(rediscover=False, manual_path=path)
         elif event.button.id in {"icon-install-action", "icon-restore-action"}:
             action = "install" if event.button.id == "icon-install-action" else "restore"
+            context = self._icon_action_context()
+            if context is None or self._icon_busy:
+                return
             now = time.monotonic()
-            if self._icon_pending_action != action or now > self._icon_confirm_deadline:
+            if (
+                self._icon_pending_action != action
+                or self._icon_pending_context != context
+                or now > self._icon_confirm_deadline
+            ):
                 self._icon_pending_action = action
+                self._icon_pending_context = context
                 self._icon_confirm_deadline = now + 10.0
                 self._render_icon_status()
                 return
-            await self._run_icon_action(action)
+            await self._run_icon_action(action, context)

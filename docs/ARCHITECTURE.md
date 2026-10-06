@@ -29,6 +29,7 @@ flowchart LR
     UDP --> FWD["UDPForwarder"]
     PARSE --> LOOP["modules.loop.run"]
     LAB["HapticsLab immutable preview request"] --> LOOP
+    PULSE["TriggerPulse UI request"] --> LOOP
     LOOP --> COLLISION["shared CollisionDetector"]
     COLLISION --> TRIG["Controller / TriggerAnimations"]
     COLLISION --> MIX["HapticMixer"]
@@ -431,6 +432,12 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 
 ## 12. 已知架构缺陷和技术债
 
+2026-10-03 审查修复的运行时边界：GUI worker 和托盘通过 `post_ui()` 发布回调，TUI worker 日志和退出通知通过异步 Message，持有生命周期锁时不再同步等待 UI。后端替换必须先确认原 native I/O worker 已退出，`close() == False` 时中止。恢复出厂设置同时重建 backend、XInput 和 UDP listener；前端启动保留 `main` 的 CLI 覆盖。Profile 切换按默认值补齐缺失或无效字段，删除当前配置后同步应用替代配置。
+
+开关反馈只发布 `TriggerPulse` 请求，由共享输出循环消费，在有界脉冲结束后恢复当前遥测效果，避免独立线程的 `off()` 绕过输出去重。扳机总开关覆盖 Lab、开关反馈、识别入口和延迟连接的启动脉冲。Xbox bridge 在有新鲜输入且键鼠拥有输入权时也能建立中立 target，供 HidHide 确认替代设备；target 的存在与手柄输入权分开判断。普通输入/输出唤醒不缩短 worker 故障退避。
+
+2026-10-06 已移除 `identify_pulse()` 的临时 HID handle。识别使用带设备身份、连接代际和截止时间的共享请求，经现有 loop/native owner 输出；连接变化后取消，选择未连接设备仅走既有重连流程。详见 `PROJECT_FIXES_2026-10-06.md`。
+
 - 遥测使用未类型化 `dict`，字段名错误只能在运行时暴露。
 - 扳机与握把字段已经集中到 `feedback_schema.py`，但系统设置和灯效 section 仍由 GUI/TUI 分别声明；新增这些非反馈设置时仍可能漏改一侧。
 - DSX 无 ACK，无法判断 DSX 是否真正监听，也不支持本项目 body haptics。
@@ -442,7 +449,7 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 - 英文、简体中文和日语用户指南是三个独立文件，共享事实仍需人工同步；`tests/test_enhanced_distribution.py` 只校验关键事实和篇幅，不能发现翻译语义的全部漂移。
 - 更新器目前每次启动都会在约 10 秒后检查，没有跨启动 24 小时节流；Release body 只通过浏览器链接查看，也没有代码签名信任链。PE 固定版本资源只用于严格识别旧覆盖式 Helper 的 legacy bootstrap，不能充当发布者身份验证。完成或回滚的 transaction journal 当前不会自动按保留期清理。
 - `UpdateService.stop()` 不会中断或 join 已进入网络 I/O 的 daemon worker；退出期间可能留下带随机名的未完成 `.part`。无效 pending metadata 会被丢弃，但它此前指向且无法再证明归属的 staged EXE 不会被宽泛删除。
-- 偏好文件使用 UUID 临时文件和原子 replace 防止内容损坏，但没有跨进程锁；同时运行两个实例时仍可能发生最后写入者覆盖另一实例的独立设置。FH6 语言包与图标工具同样没有跨进程文件锁，只依靠游戏进程检测和单实例内的串行操作。
+- 偏好文件使用跨进程事务锁、实例 Profile 绑定和字段级合并；同字段冲突拒绝保存。图标工具按游戏根目录互斥并校验文件版本；语言包写事务也按游戏根目录互斥，覆盖回滚。文件锁不约束旧版或外部更新器。
 - Xbox App 启动只用当前用户的 Start Apps AUMID 或产品页 fallback；当前没有 Xbox App 版 FH4/FH5/FH6 可做真实启动与输入验收，也没有自动发现受保护安装目录。产品页已打开不代表游戏已经安装或启动。
 - XInput bridge 依赖已停止维护的 ViGEmBus/ViGEmClient，固定版本和哈希只能降低供应链漂移，不能获得上游安全修复；clean-machine 离线安装和真实 Xbox App 游戏仍未验证。
 - FH6 语言与图标工具的 Xbox App 根路径需要用户手动选择；Microsoft Store/Xbox package ACL、更新后的布局变化、语言交换和真实还原尚未在本机 Xbox 版本验证。Xbox App 当前游戏与语音语言没有已实现的可靠元数据来源，因此三行状态会保留未知，不根据文件名猜测。
@@ -453,3 +460,15 @@ Windows one-file EXE 是主要交付边界，因此外部组件的集成同时�
 - 快捷方式迁移只能扫描当前用户 Known Folders 与已知 pinned 目录；未知位置的用户自建 `.lnk` 无法保证自动发现。真实任务栏缓存、只读链接和部分迁移失败仍需要更多系统环境验收。
 - USB 音频 endpoint 只按 host API、声道数和名称选择，无法把某个 HID serial 与多个同名 DualSense 音频 endpoint 精确绑定。
 - Per-Monitor v2 manifest、源码 probe 和查询路径已有自动验证，但混合缩放显示器间移动、运行中缩放、睡眠/唤醒、扩展坞与远程桌面仍缺少真实视觉验收。
+
+## 2026-10-05 一致性与恢复边界
+
+GUI/TUI 后端以 generation 隔离迟到的退出通知，图标扫描和确认绑定平台、路径及扫描序号。更新缓存 READY 仅在重新校验成功后保留；安装在等待后和执行前验证内容。Windows Helper 用 Job 接管挂起创建的候选及后代，健康确认后释放；链接枚举和读取未知错误阻止旧版清理。HidHide 所有权日志先写并集再更新驱动。PCM 泛音独立保留相位，碰撞参数区分省略和显式无事件，硬墙随配置重建，灯效失败隔离于反馈循环。详细行为见 `PROJECT_FIXES_2026-10-05.md`。
+
+## 2026-10-06 后续恢复边界
+
+语言工具的确认和异步结果现与图标工具一样绑定操作上下文；TUI 扫描代际防止旧结果解除新请求的忙碌状态。语言后台事务锁与界面确认分别约束并发写入和用户所选目标。Windows Job 构造失败且终止未确认时，Helper 保留非终态及两版文件，不自动重启旧版。识别输出的连接代际只在连接属性改变时推进，输入报告不推进；native mailbox 在发送前拒绝过期识别。灯效异常隔离覆盖正常遥测、Lab、空闲与收尾。
+
+## 2026-10-07 数据与更新状态收口
+
+preferences 依据实例加载/成功保存的基线识别尚未保存的 Profile 与 global 字段；Profile 切换和当前配置删除在同一偏好事务内先处理待保存字段。GUI/TUI 统一退出入口在调度更新或关闭前重试保存，失败保持界面开启。Default 会话确认与命名配置值分离。UpdateService 以同一锁认领安装路径、摘要和阶段，停止后的检查结果不能启动下一轮下载。语言文件操作对完整 ZIP 建立哈希快照，逐步校验并保守回滚；它不构成对外部更新器的强制互斥。

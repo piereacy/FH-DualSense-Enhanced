@@ -244,25 +244,27 @@ def install_and_probe(
         )
     except Exception as exc:
         return InstallResult(InstallStatus.FAILED, error=f"HidHide download or verification failed: {exc}")
-    try:
-        _report(on_progress, HidHideInstallStage.INSTALLING)
-        result = runner(
-            installer,
-            parameters="/quiet /norestart",
-            product_name="HidHide",
-            timeout_ms=HIDHIDE_INSTALL_TIMEOUT_MS,
-        )
-    except Exception as exc:
-        return InstallResult(InstallStatus.FAILED, error=f"HidHide installer could not start: {exc}")
-    _report(on_progress, HidHideInstallStage.PROBING)
-    if result.status is not InstallStatus.SUCCESS:
-        if probe():
-            return InstallResult(InstallStatus.SUCCESS, exit_code=result.exit_code)
-        return result
-    if probe():
-        return result
-    return InstallResult(
-        InstallStatus.RESTART_REQUIRED,
-        exit_code=result.exit_code,
-        error="Restart Windows to activate the HidHide driver",
-    )
+    else:
+        try:
+            _report(on_progress, HidHideInstallStage.INSTALLING)
+            result = runner(
+                installer,
+                parameters="/quiet /norestart",
+                product_name="HidHide",
+                timeout_ms=HIDHIDE_INSTALL_TIMEOUT_MS,
+            )
+        except Exception as exc:
+            return InstallResult(InstallStatus.FAILED, error=f"HidHide installer could not start: {exc}")
+        else:
+            _report(on_progress, HidHideInstallStage.PROBING)
+            if result.status is not InstallStatus.SUCCESS:
+                if probe():
+                    return InstallResult(InstallStatus.SUCCESS, exit_code=result.exit_code)
+                return result
+            if probe():
+                return result
+            return InstallResult(
+                InstallStatus.RESTART_REQUIRED,
+                exit_code=result.exit_code,
+                error="Restart Windows to activate the HidHide driver",
+            )

@@ -35,6 +35,7 @@ def make_backend(s, enable_startup_pulse):
         enable_reconnect=s.enable_reconnect,
         controller_lock_serial=s.controller_lock_serial,
         usb_handover_ready=usb_handover_ready,
+        startup_pulse_allowed=lambda: bool(s.enable_trigger_feedback and s.enable_startup_pulse),
     )
     return controller
 

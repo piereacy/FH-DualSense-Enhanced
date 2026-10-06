@@ -750,3 +750,8 @@ STRINGS.update({
     "HidHide installed; close its client or restart Windows": "HidHide ist installiert; Konfigurationsfenster schließen oder Windows neu starten",
     "HidHide Configuration Client not found": "HidHide-Konfigurationsprogramm nicht gefunden",
 })
+
+STRINGS.update({
+    "Settings could not be saved. Your changes are still open. Check file access or save a named profile before retrying.": "Die Einstellungen konnten nicht gespeichert werden. Ihre Änderungen sind weiterhin geöffnet. Prüfen Sie den Dateizugriff oder speichern Sie ein benanntes Profil, bevor Sie es erneut versuchen.",
+    "Application settings could not be saved. Your changes are still open. Check file access or restore conflicting application settings before retrying. Saving a named profile only preserves tuning.": "Die Anwendungseinstellungen konnten nicht gespeichert werden. Ihre Änderungen sind weiterhin geöffnet. Prüfen Sie den Dateizugriff oder setzen Sie widersprüchliche Anwendungseinstellungen zurück. Ein benanntes Profil speichert nur die Abstimmung.",
+})

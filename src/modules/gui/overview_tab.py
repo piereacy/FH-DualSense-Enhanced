@@ -358,7 +358,7 @@ class OverviewTab(ctk.CTkFrame):
             error=getattr(self.app, "_udp_error", ""),
         )
         try:
-            profile = profile_status(profiles.active_name(), t)
+            profile = profile_status(profiles.active_name(self.settings), t)
         except Exception as exc:
             profile = profile_status("", t, error=str(exc))
         update = update_status(self.app._update_service, self.settings, t)
@@ -888,7 +888,7 @@ class OverviewTab(ctk.CTkFrame):
         def worker():
             result = self.app._xinput_service.install_driver()
             try:
-                self.app.root.after(0, lambda: self._finish_driver_install(result))
+                self.app.post_ui(lambda: self._finish_driver_install(result))
             except (RuntimeError, tk.TclError):
                 pass
 

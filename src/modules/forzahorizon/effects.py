@@ -23,6 +23,7 @@ BURNOUT_ROT_THRESHOLD = 30.0
 DRIVEN_WHEELS = {0: ("fl", "fr"), 1: ("rl", "rr"), 2: ("fl", "fr", "rl", "rr")}
 ALL_WHEELS = ("fl", "fr", "rl", "rr")
 _TRACTION_UNSET = object()
+_COLLISION_UNSET = object()
 
 
 class _AsymmetricEwma:
@@ -80,7 +81,7 @@ def _wall_state(value, engaged, engage_at, release_at):
     return value >= release_at if engaged else value >= engage_at
 
 def build_wall(zones):
-    """Static firmware wall - top `zones` (1-9) maxed. Built once at startup."""
+    """Static firmware wall - top `zones` (1-9) maxed."""
     n = max(1, min(9, int(zones)))
     return rigid_zones([0] * (10 - n) + [8] * n)
 
@@ -441,18 +442,25 @@ class Controller:
     def __init__(self, settings):
         self.anim = TriggerAnimations()
         self._collision_detector = CollisionDetector()
+        self._wall_zones = settings.wall_zones
         self.wall = build_wall(settings.wall_zones)
         self._l2_in_wall = False
         self._r2_in_wall = False
 
-    def update(self, t, s, collision_signal=None):
+    def _current_wall(self, settings):
+        if settings.wall_zones != self._wall_zones:
+            self.wall = build_wall(settings.wall_zones)
+            self._wall_zones = settings.wall_zones
+        return self.wall
+
+    def update(self, t, s, collision_signal=_COLLISION_UNSET):
         if not t["on"] or not s.enable_trigger_feedback:
             self.anim.reset_transients()
             self._l2_in_wall = False
             self._r2_in_wall = False
             return off(), off()
         now = time.monotonic()
-        if collision_signal is None:
+        if collision_signal is _COLLISION_UNSET:
             collision_signal = self._collision_detector.update(t, s, now)
         self.anim.arm_collision(collision_signal, s, now)
         if s.enable_gear_shift or s.enable_gear_shift_brake:
@@ -505,7 +513,7 @@ class Controller:
                 s.brake_wall_release_at,
             )
             if self._l2_in_wall:
-                return self.wall
+                return self._current_wall(s)
 
         # 5. Static brake wall - optional fixed wall mid-travel; replaces ramp
         if s.enable_brake_static_wall:
@@ -568,7 +576,7 @@ class Controller:
                 s.throttle_wall_release_at,
             )
             if self._r2_in_wall:
-                return self.wall
+                return self._current_wall(s)
 
         # 6. Optional G/boost and normal throttle resistance
         base = self.anim.throttle_ramp(t, s, now)

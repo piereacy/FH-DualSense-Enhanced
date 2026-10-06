@@ -1,11 +1,44 @@
 # FH-DualSense-Enhanced 当前项目状态
 
-最后更新时间：2026-09-29
+最后更新时间：2026-10-07
 
-## 当前阶段
+## 2026-10-07 Git 同步与后续修复
 
-- 当前开发版本：`Enhanced R12`，`src/pyproject.toml` 版本为 `12`；本地 `feat/r12-xbox-mouse` 工作树是测试候选，尚未发布。
-- 当前公开稳定版：GitHub Release `R11`；本地工作树基于 `origin/main` 的 R11 merge/release commit `f2cbc69`。
+- 用户授权同步 Git 并推送后继续。提交前已 fetch 并审阅 `origin/main`，与本地 `d151573` 基线一致；三份 README 没有远端差异。同步目标为 `origin/main`，版本仍为 Enhanced R12。
+- 新增更新服务安装/停止竞态修复、语言包外部变化检测与保守回滚、保存冲突后切换/退出保护及 Default 假提示修复。全部非英语语言已有失败提示翻译，见 `PROJECT_FIXES_2026-10-07.md`。
+- 本批提交前全量 `pytest -q -W error` 为 **1232 passed、3 skipped**；Pyrefly **0 errors、1 suppressed、147 warnings**。Ruff 基础规则通过，全规则基线 412 项、当前 404 项，无新增诊断；compileall、锁文件、shell 语法及 diff 检查通过。
+- 未执行真实 Windows 更新、驱动或手柄验证，本批不发布二进制或创建标签。
+
+## 2026-10-06 后续修复与最终检查
+
+- 接续前两轮修复，完成语言包跨进程互斥、GUI/TUI 语言确认与异步结果上下文、识别脉冲唯一 HID owner，以及 Windows 候选终止未确认时的保守恢复；补齐 Lab/空闲灯效异常隔离。详见 `PROJECT_FIXES_2026-10-06.md`。
+- 最终 `pytest -q -W error`：**1196 passed、3 skipped**。跳过项要求 Windows 原生环境。识别新增测试的最后一次仅导入排序后定向复验为 18 passed；没有再改变产品逻辑。
+- Pyrefly：**0 errors、1 suppressed、150 warnings**。此前 6 项错误已消除，没有新增类型忽略规则；warning 与 error 分开记录，不宣称所有类型告警已清零。
+- Ruff E4/E7/E9/F 通过；全规则基线 412 项、当前 404 项，无新增诊断。限定源码 compileall、uv lock --check、Linux shell 语法及 git diff --check 通过。
+- 版本与分支保持 `d151573` / `work`，修复保留在工作区，未提交、推送或发布。未执行真实 Windows EXE 升级、驱动与 USB/Bluetooth 手柄验证；原有实机历史记录不作为本轮结果。
+
+## 2026-10-05 第二轮修复
+
+第二轮 22 项源码修复及验证边界见 `PROJECT_FIXES_2026-10-05.md`。当前工作树保留第一轮修复；未提交、推送或发布。
+
+- 最终 `pytest -q -W error`：1135 passed、3 skipped（Windows 环境相关）。新增托盘回归同时发现并修复图标文件未显式关闭的问题。
+- Ruff 基础 E4/E7/E9/F 通过；全规则基线 412 项、当前 410 项，无新增诊断。Pyrefly 基线与当前均 6 errors、1 suppressed；当前 warnings 148、基线 147，仍保留旧安装器及更新实例检测的静态错误。
+- compileall、uv lock --check、Linux shell 语法及 git diff --check 通过。Windows 原生 Job 测试和驱动、真实游戏/控制器验收未执行。
+
+## 2026-10-03 本地审查与修复
+
+- 本轮审查基线为本地 `d151573`，版本字段为 `12`。提交说明包含 R12 merge/release；本轮未查询线上 Release，下面 2026-09-29 的现场记录保留为历史事实。
+- 已修复 Xbox 中立 target 启动互锁、偏好恢复提前健康 ACK、输入/输出帧打断恢复退避、启动器残缺下载缓存，并扩展修复 Profile 删除与部分字段继承、出厂重置运行时同步、CLI UDP 覆盖、HID 关闭超时重复 owner、UI 跨线程等待、扳机预览仲裁与 master gate、非有限数输入和 DSX socket 失败吞异常。
+- Windows 路径解析明确使用 Windows 语义，审查前的两个 Linux 测试失败已修正。最新自动检查结果与保留问题见 `REVIEW_2026-10-03.md`；本轮未提交、推送或发布构建。
+- 用户确认 R11 输入问题使用 HidHide 后修好。该现象支持实体与虚拟输入冲突的解释，但 R11 没有 R12 隔离门禁，不能等同于本轮发现的启动互锁；真实游戏 A/B 和首键接管仍需要设备验收。
+- 当前环境是 Linux 云工作区，未执行 Windows GUI 构造、ViGEmBus/HidHide 联动、USB/BT 手柄测试或真实冻结版升级。此前 Windows 现场记录不作为本轮验证结果。
+- 随后的全项目复审新增确认 22 项问题，现已完成源码修复（P1 4 项、P2 17 项、P3 1 项），详见 `PROJECT_AUDIT_2026-10-03.md`。优先项为图标原件/备份覆盖、跨实例 Profile 覆盖及 preview 误入 stable；复审也确认上一轮异步退出通知缺少会话标识的竞态。
+- 复审全量测试为 1012 passed、2 skipped，新问题由隔离复现及代码契约确认；本次复审仅新增报告与本状态记录，没有继续修改产品源码。
+
+## 2026-09-29 阶段与现场历史记录
+
+- 当时开发版本：`Enhanced R12`，`src/pyproject.toml` 版本为 `12`；当时本地 `feat/r12-xbox-mouse` 工作树为尚未发布的测试候选。
+- 2026-09-29 现场记录的公开稳定版为 GitHub Release `R11`，当时工作树基于 `f2cbc69`；当前云工作区基线以本轮审查记录为准。
 - 当前阶段：用户明确补充问题发生在 R11 的 Xbox App 蓝牙模式：静止后切回键鼠，ABXY 通常要连按两次，摇杆、肩键、方向键正常。R12 保留蓝牙 HID 批次与 bridge 队列中的短按边沿，修正重复鼠标事件及同轮首次按键的接管基线，并提供 HidHide 一键安装、自动配置和实体隐藏状态。官方安装器按需下载并校验；HidHide 1.5 自动添加、记录和清理 FHDS 自有实体手柄规则，1.7+ 保留临时 session 路径。本机已安装 HidHide 1.5.230，曾缺失的官方配置客户端已从签名有效的安装来源恢复。新版在 HID worker 启动前放行当前 EXE，并接受 1.5 驱动列表的零填充。真实 Xbox App 游戏内 A/B 待验收。
 - 边界：R11 虚拟目标仍固定为 Xbox 360。Steam 模式不使用本项目虚拟 X360；R12 不改变 Steam 输入路径或 R7 USB/BT 握把生命周期。Steam 默认不启用 HidHide，Xbox App 模式则强制启用；只有用户点击安装按钮才会下载驱动并请求 UAC。隔离未确认时虚拟 X360 只发送中立输入。FHDS 只管理自己添加的规则，保留用户原有规则；1.5 异常退出后的持久规则在下次启动清理。
 - 前一候选验证：已核对官方 HidHide 1.5.230 x64 安装器原始 `8,078,016` 字节、SHA-256 和有效 Authenticode 签名；下载器完成真实下载与校验，且本机安装后 HidHide 服务与官方 GUI 正常运行。旧 R12 GUI 停留在 UAC 文案时已无安装器进程，具体后台调用点缺少线程堆栈，不能断言单一根因。蓝牙短按和同轮首次按键回归在 R11 逻辑下先失败，修正后通过；新 UI 的队列收尾、超时后探测和客户端启动有自动回归。前一 R12 完整自动测试 `953 passed`，Ruff、限定 `src` 的 Pyrefly（0 errors、2 suppressed、145 warnings not shown）、compileall 与 `uv lock --check` 通过。独立测试包 `outputs/r12-hidhide-linked-20260927/FH-DualSense-Enhanced-R12.exe` 为 `52,553,658` 字节，PE 版本 R12、冻结 `--help` 退出码 0、sidecar 校验通过；较桌面 R11 `52,162,333` 字节增加 `391,325` 字节（约 `0.75%`）。现场只读读取到 HidHide 全局 Active、两条蓝牙 DualSense 设备规则、仅官方客户端在应用白名单；修正解析器后，以测试包路径执行白名单准备，确认该 EXE 被放行且原有白名单、设备规则、Active 与 inverse 均未改变，所有权 journal 已写入。
@@ -199,7 +232,7 @@ Haptics Lab 与诊断都复用现有 backend 和只读运行时快照；R11 不�
 - 完成和回滚的 update transaction journal 没有按保留期自动清理；本轮新增的是安装目录旧 release/sidecar 收口，不是 journal 清理。
 - `UpdateService.stop()` 不会取消或 join 已进入网络 I/O 的 daemon worker；退出时可能留下唯一命名的未完成 `.part`。无效 pending metadata 被删除后，无法证明归属的 staged EXE 会保守保留。
 - Shell Link 扫描无法覆盖任意未知目录中的用户自建快捷方式；部分失败必须依靠保留旧版和后续重试。
-- 偏好文件没有跨进程锁，多实例同时保存仍是 last-writer-wins；FH6 语言和图标文件事务也没有跨进程互斥。
+- 偏好文件、图标和语言包事务已有跨进程互斥；不约束旧版实例和 Steam/Xbox 等外部更新器。
 - 扳机与握把 section 已集中到 `feedback_schema.py`；系统设置和灯效 section 仍由 GUI/TUI 分别声明，依靠测试保持一致。
 - 遥测仍使用未类型化 `dict`。
 - `ProcessWatcher` 的通用退出观察仍按 `forza` 子串匹配；启动器使用精确 EXE 名。

@@ -1,3 +1,5 @@
+import pytest
+
 from modules.config import preferences
 from modules.config.settings import Settings
 from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
@@ -278,3 +280,18 @@ def test_non_finite_lighting_inputs_fail_silent_instead_of_crashing():
         lightbar=(float("nan"), float("inf"), "invalid"),
         player_leds=float("nan"),
     ).normalized() == ControllerVisualState(lightbar=(0, 0, 0), player_leds=0)
+
+
+@pytest.mark.parametrize("timestamp", [2.0, 2.03, 1e308])
+def test_finite_extreme_flash_rate_is_bounded_and_does_not_overflow(timestamp):
+    settings = Settings()
+    settings.enable_tachometer_lightbar = True
+    settings.tachometer_flash_rate_hz = 1e308
+    telemetry = _telemetry(rpm=9000.0)
+
+    actual = LightingController().update(telemetry, settings, timestamp)
+    settings.tachometer_flash_rate_hz = 24.0
+    expected = LightingController().update(telemetry, settings, timestamp)
+
+    assert actual == expected
+    assert all(0 <= channel <= 255 for channel in actual.lightbar)

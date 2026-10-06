@@ -25,6 +25,7 @@ class HapticPcmRenderer:
         self._levels = [0.0, 0.0, 0.0, 0.0, 0.0]
         self._phase_low = 0.0
         self._phase_high = 0.0
+        self._phase_high_overtone = 0.0
         self._phase_engine = 0.0
 
     @property
@@ -35,6 +36,7 @@ class HapticPcmRenderer:
         self._levels = [0.0, 0.0, 0.0, 0.0, 0.0]
         self._phase_low = 0.0
         self._phase_high = 0.0
+        self._phase_high_overtone = 0.0
         self._phase_engine = 0.0
 
     def render(self, frame: HapticFrame, frames: int):
@@ -68,8 +70,12 @@ class HapticPcmRenderer:
 
         high_step = tau * 190.0 / self.sample_rate
         high_phase = self._phase_high + positions * high_step
-        wave_high = 0.7 * np_module.sin(high_phase) + 0.3 * np_module.sin(high_phase * 1.618)
+        # A non-integer multiple cannot reuse the base phase after its 2π wrap.
+        overtone_step = high_step * 1.618
+        overtone_phase = self._phase_high_overtone + positions * overtone_step
+        wave_high = 0.7 * np_module.sin(high_phase) + 0.3 * np_module.sin(overtone_phase)
         self._phase_high = (self._phase_high + frames * high_step) % tau
+        self._phase_high_overtone = (self._phase_high_overtone + frames * overtone_step) % tau
 
         try:
             engine_hz = float(frame.engine_hz)

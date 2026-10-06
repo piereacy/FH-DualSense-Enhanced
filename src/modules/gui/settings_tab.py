@@ -4,6 +4,7 @@ Each top-level section becomes a Card. Inside, rows use FieldRow for
 label-control alignment.
 """
 import logging
+import math
 import threading
 
 import customtkinter as ctk
@@ -488,7 +489,9 @@ class SettingsTab(ctk.CTkFrame):
                 new = float(raw)
             else:
                 new = raw
-        except ValueError:
+            if isinstance(new, (int, float)) and not isinstance(new, bool) and not math.isfinite(new):
+                raise ValueError("setting must be finite")
+        except (ValueError, OverflowError):
             if strict:
                 entry.delete(0, "end")
                 entry.insert(0, _format_value(current))

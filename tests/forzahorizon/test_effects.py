@@ -11,7 +11,7 @@ from modules.dualsense.adaptive_trigger import (
     M_VIBRATE_ZONES,
     vibrate,
 )
-from modules.forzahorizon.collision import CollisionSignal
+from modules.forzahorizon.collision import CollisionDetector, CollisionSignal
 from modules.forzahorizon.effects import Controller, TriggerAnimations, _AsymmetricEwma
 
 
@@ -72,6 +72,41 @@ def _unpack_zones(frame):
         ((packed >> (3 * index)) & 0x07) + 1 if active & (1 << index) else 0
         for index in range(10)
     ]
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_live_wall_depth_applies_to_both_triggers_without_restarting(direct):
+    settings = Settings()
+    settings.enable_abs = False
+    settings.enable_throttle_end_wall = True
+    controller = Controller(settings)
+    telemetry = _telemetry(brake=255, accel=255, gear=2)
+    for zones in (2, 7, 1):
+        settings.wall_zones = zones
+        if direct:
+            frames = (controller.L2(telemetry, settings, 1.0), controller.R2(telemetry, settings, 1.0))
+        else:
+            frames = controller.update(telemetry, settings)
+        assert [_unpack_zones(frame) for frame in frames] == [[0] * (10 - zones) + [8] * zones] * 2
+
+
+def test_shared_collision_none_does_not_extend_trigger_burst(monkeypatch):
+    settings = Settings()
+    settings.enable_collision_trigger_l2 = True
+    settings.enable_collision_trigger_r2 = True
+    settings.collision_trigger_duration_ms = 90.0
+    shared = Controller(settings)
+    standalone = Controller(settings)
+    detector = CollisionDetector()
+    current_time = 1.0
+    monkeypatch.setattr("modules.forzahorizon.effects.time.monotonic", lambda: current_time)
+    for current_time, acceleration in [(1.0, 0.0), (1.01, 30.0), (1.02, 30.0), (1.105, 30.0)]:
+        telemetry = _telemetry(accel_x=acceleration, gear=2)
+        signal = detector.update(telemetry, settings, current_time)
+        actual = shared.update(telemetry, settings, signal)
+        assert actual == standalone.update(telemetry, settings)
+    assert actual[0][0] != M_VIBRATE
+    assert actual[1][0] != M_VIBRATE
 
 
 def test_asymmetric_ewma_uses_elapsed_time_and_distinct_time_constants():

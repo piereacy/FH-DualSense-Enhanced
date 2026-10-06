@@ -99,7 +99,7 @@ def test_shortcut_migration_changes_only_exact_targets_and_matching_icons(tmp_pa
     assert notified == [exact, custom_icon]
 
 
-def test_shortcut_migration_reports_only_matched_failures(tmp_path):
+def test_shortcut_migration_reports_matched_and_unknown_failures(tmp_path):
     old = (tmp_path / "FH-DualSense-Enhanced-R6.exe").resolve()
     new = (tmp_path / "FH-DualSense-Enhanced-R7.exe").resolve()
     locked = (tmp_path / "locked.lnk").resolve()
@@ -127,7 +127,7 @@ def test_shortcut_migration_reports_only_matched_failures(tmp_path):
     )
 
     assert migrated == []
-    assert failed == [str(locked)]
+    assert failed == [str(locked), str(broken_unrelated)]
 
 
 def test_shortcut_migration_treats_no_matches_as_success(tmp_path):
@@ -152,10 +152,10 @@ def test_known_shortcut_scan_fails_closed_when_a_known_folder_is_unreadable(
         lambda folder: None if folder is shortcut_links.FOLDER_ROAMING_APP_DATA else tmp_path,
     )
 
-    def fail_scan(_path, _pattern):
+    def fail_scan(_path):
         raise OSError("access denied")
 
-    monkeypatch.setattr(Path, "rglob", fail_scan)
+    monkeypatch.setattr(shortcut_links.os, "scandir", fail_scan)
 
     try:
         shortcut_links.known_shortcut_paths()

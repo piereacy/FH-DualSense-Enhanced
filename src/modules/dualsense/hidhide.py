@@ -579,21 +579,9 @@ class HidHideService:
                         raise HidHideSafetyError(
                             "Turn off inverse application cloak in the HidHide Configuration Client"
                         )
-                    current = api.get_whitelist()
-                    desired, new_owned = self._desired_whitelist(
-                        current, previous_owned, image_name, inverse=False
+                    self._update_owned_whitelist(
+                        api, api.get_whitelist(), previous_owned, image_name
                     )
-                    if _canonical(desired) != _canonical(current):
-                        # Keep both old and new owned paths in the journal until
-                        # the driver write is verified, including on a crash.
-                        _write_owned_whitelist(
-                            self._ownership_path,
-                            tuple(dict.fromkeys((*previous_owned, *new_owned))),
-                        )
-                        api.set_whitelist(desired)
-                        if _canonical(api.get_whitelist()) != _canonical(desired):
-                            raise HidHideError("HidHide did not retain the FHDS application rule")
-                    _write_owned_whitelist(self._ownership_path, new_owned)
             except Exception as exc:
                 phase, message = self._classify_error(exc)
                 self._snapshot = HidHideSnapshot(phase=phase, last_error=message)
@@ -642,19 +630,12 @@ class HidHideService:
                                     "Turn off inverse application cloak in the HidHide Configuration Client"
                                 )
                             self._inactive_rule_baseline(api)
-                            desired, new_owned = self._desired_whitelist(
+                            self._update_owned_whitelist(
+                                api,
                                 original_whitelist,
                                 previous_owned,
                                 full_image_name,
-                                inverse=inverse,
                             )
-                            if _canonical(desired) != _canonical(original_whitelist):
-                                api.set_whitelist(desired)
-                                if _canonical(api.get_whitelist()) != _canonical(desired):
-                                    raise HidHideError(
-                                        "HidHide did not retain the FHDS application rule"
-                                    )
-                            _write_owned_whitelist(self._ownership_path, new_owned)
                             self._enable_active_if_safe(api)
                         except Exception:
                             self._rollback_start(
@@ -726,15 +707,9 @@ class HidHideService:
                 "Turn off inverse application cloak in the HidHide Configuration Client"
             )
         self._inactive_rule_baseline(api)
-        current_whitelist = api.get_whitelist()
-        desired, newly_owned = self._desired_whitelist(
-            current_whitelist, previous_owned, image_name, inverse=False
+        self._update_owned_whitelist(
+            api, api.get_whitelist(), previous_owned, image_name
         )
-        _write_owned_whitelist(self._ownership_path, newly_owned)
-        if _canonical(desired) != _canonical(current_whitelist):
-            api.set_whitelist(desired)
-            if _canonical(api.get_whitelist()) != _canonical(desired):
-                raise HidHideError("HidHide did not retain the FHDS application rule")
         self._enable_active_if_safe(api)
 
     @staticmethod
@@ -784,6 +759,29 @@ class HidHideService:
                 )
         _write_owned_devices(self._device_ownership_path, (), False)
 
+    def _update_owned_whitelist(
+        self,
+        api: HidHideApi,
+        current: tuple[str, ...],
+        previous_owned: tuple[str, ...],
+        application: str,
+    ) -> None:
+        desired, new_owned = self._desired_whitelist(
+            current, previous_owned, application, inverse=False
+        )
+        if _canonical(desired) != _canonical(current):
+            # Retain ownership of both possible driver states until the write
+            # is verified. A failed write/readback can then be retried or
+            # cleaned up, even if this process exits before reaching commit.
+            _write_owned_whitelist(
+                self._ownership_path,
+                tuple(dict.fromkeys((*previous_owned, *new_owned))),
+            )
+            api.set_whitelist(desired)
+            if _canonical(api.get_whitelist()) != _canonical(desired):
+                raise HidHideError("HidHide did not retain the FHDS application rule")
+        _write_owned_whitelist(self._ownership_path, new_owned)
+
     @staticmethod
     def _desired_whitelist(
         current: tuple[str, ...],
@@ -827,14 +825,22 @@ class HidHideService:
             log.exception("Could not restore FHDS-owned HidHide Device hiding state")
         if original_whitelist is not None:
             try:
+                # Restoring the previous rules is itself a driver transaction.
+                # If it fails, either the old or new EXE rule can still exist.
+                _write_owned_whitelist(
+                    self._ownership_path,
+                    tuple(dict.fromkeys((
+                        *previous_owned,
+                        *_load_owned_whitelist(self._ownership_path),
+                    ))),
+                )
                 if _canonical(api.get_whitelist()) != _canonical(original_whitelist):
                     api.set_whitelist(original_whitelist)
+                if _canonical(api.get_whitelist()) != _canonical(original_whitelist):
+                    raise HidHideError("HidHide did not restore the previous application rules")
+                _write_owned_whitelist(self._ownership_path, previous_owned)
             except Exception:
                 log.exception("Could not roll back HidHide application rules")
-        try:
-            _write_owned_whitelist(self._ownership_path, previous_owned)
-        except OSError:
-            log.exception("Could not restore HidHide ownership journal")
 
     def register_device(self, info: dict[str, Any]) -> bool:
         try:

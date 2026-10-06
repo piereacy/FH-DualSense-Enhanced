@@ -444,9 +444,7 @@ class XInputBridge:
                         "XInput bridge session failed; retrying in %.2fs",
                         delay,
                     )
-                    self._wake.clear()
-                    if self._is_running(generation):
-                        self._wake.wait(delay)
+                    self._wait_for_recovery(delay, generation)
                 finally:
                     if client is not None:
                         try:
@@ -513,6 +511,21 @@ class XInputBridge:
                         break
                     input_owner = self._input_owner
 
+                # Isolation needs a real target before the service can publish
+                # physical controls. Create its neutral replacement even when
+                # keyboard/mouse already owns input, without reclaiming input.
+                if target is None and latest is not None and age < self._stale_after:
+                    target = client.create_x360_target()
+                    target.update(XUSBReport())
+                    if not self._replace_snapshot_for_generation(
+                        generation,
+                        status=BridgeStatus.ACTIVE,
+                        target_connected=True,
+                        last_error="",
+                    ):
+                        break
+                    self._notify_target_state(True)
+
                 should_forward = (
                     latest is not None
                     and (
@@ -540,9 +553,6 @@ class XInputBridge:
                     should_forward = False
 
                 if should_forward:
-                    if target is None:
-                        target = client.create_x360_target()
-                        target.update(XUSBReport())
                     gyro_axes = gyro_processor.update(
                         latest.state,
                         latest.received_at,
@@ -648,6 +658,7 @@ class XInputBridge:
         detector = self._keyboard_mouse_activity
         if detector is None:
             return False
+
         try:
             return bool(detector())
         except Exception as exc:
@@ -657,6 +668,16 @@ class XInputBridge:
                 exc,
             )
             return False
+
+    def _wait_for_recovery(self, delay: float, generation: int) -> None:
+        """Honor the backoff deadline despite incoming physical reports."""
+        deadline = time.monotonic() + delay
+        while self._is_running(generation):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                return
+            self._wake.wait(remaining)
+            self._wake.clear()
 
     def _activate_keyboard_mouse(
         self,

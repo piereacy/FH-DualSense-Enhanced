@@ -481,7 +481,7 @@ def test_live_gyro_mapping_reapplies_latest_motion_without_recreating_target():
     bridge.stop()
 
 
-def test_keyboard_mouse_activity_before_target_waits_for_deliberate_controller_input():
+def test_keyboard_mouse_activity_before_target_keeps_a_neutral_target_for_isolation():
     activity = _Activity()
     client = _Client()
     bridge = XInputBridge(
@@ -494,13 +494,41 @@ def test_keyboard_mouse_activity_before_target_waits_for_deliberate_controller_i
     bridge._wake.set()
     _wait(lambda: bridge.snapshot().input_owner is InputOwner.KEYBOARD_MOUSE)
     bridge.publish_latest(_state())
-    time.sleep(0.02)
-    assert client.targets == []
+    _wait(lambda: bridge.snapshot().target_connected)
+    assert len(client.targets) == 1
+    assert client.targets[0].reports == [bytes(12)]
+    assert bridge.snapshot().input_owner is InputOwner.KEYBOARD_MOUSE
+    assert bridge.snapshot().forwarded_reports == 0
 
     bridge.publish_latest(_state(buttons=frozenset({DualSenseButton.CROSS})))
     _wait(lambda: bridge.snapshot().input_owner is InputOwner.CONTROLLER)
     _wait(lambda: len(client.targets) == 1)
     bridge.stop()
+
+
+def test_incoming_reports_do_not_shorten_recovery_backoff():
+    attempts = []
+    retried = threading.Event()
+
+    class FailingClient(_Client):
+        def connect(self):
+            attempts.append(time.monotonic())
+            if len(attempts) >= 2:
+                retried.set()
+            raise RuntimeError("transient ViGEm failure")
+
+    bridge = XInputBridge(client_factory=FailingClient, recovery_delays_s=(0.15,))
+    bridge.start()
+    try:
+        _wait(lambda: bridge.snapshot().recovery_attempts == 1)
+        for _ in range(10):
+            bridge.publish_latest(_state())
+            time.sleep(0.002)
+        assert len(attempts) == 1
+        assert retried.wait(1.0)
+        assert attempts[1] - attempts[0] >= 0.14
+    finally:
+        bridge.stop()
 
 
 def test_keyboard_mouse_detector_failure_keeps_controller_forwarding():
@@ -813,11 +841,13 @@ def test_second_stop_cancels_pending_successor(monkeypatch):
 
 def test_worker_cannot_republish_target_readiness_after_logical_stop():
     bridge = None
+    states_before_stop = []
 
     class _StoppingTarget(_Target):
         def update(self, report):
             super().update(report)
             if len(self.reports) == 2:
+                states_before_stop.extend(target_states)
                 bridge.stop()
 
     class _StoppingClient(_Client):
@@ -838,4 +868,5 @@ def test_worker_cannot_republish_target_readiness_after_logical_stop():
 
     assert bridge.snapshot().status is BridgeStatus.ERROR
     assert bridge.snapshot().target_connected is False
-    assert target_states == []
+    assert states_before_stop == [True]
+    assert target_states == [True, False]

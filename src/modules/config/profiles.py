@@ -18,17 +18,19 @@ _DEFAULT_BEFORE_R11 = preferences.DEFAULT_BEFORE_R11_PROFILE_NAME
 _ORIGINAL = preferences.ORIGINAL_PROFILE_NAME
 
 
-def load_profiles() -> dict:
-    """Snapshot of {'active': str, 'profiles': dict} from disk."""
+def load_profiles(s=None) -> dict:
+    """Read available profiles, retaining this instance's live selection."""
     raw = preferences._read()
+    state = preferences._settings_state(s)
     return {
-        "active": raw.get("active_profile", "") or "",
+        "active": state.name if state else raw.get("active_profile", "") or "",
         "profiles": raw.get("profiles", {}) or {},
     }
 
 
-def active_name() -> str:
-    return load_profiles().get("active", "") or ""
+def active_name(s=None) -> str:
+    state = preferences._settings_state(s)
+    return state.name if state else load_profiles().get("active", "") or ""
 
 
 def list_profile_names(store: dict) -> list:
@@ -74,32 +76,35 @@ def _unique(name: str, taken: dict) -> str:
         i += 1
 
 
-def _write_store(profs: dict, active: str) -> bool:
-    try:
-        raw = preferences._read_raw()
-        raw["profiles"] = profs
-        raw["active_profile"] = active
-        return preferences._write(raw)
-    except preferences.PreferencesError as exc:
-        log.warning("Could not update profiles without overwriting corrupt preferences: %s", exc)
-        return False
-
-
 def _defaults() -> dict:
     from .settings import Settings
     return preferences._profile_fields(Settings())
 
 
+def _apply_profile_snapshot(s, snap: dict) -> None:
+    from .settings import Settings
+
+    normalized = Settings()
+    preferences._apply_snap(normalized, snap, preferences._profile_fields(normalized))
+    preferences._apply_snap(s, preferences._profile_fields(normalized), preferences._profile_fields(s))
+
+
+@preferences._serialized("")
 def save_profile(name: str, s) -> str:
     """Save current settings as a new profile. Auto-suffixes on collision.
     Returns the final stored name, or "" if `name` was empty."""
     name = _clean_name(name)
     if not name:
         return ""
-    store = load_profiles()
-    final = _unique(name, store["profiles"])
-    store["profiles"][final] = preferences._profile_fields(s)
-    return final if _write_store(store["profiles"], final) else ""
+    raw = preferences._read_raw()
+    profs = raw.setdefault("profiles", {})
+    final = _unique(name, profs)
+    profs[final] = preferences._profile_fields(s)
+    raw["active_profile"] = final
+    if not preferences._write(raw):
+        return ""
+    preferences._bind_profile(s, final, profs[final], raw)
+    return final
 
 
 def next_profile_name(prefix: str = "profile") -> str:
@@ -111,52 +116,94 @@ def next_profile_name(prefix: str = "profile") -> str:
     return f"{prefix}{index}"
 
 
+@preferences._serialized(False)
 def apply_profile(name: str, s) -> bool:
-    store = load_profiles()
+    raw = preferences._read_raw()
+    if name != _ORIGINAL and name not in raw.get("profiles", {}):
+        return False
+    if not preferences.save_pending(s):
+        return False
+    raw = preferences._read_raw()
+    profs = raw.setdefault("profiles", {})
     if name == _ORIGINAL:
         # Loading the built-in preset always restores its canonical values,
         # even if the user previously tuned it during a session.
         snap = preferences.original_profile_fields()
-        store["profiles"][name] = snap
+        profs[name] = snap
     else:
-        snap = store["profiles"].get(name)
+        snap = profs.get(name)
     if snap is None:
         return False
-    if not _write_store(store["profiles"], name):
+    raw["active_profile"] = name
+    if not preferences._write(raw):
         return False
-    preferences._apply_snap(s, snap, preferences._profile_fields(s))
+    _apply_profile_snapshot(s, snap)
+    preferences._bind_profile(s, name, snap, raw)
     return True
 
 
-def delete_profile(name: str) -> bool:
-    store = load_profiles()
-    profs = store["profiles"]
+@preferences._serialized(False)
+def delete_profile(name: str, s=None) -> bool:
+    """Delete a snapshot, applying the fallback when deleting the live profile."""
+    raw = preferences._read_raw()
+    profs = raw.get("profiles", {})
     if name not in profs or is_builtin_profile(name):
         return False
+    state = preferences._settings_state(s)
+    if state is not None and state.name == name:
+        if not preferences.save_pending(s):
+            return False
+        raw = preferences._read_raw()
+        profs = raw.get("profiles", {})
     del profs[name]
-    active = store["active"]
-    if active == name:
+    active = raw.get("active_profile", "")
+    state = preferences._settings_state(s)
+    local_active = state.name if state else active
+    fallback = ""
+    if local_active == name or active == name:
+        if s is None:
+            # Changing only the disk selection would let the next autosave
+            # overwrite the fallback with the deleted profile's live values.
+            return False
         # Prefer Default so the canonical profile stays selected.
-        active = _DEFAULT if _DEFAULT in profs else next(
+        fallback = _DEFAULT if _DEFAULT in profs else next(
             iter(sorted(profs.keys(), key=str.lower)), "")
-    return _write_store(profs, active)
+        if active == name:
+            active = fallback
+    raw["active_profile"] = active
+    if not preferences._write(raw):
+        return False
+    if local_active == name:
+        snapshot = profs.get(fallback, {})
+        _apply_profile_snapshot(s, snapshot)
+        preferences._bind_profile(s, fallback, snapshot, raw)
+    return True
 
 
-def rename_profile(old: str, new: str) -> str:
+@preferences._serialized("")
+def rename_profile(old: str, new: str, s=None) -> str:
     """Rename `old` to `new`, auto-suffixing on collision. Returns "" if
     rejected (built-in profile locked, old missing, new empty)."""
     new = _clean_name(new)
     if not new or old == new or is_builtin_profile(old):
         return ""
-    store = load_profiles()
-    profs = store["profiles"]
+    raw = preferences._read_raw()
+    profs = raw.get("profiles", {})
     if old not in profs:
         return ""
     final = _unique(new, {k: v for k, v in profs.items() if k != old})
     # Preserve insertion order so the list doesn't reshuffle.
     profs_new = {(final if k == old else k): v for k, v in profs.items()}
-    active = final if store["active"] == old else store["active"]
-    return final if _write_store(profs_new, active) else ""
+    raw["profiles"] = profs_new
+    if raw.get("active_profile") == old:
+        raw["active_profile"] = final
+    if not preferences._write(raw):
+        return ""
+    state = preferences._settings_state(s)
+    if state is not None and state.name == old:
+        # Keep the loaded field baselines, including conflicts and pending edits.
+        state.name = final
+    return final
 
 
 # MARK: share codes --------------------------------------------------------
@@ -175,6 +222,7 @@ def export_profile(name: str) -> str:
     return SHARE_PREFIX + base64.urlsafe_b64encode(blob).rstrip(b"=").decode("ascii")
 
 
+@preferences._serialized("")
 def import_profile(code: str) -> str:
     """Decode an FHDS: code into a new profile (auto-suffixed). Returns ""
     on failure. Unknown keys are dropped; missing keys fall back to current
@@ -219,7 +267,8 @@ def import_profile(code: str) -> str:
     normalized = Settings()
     preferences._apply_snap(normalized, cleaned, preferences._profile_fields(normalized))
     snapshot = preferences._profile_fields(normalized)
-    store = load_profiles()
-    final = _unique(name, store["profiles"])
-    store["profiles"][final] = snapshot
-    return final if _write_store(store["profiles"], store["active"]) else ""
+    raw = preferences._read_raw()
+    profs = raw.setdefault("profiles", {})
+    final = _unique(name, profs)
+    profs[final] = snapshot
+    return final if preferences._write(raw) else ""

@@ -90,12 +90,12 @@ class ProfilesTab(Vertical):
         self.refresh_list()
 
     def _active_text(self) -> str:
-        store = profiles.load_profiles()
+        store = profiles.load_profiles(self.settings)
         active = store.get("active") or t("(none)")
         return t("Active: {name}").format(name=f"[b]{escape(str(active))}[/b]")
 
     def refresh_list(self):
-        store = profiles.load_profiles()
+        store = profiles.load_profiles(self.settings)
         lv = self.query_one("#profile-list", ListView)
         active = store.get("active", "")
         lv.clear()
@@ -126,6 +126,9 @@ class ProfilesTab(Vertical):
             log.warning("Profile name is empty.")
             return
         final = profiles.save_profile(name, self.settings)
+        if not final:
+            self.app.report_save_failure()
+            return
         if final and hasattr(self.app, "mark_default_saved"):
             self.app.mark_default_saved()
         widget.value = ""
@@ -152,30 +155,35 @@ class ProfilesTab(Vertical):
                 self.app.refresh_setting_widgets()
                 self.refresh_list()
                 log.info("Loaded profile: %s", name)
+            else:
+                self.app.report_save_failure()
         elif bid == "profile-delete":
             name = self._selected_name()
             if not name:
                 log.warning("No profile selected.")
                 return
-            if name == preferences.DEFAULT_PROFILE_NAME:
-                log.warning("Default profile cannot be deleted.")
+            if profiles.is_builtin_profile(name):
+                log.warning("Built-in profile cannot be deleted: %s", name)
                 return
-            if profiles.delete_profile(name):
+            if profiles.delete_profile(name, self.settings):
+                self.app.refresh_setting_widgets()
                 self.refresh_list()
                 log.info("Deleted profile: %s", name)
+            else:
+                self.app.report_save_failure()
         elif bid == "profile-rename":
             old = self._selected_name()
             if not old:
                 log.warning("No profile selected.")
                 return
-            if old == preferences.DEFAULT_PROFILE_NAME:
-                log.warning("Default profile cannot be renamed.")
+            if profiles.is_builtin_profile(old):
+                log.warning("Built-in profile cannot be renamed: %s", old)
                 return
             new = self._name_input().value.strip()
             if not new:
                 log.warning("Type the new name in the name field first.")
                 return
-            final = profiles.rename_profile(old, new)
+            final = profiles.rename_profile(old, new, self.settings)
             if not final:
                 log.warning("Rename failed.")
                 return

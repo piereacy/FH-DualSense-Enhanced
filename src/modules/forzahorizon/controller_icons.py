@@ -17,6 +17,7 @@ from pathlib import Path
 from modules.config import paths
 
 from .game_launch import is_forza_game_running, validate_forza_root
+from .icon_transaction import IconTransactionBusyError, icon_transaction
 
 log = logging.getLogger("fhds.controller_icons")
 
@@ -114,7 +115,7 @@ def _manifest_generation(manifest: dict) -> str:
 def _read_manifest(root: Path, backup_dir: Path) -> dict | None:
     try:
         manifest = json.loads(_manifest_path(backup_dir).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, TypeError):
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError):
         return None
     stored_root = manifest.get("root") if isinstance(manifest, dict) else None
     if not isinstance(stored_root, str) or _path_identity(stored_root) != _path_identity(root):
@@ -123,7 +124,10 @@ def _read_manifest(root: Path, backup_dir: Path) -> dict | None:
     if (
         not isinstance(originals, list)
         or len(originals) != len(TARGETS)
-        or any(not isinstance(value, str) or not _SHA256.fullmatch(value) for value in originals)
+        or any(
+            not isinstance(value, str) or not _SHA256.fullmatch(value) or value == MOD_SHA256
+            for value in originals
+        )
     ):
         return None
     try:
@@ -182,10 +186,26 @@ def inspect_controller_icons(
     return ControllerIconInspection(validated, state, has_backup)
 
 
-def _atomic_copy(source: Path, target: Path) -> None:
+def _check_target(target: Path, expected_hash: str | None) -> None:
+    if expected_hash is not None and _sha256(target) != expected_hash:
+        raise ControllerIconModError(
+            "Controller icons changed during the operation; changed files were preserved"
+        )
+
+
+def _atomic_copy(
+    source: Path,
+    target: Path,
+    *,
+    expected_target_hash: str | None = None,
+    expected_source_hash: str | None = None,
+) -> None:
     temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.fhds-tmp")
     try:
         shutil.copy2(source, temporary)
+        if expected_source_hash is not None and _sha256(temporary) != expected_source_hash:
+            raise ControllerIconModError("Controller-icon source failed verification")
+        _check_target(target, expected_target_hash)
         os.replace(temporary, target)
     finally:
         try:
@@ -194,10 +214,13 @@ def _atomic_copy(source: Path, target: Path) -> None:
             pass
 
 
-def _atomic_bytes(payload: bytes, target: Path) -> None:
+def _atomic_bytes(
+    payload: bytes, target: Path, *, expected_target_hash: str | None = None
+) -> None:
     temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.fhds-tmp")
     try:
         temporary.write_bytes(payload)
+        _check_target(target, expected_target_hash)
         os.replace(temporary, target)
     finally:
         try:
@@ -206,7 +229,7 @@ def _atomic_bytes(payload: bytes, target: Path) -> None:
             pass
 
 
-def _write_backup(root: Path, backup_dir: Path) -> dict:
+def _write_backup(root: Path, backup_dir: Path, expected_hashes: list[str]) -> dict:
     backup_dir.mkdir(parents=True, exist_ok=True)
     generation = uuid.uuid4().hex
     generation_dir = backup_dir / "generations" / generation
@@ -217,12 +240,20 @@ def _write_backup(root: Path, backup_dir: Path) -> dict:
             source = root / relative
             backup = _backup_path(backup_dir, index, generation)
             source_hash = _sha256(source)
+            if source_hash != expected_hashes[index] or source_hash == MOD_SHA256:
+                raise ControllerIconModError(
+                    "Controller icons changed before backup; no files were installed"
+                )
             _atomic_copy(source, backup)
             if _sha256(backup) != source_hash or _sha256(source) != source_hash:
                 raise ControllerIconModError(
                     f"Original controller-icon backup {index + 1} failed verification"
                 )
             hashes.append(source_hash)
+        if [_sha256(root / relative) for relative in TARGETS] != expected_hashes:
+            raise ControllerIconModError(
+                "Controller icons changed during backup; no files were installed"
+            )
         manifest = {
             "version": 2,
             "root": str(root),
@@ -255,30 +286,55 @@ def _ensure_game_closed(game_running: Callable[[], bool]) -> None:
         raise ControllerIconModError("Close FH6 before changing controller icon files")
 
 
-def _restore_from_manifest(root: Path, backup_dir: Path, manifest: dict) -> None:
+def _replace_icons(
+    root: Path,
+    sources: list[Path],
+    expected_hashes: list[str],
+    replacement_hashes: list[str],
+    description: str,
+) -> None:
     targets = [root / relative for relative in TARGETS]
-    generation = _manifest_generation(manifest)
-    previous: list[bytes] | None = None
+    replaced: list[tuple[Path, bytes, str]] = []
     try:
         previous = [target.read_bytes() for target in targets]
-        for index, target in enumerate(targets):
-            _atomic_copy(_backup_path(backup_dir, index, generation), target)
-        restored = [_sha256(target) for target in targets]
-        if restored != manifest["original_sha256"]:
-            raise ControllerIconModError("Restored controller icons failed verification")
+        if [hashlib.sha256(payload).hexdigest() for payload in previous] != expected_hashes:
+            raise ControllerIconModError("Controller icons changed before replacement")
+        for index, (source, target) in enumerate(zip(sources, targets, strict=True)):
+            _atomic_copy(
+                source,
+                target,
+                expected_target_hash=expected_hashes[index],
+                expected_source_hash=replacement_hashes[index],
+            )
+            replaced.append((target, previous[index], replacement_hashes[index]))
+            if _sha256(target) != replacement_hashes[index]:
+                raise ControllerIconModError(f"{description} failed verification")
+        if [_sha256(target) for target in targets] != replacement_hashes:
+            raise ControllerIconModError(f"{description} failed verification")
     except (OSError, ControllerIconModError) as exc:
-        if previous is None:
-            raise ControllerIconModError(
-                f"Could not preserve current controller icons before restore: {exc}"
-            ) from exc
-        for payload, target in zip(previous, targets, strict=True):
+        # Only undo files this transaction actually replaced, and only while
+        # they still contain its output. A concurrent game update is preserved.
+        for target, payload, written_hash in reversed(replaced):
             try:
-                _atomic_bytes(payload, target)
-            except OSError:
+                _atomic_bytes(payload, target, expected_target_hash=written_hash)
+            except (OSError, ControllerIconModError):
                 log.exception("Controller-icon rollback failed for %s", target)
         if isinstance(exc, ControllerIconModError):
             raise
-        raise ControllerIconModError(f"Could not restore original controller icons: {exc}") from exc
+        raise ControllerIconModError(f"Could not replace controller icons: {exc}") from exc
+
+
+def _restore_from_manifest(
+    root: Path, backup_dir: Path, manifest: dict, expected_hashes: list[str]
+) -> None:
+    generation = _manifest_generation(manifest)
+    _replace_icons(
+        root,
+        [_backup_path(backup_dir, index, generation) for index in range(len(TARGETS))],
+        expected_hashes,
+        manifest["original_sha256"],
+        "Restored controller icons",
+    )
 
 
 def install_controller_icons(
@@ -291,6 +347,34 @@ def install_controller_icons(
     validated = validate_controller_icon_root(root)
     if validated is None:
         raise ControllerIconModError("The selected folder is not a valid FH6 installation")
+    try:
+        with icon_transaction(validated):
+            return _install_controller_icons_locked(
+                validated, data_dir=data_dir, asset_path=asset_path, game_running=game_running
+            )
+    except (OSError, IconTransactionBusyError) as exc:
+        raise ControllerIconModError(f"Could not install controller icons: {exc}") from exc
+
+
+def _ensure_compatible_originals(current_hashes: list[str], manifest: dict) -> None:
+    if any(
+        current not in (MOD_SHA256, original)
+        for current, original in zip(current_hashes, manifest["original_sha256"], strict=True)
+    ):
+        raise ControllerIconModError(
+            "Controller icons contain changed game files. No files were overwritten. "
+            "Verify the game files in Steam or Xbox App to restore both current originals, "
+            "then install the icon MOD again."
+        )
+
+
+def _install_controller_icons_locked(
+    validated: Path,
+    *,
+    data_dir: Path,
+    asset_path: Path,
+    game_running: Callable[[], bool],
+) -> ControllerIconInspection:
     _ensure_game_closed(game_running)
     mod_hash = _asset_hash(asset_path)
     targets = [validated / relative for relative in TARGETS]
@@ -306,27 +390,25 @@ def install_controller_icons(
             raise ControllerIconModError(
                 "Only one icon archive is modified and no complete original backup exists"
             )
-        _restore_from_manifest(validated, backup_dir, manifest)
-        current_hashes = manifest["original_sha256"]
+        _ensure_compatible_originals(current_hashes, manifest)
 
     # A game update can replace native files after a previous install. Refresh
     # the backup only when both current files are clearly native.
-    if manifest is None or current_hashes != manifest["original_sha256"]:
-        manifest = _write_backup(validated, backup_dir)
+    if not partial and (manifest is None or current_hashes != manifest["original_sha256"]):
+        manifest = _write_backup(validated, backup_dir, current_hashes)
 
-    try:
-        for target in targets:
-            _atomic_copy(asset_path, target)
-        if any(_sha256(target) != mod_hash for target in targets):
-            raise ControllerIconModError("Installed controller icons failed verification")
-    except (OSError, ControllerIconModError) as exc:
-        try:
-            _restore_from_manifest(validated, backup_dir, manifest)
-        except ControllerIconModError:
-            log.exception("Controller-icon install rollback failed")
-        if isinstance(exc, ControllerIconModError):
-            raise
-        raise ControllerIconModError(f"Could not install controller icons: {exc}") from exc
+    if [_sha256(target) for target in targets] != current_hashes:
+        raise ControllerIconModError(
+            "Controller icons changed before installation; no files were installed"
+        )
+
+    _replace_icons(
+        validated,
+        [asset_path] * len(TARGETS),
+        current_hashes,
+        [mod_hash] * len(TARGETS),
+        "Installed controller icons",
+    )
     return inspect_controller_icons(validated, data_dir=data_dir, asset_path=asset_path)
 
 
@@ -340,10 +422,28 @@ def restore_controller_icons(
     validated = validate_controller_icon_root(root)
     if validated is None:
         raise ControllerIconModError("The selected folder is not a valid FH6 installation")
+    try:
+        with icon_transaction(validated):
+            return _restore_controller_icons_locked(
+                validated, data_dir=data_dir, asset_path=asset_path, game_running=game_running
+            )
+    except (OSError, IconTransactionBusyError) as exc:
+        raise ControllerIconModError(f"Could not restore controller icons: {exc}") from exc
+
+
+def _restore_controller_icons_locked(
+    validated: Path,
+    *,
+    data_dir: Path,
+    asset_path: Path,
+    game_running: Callable[[], bool],
+) -> ControllerIconInspection:
     _ensure_game_closed(game_running)
     backup_dir = _backup_dir(validated, data_dir)
     manifest = _read_manifest(validated, backup_dir)
     if manifest is None:
         raise ControllerIconModError("No verified original controller-icon backup is available")
-    _restore_from_manifest(validated, backup_dir, manifest)
+    current_hashes = [_sha256(validated / relative) for relative in TARGETS]
+    _ensure_compatible_originals(current_hashes, manifest)
+    _restore_from_manifest(validated, backup_dir, manifest, current_hashes)
     return inspect_controller_icons(validated, data_dir=data_dir, asset_path=asset_path)

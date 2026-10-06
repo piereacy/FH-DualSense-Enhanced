@@ -4,6 +4,7 @@ import logging
 import time
 
 from modules import dualsense, forzahorizon
+from modules.dualsense.output_state import ControllerVisualState, NO_VISUAL_CONTROL
 from modules.forzahorizon import ProcessWatcher
 from modules.haptics import HapticManager, HapticMixer, SILENT_FRAME
 
@@ -22,6 +23,7 @@ def run(
     usb_audio=None,
     haptics_lab=None,
     diagnostics=None,
+    trigger_pulse=None,
 ):
     OFF = dualsense.adaptive_trigger.off()
     controller = forzahorizon.Controller(s)
@@ -34,12 +36,16 @@ def run(
     else:
         haptic_manager = HapticManager(ds, s, audio=usb_audio)
     prev = None
+    previous_trigger_guard = None
     last_pkt = time.monotonic()
     now = last_pkt
     last_log = 0.0
     pkt_count = 0
     idle_silenced = False
     lab_output_active = False
+    pulse_output_active = False
+    telemetry_state = None
+    last_visual = NO_VISUAL_CONTROL
     last_diagnostics = -1e9
 
     watcher = ProcessWatcher(s.game_process_name_contains, s.game_poll_interval_s)
@@ -73,6 +79,36 @@ def run(
         except Exception as exc:
             log.debug("haptic pause failed: %s", exc)
 
+    def write_state(state, *, context, trigger_guard=None):
+        nonlocal prev, previous_trigger_guard
+        if state == prev and trigger_guard == previous_trigger_guard:
+            return
+        try:
+            kwargs = {"trigger_guard": trigger_guard} if trigger_guard is not None else {}
+            ds.set(state[0], state[1], state[2], visual=state[3], **kwargs)
+            prev = state
+            previous_trigger_guard = trigger_guard
+        except Exception as exc:
+            log.debug("ds.set %s failed: %s", context, exc)
+
+    def render_visual(telemetry, timestamp):
+        nonlocal last_visual
+        try:
+            last_visual = lighting.update(telemetry, s, timestamp)
+        except Exception as exc:  # noqa: BLE001 - isolate optional lighting failures
+            log.warning("lighting update failed: %s", exc)
+            # Release only fields the application owned or has enabled. A bad
+            # lighting setting must not interrupt triggers, input or grip audio.
+            last_visual = ControllerVisualState(
+                lightbar=(0, 0, 0) if (
+                    last_visual.lightbar is not None or s.enable_tachometer_lightbar
+                ) else None,
+                player_leds=0 if (
+                    last_visual.player_leds is not None or s.enable_gear_player_leds
+                ) else None,
+            )
+        return last_visual
+
     def silence_output(timestamp, *, reset_transients=True, force_haptics=False):
         if reset_transients:
             try:
@@ -89,13 +125,9 @@ def run(
         except Exception as exc:
             log.debug("haptic silence failed: %s", exc)
             stop_rumble = None
-        stop_visual = lighting.update({"on": False}, s, timestamp)
+        stop_visual = render_visual({"on": False}, timestamp)
         stop_state = (OFF, OFF, stop_rumble, stop_visual)
-        if stop_state != prev:
-            try:
-                ds.set(OFF, OFF, stop_rumble, visual=stop_visual)
-            except Exception as exc:
-                log.debug("ds.set silence failed: %s", exc)
+        write_state(stop_state, context="silence")
         return stop_state
 
     publish_haptics_diagnostics(now, force=True)
@@ -129,24 +161,16 @@ def run(
                 except Exception as exc:
                     log.debug("Haptics Lab body route failed: %s", exc)
                     rumble = None
-                visual = lighting.update({"on": False}, s, now)
+                visual = render_visual({"on": False}, now)
+                left = lab_output.left_trigger if s.enable_trigger_feedback else OFF
+                right = lab_output.right_trigger if s.enable_trigger_feedback else OFF
                 state = (
-                    lab_output.left_trigger,
-                    lab_output.right_trigger,
+                    left,
+                    right,
                     rumble,
                     visual,
                 )
-                if state != prev:
-                    try:
-                        ds.set(
-                            lab_output.left_trigger,
-                            lab_output.right_trigger,
-                            rumble,
-                            visual=visual,
-                        )
-                        prev = state
-                    except Exception as exc:
-                        log.debug("Haptics Lab controller write failed: %s", exc)
+                write_state(state, context="Haptics Lab")
                 lab_output_active = True
                 publish_haptics_diagnostics(now)
             elif lab_output_active:
@@ -156,6 +180,34 @@ def run(
                 publish_haptics_diagnostics(now, force=True)
                 log.info("Haptics Lab preview stopped")
 
+            pulse = None
+            pulse_guard = None
+            if trigger_pulse is not None:
+                if (
+                    not s.enable_trigger_feedback
+                    or not bool(getattr(ds, "connected", True))
+                    or lab_output_active
+                ):
+                    trigger_pulse.stop()
+                else:
+                    output = trigger_pulse.sample_output(now=now, controller=ds)
+                    if output is not None:
+                        pulse, pulse_guard = output.effect, output.guard
+                if pulse is not None:
+                    state = (pulse, pulse, *(prev[2:] if prev is not None else (None, None)))
+                    write_state(state, context="UI pulse", trigger_guard=pulse_guard)
+                    pulse_output_active = True
+                elif pulse_output_active:
+                    if not lab_output_active:
+                        if telemetry_state is not None and now - last_pkt <= 1.0:
+                            state = telemetry_state
+                            if not s.enable_trigger_feedback:
+                                state = (OFF, OFF, *state[2:])
+                            write_state(state, context="UI pulse restore")
+                        else:
+                            prev = silence_output(now)
+                    pulse_output_active = False
+
             if s.exit_on_game_close:
                 try:
                     if watcher.should_exit():
@@ -164,7 +216,7 @@ def run(
                 except Exception as exc:
                     log.warning("game-close watcher error: %s", exc)
 
-            pkt, addr = recv_latest(preview_active=lab_output_active)
+            pkt, addr = recv_latest(preview_active=lab_output_active or pulse_output_active)
             now = time.monotonic()
             source_host = addr[0] if addr is not None else "unknown"
             source_port = addr[1] if addr is not None else 0
@@ -203,13 +255,8 @@ def run(
                     except Exception as exc:
                         log.debug("haptic silence failed: %s", exc)
                         rumble = None
-                    state = (OFF, OFF, rumble, lighting.update({"on": False}, s, now))
-                    if state != prev:
-                        try:
-                            ds.set(state[0], state[1], state[2], visual=state[3])
-                            prev = state
-                        except Exception as exc:
-                            log.debug("ds.set idle failed: %s", exc)
+                    state = (OFF, OFF, rumble, render_visual({"on": False}, now))
+                    write_state(state, context="idle")
                     idle_silenced = True
                 if (
                     s.exit_on_game_close
@@ -270,14 +317,23 @@ def run(
                 log.debug("haptic route failed: %s", exc)
                 rumble = None
 
-            visual = lighting.update(t, s, now)
+            visual = render_visual(t, now)
+            telemetry_state = (left, right, rumble, visual)
+            if pulse is not None:
+                # UDP waiting and rendering can outlive the request or a UI
+                # change. Recheck immediately before publishing its effect.
+                if s.enable_trigger_feedback:
+                    output = trigger_pulse.sample_output(now=now, controller=ds)
+                else:
+                    trigger_pulse.stop()
+                    output = None
+                pulse_guard = output.guard if output is not None else None
+                if output is not None:
+                    left = right = output.effect
+            if not s.enable_trigger_feedback:
+                left = right = OFF
             state = (left, right, rumble, visual)
-            if state != prev:
-                try:
-                    ds.set(left, right, rumble, visual=visual)
-                    prev = state
-                except Exception as exc:
-                    log.debug("ds.set failed: %s", exc)
+            write_state(state, context="telemetry", trigger_guard=pulse_guard)
 
             if now - last_log >= 1.0:
                 last_log = now
@@ -299,6 +355,8 @@ def run(
                     slip_c,
                 )
     finally:
+        if trigger_pulse is not None:
+            trigger_pulse.stop()
         prev = silence_output(
             now,
             reset_transients=False,

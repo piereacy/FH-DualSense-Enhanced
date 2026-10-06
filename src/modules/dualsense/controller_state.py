@@ -25,6 +25,7 @@ class ControllerSnapshot:
     battery_level: int | None = None
     battery_status: BatteryStatus = BatteryStatus.UNKNOWN
     error: str = ""
+    connection_generation: int = 0
 
     @property
     def connected(self) -> bool:

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from modules.haptics.frame import HapticFrame, SILENT_FRAME
 from modules.haptics.pcm import HapticPcmRenderer
@@ -16,6 +17,21 @@ def test_renderer_keeps_left_and_right_channels_isolated():
     assert np.all(left_pcm[:, 1] == 0.0)
     assert np.all(right_pcm[:, 0] == 0.0)
     assert np.any(right_pcm[:, 1] != 0.0)
+
+
+@pytest.mark.parametrize(("sample_rate", "block"), [(48_000, 512), (3_000, 32)])
+def test_high_frequency_pcm_is_independent_of_block_boundaries(sample_rate, block):
+    def renderer():
+        return HapticPcmRenderer(numpy_module=np, sample_rate=sample_rate, smoothing=1.0)
+
+    frame = HapticFrame(left_high=0.8, right_high=0.3)
+    split = renderer()
+    expected = renderer().render(frame, block * 7)
+    actual = np.concatenate([split.render(frame, block) for _ in range(7)])
+
+    np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-6)
+    split.reset()
+    np.testing.assert_allclose(split.render(frame, block), expected[:block], rtol=0, atol=1e-6)
 
 
 def test_renderer_uses_same_block_smoothing_at_usb_and_bluetooth_rates():

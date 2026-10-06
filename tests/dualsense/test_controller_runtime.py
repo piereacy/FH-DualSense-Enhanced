@@ -473,6 +473,39 @@ def test_force_reconnect_restarts_missing_io_worker(monkeypatch):
     assert controller._take_reconnect_request() is True
 
 
+def test_output_wakes_do_not_shorten_hid_recovery_backoff(monkeypatch):
+    controller = dualsense_main.DualSense(enable_startup_pulse=False, enable_reconnect=True)
+    attempts = []
+    recovered = threading.Event()
+
+    def session():
+        attempts.append(time.monotonic())
+        if len(attempts) == 1:
+            raise RuntimeError("synthetic HID failure")
+        recovered.set()
+        while controller._running:
+            controller._wake.wait(0.01)
+            controller._wake.clear()
+
+    monkeypatch.setattr(controller, "_io_loop", session)
+    monkeypatch.setattr(dualsense_main, "IO_RECOVERY_DELAYS_S", (0.15,))
+    monkeypatch.setattr(dualsense_main.hidhide, "is_detected", lambda: False)
+    controller.open()
+    try:
+        deadline = time.monotonic() + 1.0
+        while controller._io_recovery_count == 0:
+            assert time.monotonic() < deadline
+            time.sleep(0.002)
+        for _ in range(10):
+            controller.set(dualsense_main.off(), dualsense_main.off())
+            time.sleep(0.002)
+        assert not recovered.is_set()
+        assert recovered.wait(1.0)
+        assert attempts[1] - attempts[0] >= 0.14
+    finally:
+        controller.close()
+
+
 def test_close_does_not_touch_hid_when_worker_failed_to_stop(monkeypatch):
     class _StuckThread:
         def join(self, timeout=None):
@@ -492,7 +525,7 @@ def test_close_does_not_touch_hid_when_worker_failed_to_stop(monkeypatch):
         ),
     )
 
-    controller.close()
+    assert controller.close() is False
 
     assert controller._thread is not None
 

@@ -1,16 +1,19 @@
 @echo off
 REM FH-DualSense-Enhanced Windows launcher.
 REM Downloads the ZUV bundle when needed and lets uv provision Python.
-setlocal EnableDelayedExpansion
+setlocal DisableDelayedExpansion
 
 set "DIR=%~dp0"
 set "APP=%DIR%app"
 set "BUNDLE=%APP%\FH-DualSense-Enhanced.zuv.py"
+set "PART=%BUNDLE%.part"
 set "MANUAL=%DIR%FH-DualSense-Enhanced.zuv.py"
 set "REPO=piereacy/FH-DualSense-Enhanced"
 set "URL=https://github.com/%REPO%/releases/latest/download/FH-DualSense-Enhanced.zuv.py"
 set "FLAGS="
 set "GAME="
+set "APP_MODE="
+set "GAME_MODE="
 
 if not exist "%APP%" mkdir "%APP%"
 if not exist "%BUNDLE%" (
@@ -21,31 +24,42 @@ if not exist "%BUNDLE%" (
 )
 if not exist "%BUNDLE%" (
     echo Downloading FH-DualSense-Enhanced.zuv.py...
-    curl.exe -L --fail -o "%BUNDLE%" "%URL%" || (
+    curl.exe -L --fail -o "%PART%" "%URL%" || (
+        del /q "%PART%" >nul 2>nul
         echo ERROR: Download failed. Download the ZUV manually from:
         echo https://github.com/%REPO%/releases
         echo Then place it beside win_start.bat and retry.
         pause
         exit /b 1
     )
+    move /y "%PART%" "%BUNDLE%" >nul
+    if errorlevel 1 exit /b 1
 )
 
-REM Args starting with -- are forwarded to the app. Other args form an optional
-REM Steam wrapper command, for example: start "" steam://rungameid/1551360
+REM App arguments keep their values and original quoting, for example:
+REM   win_start.bat --host 127.0.0.1 --port 5301
+REM A standalone -- starts an optional Steam wrapper command:
+REM   win_start.bat --headless -- "C:\Program Files\Steam\steam.exe" -applaunch 1551360
+REM A command as the first argument remains a legacy wrapper-only invocation.
+REM To mix app options and a wrapper, put app options first and use --.
+REM Keep delayed expansion disabled so literal ! in paths/values survives.
 :argloop
-if "%~1"=="" goto ready
-set "a=%~1"
-
-if "!a:~0,2!"=="--" goto flag_arg
-
-if defined GAME goto append_game
-set "GAME=%1"
+if [%1]==[] goto ready
+if defined GAME_MODE goto game_arg
+if "%~1"=="--" goto game_mode
+if defined APP_MODE goto flag_arg
+set "FIRST=%~1"
+if "%FIRST:~0,1%"=="-" goto flag_arg
+set "GAME_MODE=1"
+:game_arg
+set GAME=%GAME% %1
 goto next_arg
-:append_game
-set "GAME=!GAME! %1"
+:game_mode
+set "GAME_MODE=1"
 goto next_arg
 :flag_arg
-set "FLAGS=!FLAGS! %1"
+set "APP_MODE=1"
+set FLAGS=%FLAGS% %1
 :next_arg
 shift
 goto argloop

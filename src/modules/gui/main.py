@@ -19,7 +19,6 @@ import logging
 import queue
 import sys
 import threading
-import time
 import tkinter as tk
 import webbrowser
 
@@ -32,10 +31,10 @@ from modules.config import preferences, profiles
 from modules.config.profile_session import ProfileSession
 from modules.config.preferences import _release_version
 from modules.diagnostics import DiagnosticsCollector
-from modules.dualsense.adaptive_trigger import off, vibrate
 from modules.dualsense.presentation import controller_pill_status
 from modules.dpi import DpiSnapshot, format_dpi_snapshot, query_windows_dpi
 from modules.haptics import HAPTICS_LAB_SCENES, HapticsLab, UsbAudioHaptics, UsbAudioLifecycle
+from modules.haptics.trigger_pulse import TriggerPulse
 from modules.runtime_logging import install_runtime_file_handler
 from modules.update import UpdateService
 from modules.update.install import cleanup_previous_update, self_update_supported
@@ -58,11 +57,6 @@ from .tray import TrayController
 from .xinput_mapping_tab import XInputMappingTab
 
 log = logging.getLogger("fhds")
-
-HAPTIC_FREQ_HZ = 40
-HAPTIC_AMP_ON = 200
-HAPTIC_AMP_OFF = 120
-HAPTIC_DURATION_S = 0.10
 
 NAV_ITEMS = (
     "Overview", "Driving", "Haptics", "Lighting", "Profiles",
@@ -104,6 +98,7 @@ class TriggerGUI:
         # Runtime state
         self._stop = threading.Event()
         self._thread = None
+        self._backend_generation = 0
         self._backend_restart_lock = threading.Lock()
         self._ds = None
         self._listener_cm = None
@@ -116,6 +111,7 @@ class TriggerGUI:
         self._refreshing = False
         self._refresh_callbacks: list = []
         self._log_queue: queue.Queue = queue.Queue(maxsize=4000)
+        self._ui_queue: queue.SimpleQueue = queue.SimpleQueue()
         self._usb_audio = UsbAudioHaptics()
         self._usb_audio_lifecycle = UsbAudioLifecycle(self._usb_audio)
         self._usb_audio_gate_active = False
@@ -126,6 +122,7 @@ class TriggerGUI:
         )
         self._xinput_service = XInputBridgeService(settings)
         self._haptics_lab = HapticsLab()
+        self._trigger_pulse = TriggerPulse()
         self._diagnostics = DiagnosticsCollector(
             settings,
             controller_provider=lambda: self._ds,
@@ -160,6 +157,7 @@ class TriggerGUI:
             self.root,
             on_show=self._show_window,
             on_quit=lambda: self.request_close("tray"),
+            post_ui=self.post_ui,
         )
         self.root.protocol("WM_DELETE_WINDOW", lambda: self.request_close("window"))
         self.root.bind("<Unmap>", self._on_unmap)
@@ -560,6 +558,9 @@ class TriggerGUI:
         self._finish_close(before_exit)
 
     def _finish_close(self, before_exit=None):
+        if not preferences.save_pending(self.settings):
+            self.report_save_failure()
+            return
         if before_exit is not None:
             try:
                 before_exit()
@@ -584,6 +585,10 @@ class TriggerGUI:
         except tk.TclError:
             pass
 
+    def report_save_failure(self) -> None:
+        message = t(preferences.save_failure_message(self.settings))
+        self.toast(message)
+
     def mark_default_saved(self):
         self._profile_session.accept_current_default(self.settings)
 
@@ -599,8 +604,9 @@ class TriggerGUI:
             set_language(self.settings.language)
             self.refresh_setting_widgets()
             threading.Thread(
-                target=self._xinput_service.sync_hidhide,
-                name="FHDS-HidHide-FactoryReset",
+                target=self._restart_backend,
+                kwargs={"restart_listener": True},
+                name="FHDS-FactoryReset",
                 daemon=True,
             ).start()
             self._refresh_profile()
@@ -656,6 +662,9 @@ class TriggerGUI:
     def _drain_logs(self):
         if self._tearing_down:
             return
+        self._drain_ui_callbacks()
+        if self._tearing_down:
+            return
         self._drain_requested_usb_audio_sync()
         for _ in range(200):
             try:
@@ -665,10 +674,28 @@ class TriggerGUI:
             self.logs_tab.write(level, msg)
         self.root.after(100, self._drain_logs)
 
+    def post_ui(self, callback):
+        """Publish work without calling Tk from a worker or holding its locks."""
+        if not self._tearing_down:
+            self._ui_queue.put(callback)
+
+    def _drain_ui_callbacks(self):
+        for _ in range(200):
+            if self._tearing_down:
+                return
+            try:
+                callback = self._ui_queue.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                callback()
+            except Exception:
+                log.exception("GUI callback failed")
+
     def _start_backend(self):
+        self._backend_generation += 1
         s = self.settings
         try:
-            preferences.load(s)
             self._ds = make_backend(
                 s,
                 s.enable_startup_pulse and s.enable_trigger_feedback,
@@ -693,7 +720,9 @@ class TriggerGUI:
                      s.udp_host, s.udp_port)
             if s.use_dsx:
                 log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
+            self._thread = threading.Thread(
+                target=self._run_loop, args=(self._backend_generation,), daemon=True,
+            )
             self._thread.start()
         except OSError as exc:
             self._udp_error = str(exc) or type(exc).__name__
@@ -728,7 +757,7 @@ class TriggerGUI:
         if callback is not None:
             callback()
 
-    def _run_loop(self):
+    def _run_loop(self, generation: int):
         try:
             loop.run(
                 self._ds,
@@ -737,23 +766,31 @@ class TriggerGUI:
                 stop_event=self._stop,
                 usb_audio=self._usb_audio,
                 haptics_lab=getattr(self, "_haptics_lab", None),
+                trigger_pulse=getattr(self, "_trigger_pulse", None),
                 diagnostics=getattr(self, "_diagnostics", None),
             )
         except Exception:
             log.exception("Telemetry loop crashed")
         finally:
             if not self._stop.is_set():
-                try:
-                    self.root.after(0, self._on_close)
-                except (RuntimeError, tk.TclError):
-                    pass
+                self.post_ui(lambda: self._on_backend_stopped(generation))
 
-    def _restart_backend(self):
-        """Swap the running backend without touching the UDP listener.
+    def _on_backend_stopped(self, generation: int):
+        if (
+            generation == self._backend_generation
+            and not self._tearing_down
+            and not self._stop.is_set()
+        ):
+            self._on_close()
+
+    def _restart_backend(self, *, restart_listener: bool = False):
+        """Swap the backend, optionally reopening the listener after a reset.
         Called off the Tk thread (via threading.Thread) so we can join the old loop."""
         with self._backend_restart_lock:
             if self._tearing_down:
                 return
+            # Invalidate queued exits before clearing the reused stop event.
+            self._backend_generation += 1
             # MARK: stop old loop + backend, reuse listener
             self._haptics_lab.stop("backend_restart")
             self._stop.set()
@@ -764,19 +801,19 @@ class TriggerGUI:
                 error = RuntimeError("telemetry loop did not stop within 2 seconds")
                 self._backend_error = str(error)
                 log.error("Backend restart aborted: %s", error)
-                try:
-                    self.root.after(0, lambda error=error: self.status_pill.set_label(
-                        t("Backend failed: {error}").format(error=error)))
-                except (RuntimeError, tk.TclError):
-                    pass
                 return
             self._thread = None
             self._xinput_service.stop()
-            if self._ds:
-                self._ds.close()
-            self._stop.clear()
             s = self.settings
             try:
+                if self._ds and self._ds.close() is False:
+                    raise RuntimeError("controller I/O worker has not stopped")
+                if restart_listener:
+                    if self._listener_cm is not None:
+                        self._listener_cm.__exit__(None, None, None)
+                    self._listener_cm = None
+                    self._listener = None
+                self._stop.clear()
                 # MARK: suppress pulse on hot-swap
                 self._ds = make_backend(s, False)
                 self._xinput_service.prepare_controller_access(self._ds)
@@ -787,17 +824,21 @@ class TriggerGUI:
                     log.info("DSX mode: sending triggers to %s:%d", s.dsx_host, s.dsx_port)
                 else:
                     log.info("HID mode: writing direct to DualSense")
+                if restart_listener:
+                    self._listener_cm = forzahorizon.UDPListener(
+                        s.udp_host, s.udp_port, s.udp_timeout,
+                        s.udp_forward_to, s.udp_forward,
+                    )
+                    self._listener = self._listener_cm.__enter__()
+                    self._udp_error = ""
                 if self._listener is not None:
-                    self._thread = threading.Thread(target=self._run_loop, daemon=True)
+                    self._thread = threading.Thread(
+                        target=self._run_loop, args=(self._backend_generation,), daemon=True,
+                    )
                     self._thread.start()
             except Exception as exc:
                 self._backend_error = str(exc) or type(exc).__name__
                 log.exception("Backend restart failed")
-                try:
-                    self.root.after(0, lambda error=exc: self.status_pill.set_label(
-                        t("Backend failed: {error}").format(error=error)))
-                except (RuntimeError, tk.TclError):
-                    pass
 
     # MARK: status / profile ------------------------------------------------
 
@@ -904,7 +945,7 @@ class TriggerGUI:
 
     def _refresh_profile(self):
         try:
-            active = profiles.load_profiles().get("active") or t("(none)")
+            active = profiles.load_profiles(self.settings).get("active") or t("(none)")
         except Exception:
             active = t("(none)")
         self.profile_pill.set_label(active)
@@ -930,20 +971,8 @@ class TriggerGUI:
 
     def haptic(self, on_state: bool):
         controller = self._ds
-        if controller and controller.connected:
-            threading.Thread(
-                target=self._do_haptic,
-                args=(controller, on_state),
-                daemon=True,
-            ).start()
-
-    @staticmethod
-    def _do_haptic(controller, on_state: bool):
-        amp = HAPTIC_AMP_ON if on_state else HAPTIC_AMP_OFF
-        v = vibrate(HAPTIC_FREQ_HZ, amp)
-        controller.set(v, v)
-        time.sleep(HAPTIC_DURATION_S)
-        controller.set(off(), off())
+        if self.settings.enable_trigger_feedback and controller and controller.connected:
+            self._trigger_pulse.request(on_state)
 
     @staticmethod
     def _open_url(url: str):

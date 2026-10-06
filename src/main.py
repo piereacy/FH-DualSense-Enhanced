@@ -112,7 +112,7 @@ def acknowledge_update_health(
     )
 
 
-def _confirm_gui_preferences_reset(error: Exception, *, on_ready=None) -> bool:
+def _confirm_gui_preferences_reset(error: Exception) -> bool:
     """Show preference recovery in a real GUI instead of a hidden console."""
     try:
         import tkinter as tk
@@ -121,8 +121,6 @@ def _confirm_gui_preferences_reset(error: Exception, *, on_ready=None) -> bool:
         root = tk.Tk()
         root.withdraw()
         root.update_idletasks()
-        if on_ready is not None:
-            on_ready()
         try:
             return bool(
                 messagebox.askyesno(
@@ -218,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{error}", file=sys.stderr)
         gui_mode = not args.headless and not args.tui
         if gui_mode:
-            confirmed = _confirm_gui_preferences_reset(error, on_ready=acknowledge_once)
+            confirmed = _confirm_gui_preferences_reset(error)
         else:
             confirmed = _confirm(
                 f"Reset {preferences.PATH.name} to defaults? "

@@ -19,6 +19,20 @@ def test_set_accepts_and_ignores_native_rumble_argument(monkeypatch):
     assert sent == [dsx_wrapper.frames_to_packet(left, right)]
 
 
+def test_socket_creation_failure_reaches_startup_health_boundary(monkeypatch):
+    client = DSXClient(enable_startup_pulse=False)
+
+    def fail_socket(*_args):
+        raise OSError("socket unavailable")
+
+    monkeypatch.setattr("modules.dsx.client.socket.socket", fail_socket)
+
+    with pytest.raises(OSError, match="socket unavailable"):
+        client.open()
+    assert client.connected is False
+    assert client.diagnostics_snapshot().last_error == "socket unavailable"
+
+
 def test_startup_pulse_request_is_idempotent(monkeypatch):
     client = DSXClient(enable_startup_pulse=True)
     sent = []

@@ -3,6 +3,8 @@ import sys
 from io import BytesIO
 from types import SimpleNamespace
 
+import pytest
+
 from modules.dualsense import hidhide
 from modules.dualsense import hidhide_installer as installer
 from modules.xinput.driver import InstallResult, InstallStatus
@@ -149,6 +151,44 @@ def test_installer_timeout_can_reconcile_a_ready_driver(tmp_path, monkeypatch):
         installed_marker=lambda: False,
     )
     assert result.status is InstallStatus.SUCCESS
+
+
+@pytest.mark.parametrize("failed_stage", ("download", "install"))
+def test_install_stops_at_failed_stage_without_probing_again(
+    tmp_path, monkeypatch, failed_stage
+):
+    monkeypatch.setattr(installer.sys, "platform", "win32")
+    calls = []
+
+    def probe():
+        calls.append("probe")
+        return False
+
+    def downloader(path):
+        calls.append("download")
+        if failed_stage == "download":
+            raise OSError("verification failed")
+        return path
+
+    def runner(_path, **_kwargs):
+        calls.append("install")
+        raise OSError("elevation failed")
+
+    result = installer.install_and_probe(
+        path=tmp_path / "HidHide.exe",
+        probe=probe,
+        downloader=downloader,
+        runner=runner,
+        installed_marker=lambda: False,
+    )
+
+    assert result.status is InstallStatus.FAILED
+    if failed_stage == "download":
+        assert calls == ["probe", "download"]
+        assert result.error == "HidHide download or verification failed: verification failed"
+    else:
+        assert calls == ["probe", "download", "install"]
+        assert result.error == "HidHide installer could not start: elevation failed"
 
 
 def test_official_client_lookup_and_launch(tmp_path, monkeypatch):

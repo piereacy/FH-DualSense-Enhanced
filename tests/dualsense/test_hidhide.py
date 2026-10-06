@@ -705,6 +705,74 @@ def test_failed_session_cleanup_keeps_state_for_a_later_retry(tmp_path):
     assert api.session == []
 
 
+@pytest.mark.parametrize("entry", ["prepare", "legacy"])
+@pytest.mark.parametrize("failure", ["before_write", "after_write", "ignored_write"])
+def test_allowlist_migration_failure_keeps_both_possible_owned_rules(tmp_path, entry, failure):
+    user_rule = r"\Device\Volume\UserControllerApp.exe"
+    journal = tmp_path / "hidhide_owned.json"
+    journal.write_text(json.dumps({"schema": 1, "whitelist_paths": [OLD_APP_NT_PATH]}))
+
+    class Api(_Api):
+        fail = True
+
+        def set_whitelist(self, entries):
+            if self.fail:
+                self.fail = False
+                intent = json.loads(journal.read_text())["whitelist_paths"]
+                assert set(intent) == {OLD_APP_NT_PATH, APP_NT_PATH}
+                assert user_rule not in intent
+                if failure == "before_write":
+                    raise OSError("write failed")
+                if failure == "ignored_write":
+                    return
+                super().set_whitelist(entries)
+                raise OSError("write completed but call failed")
+            super().set_whitelist(entries)
+
+    api = Api(whitelist=(user_rule, OLD_APP_NT_PATH), active=True)
+    class OldDriverError(OSError):
+        winerror = 1
+
+    api.clear_error = OldDriverError("session IOCTL unavailable") if entry == "legacy" else None
+    service = _service(tmp_path, api, automatic_legacy=True)
+
+    snapshot = service.prepare_application_access() if entry == "prepare" else service.start()
+    assert snapshot.phase is hidhide.HidHidePhase.ERROR
+    assert set(json.loads(journal.read_text())["whitelist_paths"]) == {OLD_APP_NT_PATH, APP_NT_PATH}
+    assert service.stop(remove_allowlist=True).phase is hidhide.HidHidePhase.DISABLED
+    assert api.whitelist == (user_rule,)
+    assert json.loads(journal.read_text())["whitelist_paths"] == []
+
+
+def test_failed_start_and_failed_allowlist_rollback_retain_cleanup_ownership(tmp_path):
+    user_rule = r"\Device\Volume\UserControllerApp.exe"
+    journal = tmp_path / "hidhide_owned.json"
+    journal.write_text(json.dumps({"schema": 1, "whitelist_paths": [OLD_APP_NT_PATH]}))
+
+    class Api(_Api):
+        fail = True
+
+        def get_active(self):
+            if self.fail and APP_NT_PATH in self.whitelist:
+                raise OSError("driver became unavailable during start")
+            return super().get_active()
+
+        def set_whitelist(self, entries):
+            if self.fail and OLD_APP_NT_PATH in entries:
+                raise OSError("rollback write failed")
+            super().set_whitelist(entries)
+
+    api = Api(whitelist=(user_rule, OLD_APP_NT_PATH), active=True)
+    service = _service(tmp_path, api)
+    assert service.start().phase is hidhide.HidHidePhase.ERROR
+    assert api.whitelist == (user_rule, APP_NT_PATH)
+    assert set(json.loads(journal.read_text())["whitelist_paths"]) == {OLD_APP_NT_PATH, APP_NT_PATH}
+
+    api.fail = False
+    assert service.stop(remove_allowlist=True).phase is hidhide.HidHidePhase.DISABLED
+    assert api.whitelist == (user_rule,)
+
+
 def test_global_active_state_remains_user_owned_when_permanent_rules_change(tmp_path):
     api = _Api(active=True)
     service = _service(tmp_path, api)

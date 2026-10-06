@@ -111,7 +111,7 @@ def test_tui_close_prompt_runs_deferred_exit_action_only_after_confirmation(monk
 def test_tui_profile_heading_escapes_user_supplied_rich_markup(monkeypatch):
     monkeypatch.setattr(
         "modules.tui.profiles_tab.profiles.load_profiles",
-        lambda: {"active": "[red]Track[/]", "profiles": {}},
+        lambda _settings=None: {"active": "[red]Track[/]", "profiles": {}},
     )
     tab = ProfilesTab(object())
 

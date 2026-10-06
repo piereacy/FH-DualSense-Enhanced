@@ -8,8 +8,8 @@ from lang import t
 from modules.config import preferences
 from modules.dualsense.main import (
     _is_bluetooth,
+    _normalise_identity,
     _raw_dualsense_interfaces,
-    identify_pulse,
 )
 from modules.update import UpdatePhase
 from modules.update.presentation import (
@@ -198,7 +198,7 @@ class SystemTab(SettingsTab):
                 self.app.toast(message, ms=5000)
 
             try:
-                self.app.root.after(0, finish)
+                self.app.post_ui(finish)
             except Exception:
                 pass
 
@@ -353,7 +353,7 @@ class SystemTab(SettingsTab):
             log.exception("controller enumeration failed")
             devs = []
         try:
-            self.app.root.after(0, lambda: self._apply_devices(devs))
+            self.app.post_ui(lambda: self._apply_devices(devs))
         except Exception:
             pass
 
@@ -369,15 +369,9 @@ class SystemTab(SettingsTab):
         new = self._lock_var.get()
         if new.startswith("__noserial_"):
             return
-        if new:
-            info = next((d for d in self._devices
-                         if (d.get("serial_number") or "") == new), None)
-            if info is not None:
-                threading.Thread(
-                    target=identify_pulse, args=(info,),
-                    kwargs={"force": self.settings.startup_pulse_force},
-                    daemon=True,
-                ).start()
+        new = _normalise_identity(new)
+        pulse = self.app._trigger_pulse
+        pulse.stop()
         if self.settings.controller_lock_serial != new:
             self.settings.controller_lock_serial = new
             preferences.save(self.settings)
@@ -385,8 +379,10 @@ class SystemTab(SettingsTab):
         ds = getattr(self.app, "_ds", None)
         if ds is not None:
             ds.set_selection(new)
-            if new and new != self._attached_serial():
+            if new and new != _normalise_identity(self._attached_serial()):
                 ds.force_reconnect()
+            elif new and self.settings.enable_trigger_feedback:
+                pulse.identify(ds, new, force=self.settings.startup_pulse_force)
         threading.Thread(target=self._enumerate_async, daemon=True).start()
 
     # MARK: updates ---------------------------------------------------------

@@ -4,6 +4,14 @@ import math
 from dataclasses import dataclass
 
 
+@dataclass(frozen=True, slots=True)
+class TriggerOutputGuard:
+    """A short identification effect may only reach its original connection."""
+
+    connection_generation: int
+    expires_at: float
+
+
 def _byte(value) -> int:
     try:
         number = float(value)
@@ -41,4 +49,3 @@ class ControllerVisualState:
 
 
 NO_VISUAL_CONTROL = ControllerVisualState()
-

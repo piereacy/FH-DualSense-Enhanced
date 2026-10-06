@@ -78,7 +78,8 @@ class DSXClient:
         except OSError as e:
             log.warning("DSX client open failed: %s", e)
             self._connected = False
-            return
+            self._last_error = str(e)
+            raise
         self._connected = True
         log.info("DSX client -> %s:%d (fire-and-forget UDP, no ack)", *self._addr)
         # Only ever send trigger data — the lightbar/RGB belongs to DSX, not me.
@@ -109,6 +110,7 @@ class DSXClient:
         self._sock = None
         self._connected = False
         log.info("DSX client closed (%d packets sent)", self._sent)
+        return True
 
     def set(self, left, right, rumble=None, *, visual=None):
         # Keep the native writer's call shape. DSX owns body-haptics output.

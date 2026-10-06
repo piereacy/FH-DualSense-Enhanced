@@ -1,10 +1,12 @@
 import threading
+import time
 from dataclasses import replace
 
 from modules.config.settings import Settings
 from modules.dualsense.hidhide import HidHidePhase, HidHideSnapshot
 from modules.dualsense.input_state import DPad, DualSenseButton, DualSenseInputState
-from modules.xinput.bridge import BridgeSnapshot, BridgeStatus
+from modules.xinput.bridge import BridgeSnapshot, BridgeStatus, InputOwner, XInputBridge
+from modules.xinput.report import XUSBButton, XUSBReport
 from modules.xinput.driver import InstallResult, InstallStatus
 from modules.xinput.mapping import DEFAULT_BUTTON_MAPPING
 from modules.xinput.gyro import DEFAULT_GYRO_MAPPING, GyroMode
@@ -171,6 +173,72 @@ XInputBridgeService = RuntimeXInputBridgeService
 def test_unknown_platform_normalizes_to_safe_steam_default():
     assert normalize_forza_platform("XBOX_APP") == XBOX_APP_PLATFORM
     assert normalize_forza_platform("future-store") == STEAM_PLATFORM
+
+
+def test_keyboard_owner_does_not_block_hidhide_bootstrap_or_first_real_press():
+    reports = []
+    activity = threading.Event()
+    activity.set()
+
+    def poll_activity():
+        pending = activity.is_set()
+        activity.clear()
+        return pending
+
+    class Target:
+        def update(self, report):
+            reports.append(bytes(report))
+
+        def close(self):
+            pass
+
+    class Client:
+        def connect(self):
+            pass
+
+        def create_x360_target(self):
+            return Target()
+
+        def close(self):
+            pass
+
+    class Backend(_Backend):
+        def set_device_visibility_observer(self, observer):
+            super().set_device_visibility_observer(observer)
+            if observer is not None:
+                observer({"path": b"synthetic-dualsense"})
+
+    def wait_for(predicate):
+        deadline = time.monotonic() + 1.0
+        while not predicate():
+            assert time.monotonic() < deadline, "XInput isolation did not converge"
+            time.sleep(0.002)
+
+    bridge = XInputBridge(client_factory=Client, keyboard_mouse_activity=poll_activity)
+    service = XInputBridgeService(
+        Settings(preferred_forza_platform=XBOX_APP_PLATFORM, enable_hidhide=True),
+        bridge=bridge,
+        hidhide_service=_HidHide(),
+        hidhide_driver_ready=lambda: True,
+        platform_supported=lambda: True,
+        hidhide_retry_timer_factory=_RetryTimer,
+    )
+    backend = Backend()
+    state = DualSenseInputState(128, 128, 128, 128, 0, 0, DPad.NEUTRAL,
+                               frozenset({DualSenseButton.CROSS}))
+    try:
+        service.sync(backend)
+        wait_for(lambda: bridge.snapshot().input_owner is InputOwner.KEYBOARD_MOUSE)
+        backend.consumers[-1](state, time.monotonic())
+        wait_for(service.isolation_confirmed)
+        assert reports == [bytes(12)]
+        assert bridge.snapshot().input_owner is InputOwner.KEYBOARD_MOUSE
+        backend.consumers[-1](state, time.monotonic())
+        wait_for(lambda: bridge.snapshot().forwarded_reports == 1)
+        assert XUSBReport.from_buffer_copy(reports[-1]).wButtons & XUSBButton.A
+        assert bridge.snapshot().input_owner is InputOwner.CONTROLLER
+    finally:
+        service.stop()
 
 
 def test_steam_mode_never_starts_bridge_or_attaches_input_consumer():

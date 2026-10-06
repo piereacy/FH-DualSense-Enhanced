@@ -104,8 +104,10 @@ class LightingController:
         elif ratio < start:
             color = (0, 0, 0)
         elif alert_allowed and (limiter_active or ratio >= flash):
-            rate = max(0.0, _number(getattr(settings, "tachometer_flash_rate_hz", 10.0)))
-            visible = rate <= 0.0 or int(_number(now) * rate * 2.0) % 2 == 0
+            rate = max(0.0, min(24.0, _number(
+                getattr(settings, "tachometer_flash_rate_hz", 10.0)
+            )))
+            visible = rate <= 0.0 or int(_number(_number(now) * rate * 2.0)) % 2 == 0
             color = redline_color if visible else (0, 0, 0)
         else:
             progress = (ratio - start) / max(0.01, flash - start)

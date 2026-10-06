@@ -4,6 +4,7 @@ import pytest
 
 from modules.config import preferences
 from modules.config.settings import Settings
+from modules.forzahorizon.collision import CollisionDetector
 from modules.haptics.frame import SILENT_FRAME, to_compatible_rumble
 from modules.haptics.mixer import HapticMixer
 
@@ -810,6 +811,25 @@ def test_collision_jerk_is_directional_and_persists(settings):
 
     assert impact.left_low > impact.right_low > 0.0
     assert held.left_low > held.right_low > 0.0
+
+
+def test_shared_collision_none_does_not_retrigger_previous_impact(settings):
+    shared = HapticMixer()
+    standalone = HapticMixer()
+    detector = CollisionDetector()
+    frames = []
+    for now, acceleration in [(1.0, 0.0), (1.01, 30.0), (1.02, 30.0), (1.061, 30.0)]:
+        telemetry = _telemetry(speed=0.0, rpm=1000.0, accel_x=acceleration)
+        signal = detector.update(telemetry, settings, now)
+        actual = shared.update(telemetry, settings, now, signal)
+        expected = standalone.update(telemetry, settings, now)
+        assert actual == expected
+        frames.append(actual)
+
+    assert frames[1].left_low > 0.0
+    gap = frames[-1]
+    assert gap.left_low == gap.left_high == gap.right_low == gap.right_high == 0.0
+    assert to_compatible_rumble(gap) == to_compatible_rumble(SILENT_FRAME)
 
 
 def test_smashable_velocity_arms_a_centered_impact(settings):

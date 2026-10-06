@@ -4,7 +4,8 @@ name: release
 #   - tag RN or commit msg contains "release RN" -> stable R-series release
 #   - tag vX.Y.Z or vX.Y.Z.postN                  -> legacy stable release
 #   - legacy "release vX.Y.Z[.postN]" commits     -> legacy stable release
-#   - commit msg contains "prerelease" or manual dispatch -> rolling RN-preview
+#   - commit msg contains "prerelease"          -> rolling RN-preview
+#   - manual dispatch                          -> explicit selected channel
 
 on:
   push:
@@ -32,6 +33,7 @@ jobs:
       tag: ${{ steps.parse.outputs.tag }}
       prerelease: ${{ steps.parse.outputs.prerelease }}
       title: ${{ steps.parse.outputs.title }}
+      windows_asset: ${{ steps.parse.outputs.windows_asset }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -52,25 +54,38 @@ jobs:
           fi
           release="R$internal"
 
-          if [[ "$GITHUB_REF" =~ ^refs/tags/(R[0-9]+)$ ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            # An explicit channel always wins over the selected ref or its subject.
+            if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
+              tag="$release"; prerelease=false
+            elif [[ "$RELEASE_CHANNEL" == "preview" ]]; then
+              tag="${release}-preview"
+              prerelease=true; title="FH-DualSense-Enhanced ${release} Preview"
+            else
+              echo "Unsupported release channel: $RELEASE_CHANNEL" >&2
+              exit 1
+            fi
+          elif [[ "$GITHUB_REF" =~ ^refs/tags/(R[0-9]+)-preview$ ]]; then
+            tag="${BASH_REMATCH[1]}-preview"
+            prerelease=true; title="FH-DualSense-Enhanced ${BASH_REMATCH[1]} Preview"
+          elif [[ "$GITHUB_REF" =~ ^refs/tags/(R[0-9]+)$ ]]; then
             # R-series tag push -> stable
             tag="${BASH_REMATCH[1]}"; prerelease=false
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          elif [[ "$GITHUB_REF" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?)$ ]]; then
             # legacy tag push -> stable
             tag="${GITHUB_REF#refs/tags/}"; prerelease=false; title="$tag"
-          elif [[ "$msg" =~ release[[:space:]]+(R[0-9]+) ]]; then
-            # explicit R-series stable release commit
-            tag="${BASH_REMATCH[1]}"; prerelease=false
-          elif [[ "$msg" =~ release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?) ]]; then
-            # explicit legacy stable release commit
-            tag="${BASH_REMATCH[1]}"; prerelease=false; title="$tag"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "$RELEASE_CHANNEL" == "stable" ]]; then
-            # explicit manual recovery path when repository push events are unavailable
-            tag="$release"; prerelease=false
-          elif [[ "$msg" == *prerelease* || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # rolling prerelease for the current R-series version
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Unknown tags must not inherit a release channel from the commit.
+            echo "Ignoring unsupported release tag: $GITHUB_REF"
+          elif [[ "$msg" =~ (^|[^[:alnum:]_])prerelease($|[^[:alnum:]_]) ]]; then
             tag="${release}-preview"
             prerelease=true; title="FH-DualSense-Enhanced ${release} Preview"
+          elif [[ "$msg" =~ (^|[^[:alnum:]_])release[[:space:]]+(R[0-9]+)($|[^[:alnum:]_.-]) ]]; then
+            # explicit R-series stable release commit
+            tag="${BASH_REMATCH[2]}"; prerelease=false
+          elif [[ "$msg" =~ (^|[^[:alnum:]_])release[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?)($|[^[:alnum:]_.-]) ]]; then
+            # explicit legacy stable release commit
+            tag="${BASH_REMATCH[2]}"; prerelease=false; title="$tag"
           fi
 
           if [[ "$tag" =~ ^R([0-9]+)(-preview)?$ ]]; then
@@ -97,6 +112,7 @@ jobs:
           echo "tag=$tag"               >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "title=$title"           >> "$GITHUB_OUTPUT"
+          echo "windows_asset=FH-DualSense-Enhanced-${release}.exe" >> "$GITHUB_OUTPUT"
 
       - name: Move rolling tag
         if: steps.parse.outputs.tag && steps.parse.outputs.prerelease == 'true'
@@ -170,13 +186,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
-      # AppIndicator/GTK so the pystray tray works in the frozen build.
-      - name: Install system tray libraries
+      # The ELF bundles the xorg tray backend; audio uses system PortAudio.
+      - name: Install system audio library
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            gir1.2-ayatanaappindicator3-0.1 \
-            python3-gi gir1.2-gtk-3.0 libportaudio2
+          sudo apt-get install -y libportaudio2
 
       - name: Build FH-DualSense-Enhanced (ELF)
         run: |
@@ -235,7 +249,7 @@ jobs:
 
             ### Windows 独立 EXE（推荐）
 
-            下载 `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`。EXE 已包含 Python 和应用运行依赖；Xbox App 所需的 HidHide 驱动按需安装。
+            下载 `${{ needs.prepare.outputs.windows_asset }}`。EXE 已包含 Python 和应用运行依赖；Xbox App 所需的 HidHide 驱动按需安装。
 
             ### ZUV / Linux 备用方式
 
@@ -262,7 +276,7 @@ jobs:
 
             ### Windows standalone EXE (recommended)
 
-            Download `${{ format('FH-DualSense-Enhanced-{0}.exe', needs.prepare.outputs.tag) }}`. It includes Python and the app's runtime dependencies; the HidHide driver required for Xbox App is installed on demand.
+            Download `${{ needs.prepare.outputs.windows_asset }}`. It includes Python and the app's runtime dependencies; the HidHide driver required for Xbox App is installed on demand.
 
             ### ZUV / Linux fallback
 
@@ -275,4 +289,3 @@ jobs:
             - For Xbox App, select `Xbox App` inside FH-DualSense-Enhanced and do not let Steam Input or DS4Windows claim the controller at the same time.
             - In Xbox App mode, confirm in Overview -> Quick access that HidHide is installed and the current physical DualSense is hidden.
           files: release/*
-

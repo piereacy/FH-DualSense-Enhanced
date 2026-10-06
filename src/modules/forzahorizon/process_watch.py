@@ -4,6 +4,7 @@ import math
 import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import psutil
 
@@ -26,6 +27,7 @@ def find_game_process(
     *,
     exact_name: str = "",
     exact_names: tuple[str, ...] = (),
+    exact_executable: str | os.PathLike | None = None,
     strict: bool = False,
 ) -> GameProcess | None:
     """Return a matching process while tolerating protected/vanishing entries.
@@ -33,6 +35,9 @@ def find_game_process(
     With ``strict=True``, a process-table failure is distinguished from a
     successful scan with no match. Mutating game-file tools use that mode so
     an OS query failure cannot be mistaken for "the game is closed".
+    ``exact_executable`` filters every matching name, not just the first one.
+    A matching process with an unreadable executable path is kept as a
+    conservative match, since it may belong to the requested installation.
     """
     needles = tuple(n.lower() for n in name_contains)
     exacts = frozenset(
@@ -64,6 +69,12 @@ def find_game_process(
                 haystack = (name + " " + exe_base).lower()
                 if not any(needle in haystack for needle in needles):
                     continue
+            if exact_executable is not None and exe:
+                try:
+                    if Path(exe).resolve() != Path(exact_executable).resolve():
+                        continue
+                except OSError:
+                    pass
             try:
                 pid = int(process.pid)
             except (AttributeError, TypeError, ValueError):

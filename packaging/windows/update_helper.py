@@ -40,6 +40,10 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _POPEN_CLASS = subprocess.Popen
 
 
+class _UnconfirmedLaunchError(RuntimeError):
+    """Launching failed without confirming that all candidate processes stopped."""
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -499,6 +503,11 @@ def _stale_release_candidates(
 
 def _stop_process(process) -> bool:
     """Stop the launched process tree and report whether it is gone."""
+    stop_tree = getattr(process, "stop_tree", None)
+    if callable(stop_tree):
+        # Job membership outlives the outer process; always stop the job even
+        # when poll() reports that its bootloader has already exited.
+        return stop_tree()
     if process is None or not _process_running(process):
         return True
 
@@ -553,6 +562,19 @@ def _stop_process(process) -> bool:
                 except Exception:
                     pass
     return not _process_running(process)
+
+
+def _launch_update(command, *, cwd):
+    if os.name == "nt":
+        from update_process import JobProcess, UnconfirmedTerminationError
+
+        try:
+            return JobProcess(command, cwd=cwd)
+        except UnconfirmedTerminationError as exc:
+            # No JobProcess was returned to apply(). Preserve the distinction
+            # between "never started" and a failed constructor with survivors.
+            raise _UnconfirmedLaunchError(str(exc)) from exc
+    return subprocess.Popen(command, cwd=cwd)
 
 
 def _restore_legacy_old(
@@ -725,7 +747,9 @@ def _rollback_failed_apply(
     problems: list[str] = []
 
     if not _stop_process(process):
-        problems.append("the launched update process tree is still running")
+        # Do not remove executables or resume the old application while a
+        # descendant may still own devices or files from this attempt.
+        raise RuntimeError("the launched update process tree is still running")
 
     if new_owned and new.exists():
         if not _file_matches(new, expected_new):
@@ -793,6 +817,8 @@ def apply(
         _set_phase(plan_path, plan, "waiting_old_exit")
         wait_for_pid(int(plan["pid"]))
         old_exited = True
+        if not _file_matches(staged, expected_new):
+            raise ValueError("staged update changed while waiting for the running version")
         if legacy:
             if not _file_matches(old, expected_new):
                 raise ValueError("legacy running version changed before installation")
@@ -829,7 +855,9 @@ def apply(
             "--fhds-update-token",
             plan["token"],
         ]
-        process = subprocess.Popen(command, cwd=str(new.parent))
+        if not _file_matches(new, expected_new):
+            raise ValueError("installed update failed checksum validation before launch")
+        process = _launch_update(command, cwd=str(new.parent))
         wait_for_health(
             plan_path,
             plan,
@@ -837,8 +865,18 @@ def apply(
             timeout=health_timeout,
             survival_seconds=survival_seconds,
         )
+        release = getattr(process, "release", None)
+        if callable(release):
+            release()
         health_confirmed = True
         _continue_commit(plan_path, plan)
+    except _UnconfirmedLaunchError as update_error:
+        # process is still None, but the constructor could not confirm a stop.
+        # Keep both EXEs and the nonterminal journal; never restart the old app
+        # while a candidate may still own devices or files.
+        raise RuntimeError(
+            f"update failed and rollback remains pending: {update_error}"
+        ) from update_error
     except Exception as update_error:
         if health_confirmed:
             try:
@@ -859,6 +897,10 @@ def apply(
                 f"update failed and rollback remains pending: {rollback_error}"
             ) from update_error
         raise
+    finally:
+        close = getattr(process, "close", None)
+        if callable(close):
+            close()
 
 
 def _show_error(message: str) -> None:

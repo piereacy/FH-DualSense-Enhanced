@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import ntpath
 import os
 import uuid
 from contextlib import nullcontext
@@ -219,9 +220,11 @@ def _known_folder(folder_id: GUID) -> Path | None:
     value = ctypes.c_wchar_p()
     result = int(get_path(ctypes.byref(folder_id), 0, None, ctypes.byref(value)))
     if _failed(result):
-        return None
+        raise ShortcutError("could not resolve a known shortcut directory")
     try:
-        return Path(value.value).resolve() if value.value else None
+        if not value.value:
+            raise ShortcutError("known shortcut directory has no path")
+        return Path(value.value).resolve()
     finally:
         free = ctypes.OleDLL("ole32").CoTaskMemFree
         free.argtypes = (ctypes.c_void_p,)
@@ -243,8 +246,25 @@ def known_shortcut_paths() -> tuple[Path, ...]:
     found: dict[str, Path] = {}
     for root in roots:
         try:
-            for shortcut in root.rglob("*.lnk"):
-                found.setdefault(os.path.normcase(str(shortcut.resolve())), shortcut.resolve())
+            # pathlib glob suppresses traversal errors in Python 3.13. Walk
+            # explicitly so an incomplete scan cannot authorize EXE cleanup.
+            def scan(directory: Path, *, optional: bool = False):
+                try:
+                    with os.scandir(directory) as entries:
+                        for entry in entries:
+                            path = Path(entry.path)
+                            if entry.is_symlink() and path.suffix.casefold() != ".lnk":
+                                raise OSError(f"cannot verify linked shortcut directory: {path}")
+                            if entry.is_dir(follow_symlinks=False):
+                                yield from scan(path)
+                            elif path.suffix.casefold() == ".lnk":
+                                yield path
+                except FileNotFoundError:
+                    if not optional:
+                        raise
+
+            for shortcut in scan(root, optional=True):
+                found.setdefault(_normalized(shortcut.resolve()), shortcut.resolve())
         except OSError as exc:
             # If a known shortcut location cannot be enumerated, deleting the
             # old executable could silently strand a link we never inspected.
@@ -256,7 +276,7 @@ def _normalized(value: str | Path) -> str:
     text = os.path.expandvars(str(value)).strip()
     if not text:
         return ""
-    return os.path.normcase(os.path.normpath(os.path.abspath(text)))
+    return ntpath.normcase(ntpath.normpath(os.path.abspath(text)))
 
 
 def _notify_changed(path: Path) -> None:
@@ -283,7 +303,7 @@ def migrate_shortcuts(
     link_factory: Callable[[Path], object] | None = None,
     notifier: Callable[[Path], None] | None = None,
 ) -> tuple[list[str], list[str]]:
-    """Migrate exact old-EXE targets and return successful/failed matched links."""
+    """Return migrated links and failures, including links with unknown targets."""
     old = Path(old).resolve()
     new = Path(new).resolve()
     candidate_paths = tuple(known_shortcut_paths() if candidates is None else candidates)
@@ -295,13 +315,14 @@ def migrate_shortcuts(
     with apartment:
         for candidate in candidate_paths:
             candidate = Path(candidate).resolve()
-            matched = False
             icon_changed = False
             try:
                 with factory(candidate) as link:
-                    if _normalized(link.target()) != _normalized(old):
+                    target = _normalized(link.target())
+                    if not target:
+                        raise ShortcutError("shortcut target is unknown")
+                    if target != _normalized(old):
                         continue
-                    matched = True
                     icon_path, icon_index = link.icon()
                     icon_changed = _normalized(icon_path) == _normalized(old)
                     link.set_target(new)
@@ -316,6 +337,7 @@ def migrate_shortcuts(
                 notify(candidate)
                 migrated.append(str(candidate))
             except Exception:
-                if matched:
-                    failed.append(str(candidate))
+                # A failed Load/target read does not prove the link unrelated.
+                # Preserve the old executable until this link can be inspected.
+                failed.append(str(candidate))
     return migrated, failed

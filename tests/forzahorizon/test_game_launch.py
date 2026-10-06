@@ -1,10 +1,11 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from modules.config import preferences
 from modules.config.settings import Settings
-from modules.forzahorizon import game_launch
+from modules.forzahorizon import game_launch, process_watch
 from modules.forzahorizon.process_watch import GameProcess
 
 
@@ -186,6 +187,71 @@ def test_exact_process_detection_distinguishes_each_generation(tmp_path, monkeyp
     assert game_launch.is_forza_game_running("fh5") is True
     assert game_launch.is_forza_game_running("fh4") is False
     assert calls == ["ForzaHorizon5.exe", "ForzaHorizon4.exe"]
+
+
+@pytest.mark.parametrize("key", game_launch.FORZA_GAME_KEYS)
+def test_install_process_detection_checks_later_same_named_instances(
+    tmp_path, monkeypatch, key
+):
+    root = _game_root(tmp_path / "Selected", key)
+    other_root = _game_root(tmp_path / "Other", key)
+    install = game_launch.validate_forza_root(key, root)
+    assert install is not None
+    executable = install.game.executable_name
+    processes = [
+        SimpleNamespace(pid=1, info={"name": executable, "exe": str(other_root / executable)}),
+        SimpleNamespace(pid=2, info={"name": executable, "exe": str(root / executable)}),
+    ]
+    visited = []
+
+    def process_iter(_fields):
+        for process in processes:
+            visited.append(process.pid)
+            yield process
+
+    monkeypatch.setattr(process_watch.psutil, "process_iter", process_iter)
+
+    assert game_launch.is_forza_game_running(key, install, strict=True) is True
+    assert visited == [1, 2]
+
+
+@pytest.mark.parametrize("key", game_launch.FORZA_GAME_KEYS)
+def test_install_process_detection_rejects_other_roots(tmp_path, monkeypatch, key):
+    root = _game_root(tmp_path / "Selected", key)
+    install = game_launch.validate_forza_root(key, root)
+    assert install is not None
+    executable = install.game.executable_name
+    processes = [
+        SimpleNamespace(
+            pid=pid,
+            info={"name": executable, "exe": str(tmp_path / f"Other-{pid}" / executable)},
+        )
+        for pid in (1, 2)
+    ]
+    monkeypatch.setattr(process_watch.psutil, "process_iter", lambda _fields: processes)
+
+    assert game_launch.is_forza_game_running(key, install, strict=True) is False
+
+
+@pytest.mark.parametrize("key", game_launch.FORZA_GAME_KEYS)
+@pytest.mark.parametrize("unreadable_exe", (None, ""))
+def test_install_process_detection_keeps_unknown_roots_as_running(
+    tmp_path, monkeypatch, key, unreadable_exe
+):
+    root = _game_root(tmp_path / "Selected", key)
+    install = game_launch.validate_forza_root(key, root)
+    assert install is not None
+    executable = install.game.executable_name
+    processes = [
+        SimpleNamespace(
+            pid=1,
+            info={"name": executable, "exe": str(tmp_path / "Other" / executable)},
+        ),
+        SimpleNamespace(pid=2, info={"name": executable, "exe": unreadable_exe}),
+    ]
+    monkeypatch.setattr(process_watch.psutil, "process_iter", lambda _fields: processes)
+
+    assert game_launch.is_forza_game_running(key, install, strict=True) is True
 
 
 def test_any_forza_process_detection_checks_all_generations_in_one_exact_scan(

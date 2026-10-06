@@ -7,6 +7,8 @@ import runpy
 import subprocess
 import sys
 import time
+from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -25,6 +27,18 @@ from modules.update.transaction import (
     set_phase,
     write_health_ack,
 )
+
+
+def _load_helper():
+    helper = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
+    )
+    # Transaction tests inject Popen on every platform. Native Job ownership is
+    # exercised separately in test_update_process.py.
+    helper["apply"].__globals__["_launch_update"] = (
+        lambda command, *, cwd: helper["subprocess"].Popen(command, cwd=cwd)
+    )
+    return helper
 
 
 def release_payload(version=4, *, checksum=True):
@@ -271,7 +285,8 @@ def test_update_service_reports_up_to_date(monkeypatch, tmp_path):
     assert updater.snapshot().phase is UpdatePhase.UP_TO_DATE
 
 
-def test_verified_pending_update_round_trips_across_restart(monkeypatch, tmp_path):
+@pytest.mark.parametrize("check_result", ["same", "offline", "none"])
+def test_verified_pending_update_round_trips_across_restart(monkeypatch, tmp_path, check_result):
     from modules.update import service
 
     update_dir = tmp_path / "updates"
@@ -298,6 +313,16 @@ def test_verified_pending_update_round_trips_across_restart(monkeypatch, tmp_pat
 
     assert reader.snapshot().phase is UpdatePhase.READY
     assert reader.snapshot().release == release
+    assert reader.snapshot().staged_path == str(staged.resolve())
+
+    if check_result == "offline":
+        def offline(**_kwargs):
+            raise UpdateError("offline")
+        monkeypatch.setattr(reader.client, "latest", offline)
+    elif check_result == "same":
+        reader.client.release = release
+    reader._check_impl(background=True)
+    assert reader.snapshot().phase is UpdatePhase.READY
     assert reader.snapshot().staged_path == str(staged.resolve())
 
 
@@ -427,9 +452,7 @@ class FakeRunningProcess:
 
 
 def test_update_helper_commits_side_by_side_without_old_file(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -501,9 +524,7 @@ def test_update_helper_commits_side_by_side_without_old_file(tmp_path, monkeypat
     ],
 )
 def test_update_helper_rejects_malformed_transaction_fields(tmp_path, field, value, message):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -529,9 +550,7 @@ def test_update_helper_rejects_malformed_transaction_fields(tmp_path, field, val
 def test_healthy_update_removes_all_strictly_named_older_releases_and_sidecars(
     tmp_path, monkeypatch
 ):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     r5 = tmp_path / "FH-DualSense-Enhanced-R5.exe"
     r5_old = tmp_path / "FH-DualSense-Enhanced-R5.exe.old"
     r5_sidecar = tmp_path / "FH-DualSense-Enhanced-R5.exe.sha256"
@@ -576,9 +595,7 @@ def test_healthy_update_removes_all_strictly_named_older_releases_and_sidecars(
 
 
 def test_stale_release_scan_never_follows_a_canonical_named_symlink(tmp_path):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     install = tmp_path / "install"
     outside = tmp_path / "outside"
     install.mkdir()
@@ -603,9 +620,7 @@ def test_stale_release_scan_never_follows_a_canonical_named_symlink(tmp_path):
 def test_stale_shortcut_failure_keeps_only_its_canonical_old_executable(
     tmp_path, monkeypatch
 ):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     r5 = tmp_path / "FH-DualSense-Enhanced-R5.exe"
     r5_old = tmp_path / "FH-DualSense-Enhanced-R5.exe.old"
     r6 = tmp_path / "FH-DualSense-Enhanced-R6.exe"
@@ -644,9 +659,7 @@ def test_stale_shortcut_failure_keeps_only_its_canonical_old_executable(
 
 
 def test_update_helper_rolls_back_when_new_process_is_not_healthy(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -684,9 +697,7 @@ def test_update_helper_rolls_back_when_new_process_is_not_healthy(tmp_path, monk
 
 
 def test_healthy_new_version_is_not_rolled_back_by_shortcut_subsystem_failure(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -739,9 +750,7 @@ def test_healthy_new_version_is_not_rolled_back_by_shortcut_subsystem_failure(tm
 
 
 def test_recovery_rolls_back_unconfirmed_side_by_side_update(tmp_path):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -767,9 +776,7 @@ def test_recovery_rolls_back_unconfirmed_side_by_side_update(tmp_path):
 
 
 def test_recovery_refuses_to_delete_changed_unconfirmed_target(tmp_path):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -796,9 +803,7 @@ def test_recovery_refuses_to_delete_changed_unconfirmed_target(tmp_path):
 
 
 def test_recovery_closes_move_to_journal_crash_gap(tmp_path):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -824,9 +829,7 @@ def test_recovery_closes_move_to_journal_crash_gap(tmp_path):
 
 
 def test_preexisting_matching_target_is_preserved_before_adoption(tmp_path):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -856,9 +859,7 @@ def test_preexisting_matching_target_is_preserved_before_adoption(tmp_path):
 
 
 def test_failed_rollback_stays_recoverable_instead_of_claiming_success(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -896,9 +897,7 @@ def test_failed_rollback_stays_recoverable_instead_of_claiming_success(tmp_path,
 
 
 def test_recovery_finishes_shortcuts_and_cleanup_after_valid_health(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -944,9 +943,7 @@ def test_recovery_finishes_shortcuts_and_cleanup_after_valid_health(tmp_path, mo
 
 
 def test_recovery_rolls_back_a_valid_ack_from_a_dead_process(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -986,9 +983,7 @@ def test_recovery_rolls_back_a_valid_ack_from_a_dead_process(tmp_path, monkeypat
 
 
 def test_recovery_keeps_old_executable_when_shortcut_retry_still_fails(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
     staged.parent.mkdir(parents=True)
@@ -1113,6 +1108,31 @@ def test_instance_guard_still_reports_a_separate_onefile_pair(tmp_path, monkeypa
     )
 
 
+def test_instance_guard_skips_unreadable_records_and_keeps_scanning(tmp_path, monkeypatch):
+    executable = tmp_path / "FH-DualSense-Enhanced-R5.exe"
+
+    class UnreadableProcess:
+        @property
+        def info(self):
+            raise install.psutil.AccessDenied(pid=123)
+
+    records = [
+        {"pid": "invalid", "ppid": 1, "exe": str(executable)},
+        {"pid": 124, "ppid": "invalid", "exe": str(executable)},
+        {"pid": 125, "ppid": 1, "exe": ""},
+        {"pid": 126, "ppid": 1, "exe": str(tmp_path / "other.exe")},
+        {"pid": 127, "ppid": 1, "exe": str(tmp_path / "other" / executable.name)},
+        {"pid": 300, "ppid": 1, "exe": str(executable)},
+    ]
+    processes = [UnreadableProcess(), *(type("Process", (), {"info": info})() for info in records)]
+    monkeypatch.setattr(install.sys, "platform", "win32")
+    monkeypatch.setattr(install.psutil, "process_iter", lambda _fields: processes)
+
+    assert install._other_install_instances(tmp_path, current_pid=200) == (
+        (300, str(executable.resolve())),
+    )
+
+
 def test_restart_arguments_strip_both_internal_argument_forms():
     assert install._restart_args(
         [
@@ -1149,9 +1169,7 @@ def test_legacy_bootstrap_refuses_a_separate_instance_before_copying(tmp_path, m
 
 
 def test_update_helper_consumes_r6_old_during_legacy_bootstrap(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     backup = Path(str(running) + ".old")
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
@@ -1203,9 +1221,7 @@ def test_update_helper_consumes_r6_old_during_legacy_bootstrap(tmp_path, monkeyp
 
 
 def test_update_helper_legacy_health_failure_restores_real_r6(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     backup = Path(str(running) + ".old")
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
@@ -1247,9 +1263,7 @@ def test_update_helper_legacy_health_failure_restores_real_r6(tmp_path, monkeypa
 
 
 def test_legacy_recovery_restores_backup_after_move_to_journal_crash(tmp_path):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     backup = Path(str(running) + ".old")
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
@@ -1279,9 +1293,7 @@ def test_legacy_recovery_restores_backup_after_move_to_journal_crash(tmp_path):
 
 
 def test_healthy_legacy_gap_restores_old_before_shortcut_migration(tmp_path, monkeypatch):
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     running = tmp_path / "FH-DualSense-Enhanced-R6.exe"
     backup = Path(str(running) + ".old")
     staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
@@ -1425,9 +1437,7 @@ def test_launch_legacy_bootstrap_repairs_filename_lag_and_starts_new_helper(
 
 @pytest.mark.skipif(os.name != "nt", reason="Win32 wait-handle contract")
 def test_update_helper_waits_for_windows_process_without_signalling_it():
-    helper = runpy.run_path(
-        str(Path(__file__).resolve().parents[1] / "packaging/windows/update_helper.py")
-    )
+    helper = _load_helper()
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.15)"])
     started = time.monotonic()
 
@@ -1468,3 +1478,95 @@ with h['_transaction_lock'](Path({str(plan)!r})) as acquired:
         child.wait(timeout=5.0)
 
     assert child.returncode == 0
+
+
+def test_update_helper_rejects_package_changed_during_old_process_wait(tmp_path, monkeypatch):
+    helper = _load_helper()
+    target = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    target.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=staged.parent / "transactions",
+        staged=staged,
+        target=target,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="b" * 32,
+        token="helper-test-token-with-24-bytes",
+    )
+    monkeypatch.setitem(
+        helper["apply"].__globals__, "wait_for_pid",
+        lambda *_args: staged.write_bytes(b"MZ-tampered"),
+    )
+    launched = []
+    monkeypatch.setattr(
+        helper["subprocess"], "Popen",
+        lambda command, **_kwargs: launched.append(command) or FakeRunningProcess(),
+    )
+    with pytest.raises(ValueError, match="changed while waiting"):
+        helper["apply"](plan, survival_seconds=0)
+    assert target.read_bytes() == b"MZ-old"
+    assert not transaction.new.exists()
+    assert all(Path(command[0]) == target for command in launched)
+    assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+
+
+@pytest.mark.parametrize("launch_failure", ["assign", "resume"])
+@pytest.mark.parametrize("termination_confirmed", [False, True])
+def test_failed_launch_rolls_back_only_after_confirmed_termination(
+    tmp_path, monkeypatch, launch_failure, termination_confirmed,
+):
+    helper = _load_helper()
+    old = tmp_path / "FH-DualSense-Enhanced-R6.exe"
+    staged = tmp_path / "data" / "updates" / "FH-DualSense-Enhanced-R7.exe"
+    staged.parent.mkdir(parents=True)
+    old.write_bytes(b"MZ-old")
+    staged.write_bytes(b"MZ-new")
+    transaction, plan = create_transaction(
+        root=staged.parent / "transactions",
+        staged=staged,
+        target=old,
+        expected_sha256=hashlib.sha256(b"MZ-new").hexdigest(),
+        pid=123,
+        transaction_id="c" * 32,
+        token="unconfirmed-launch-token-24-bytes",
+    )
+    process_module = ModuleType("update_process")
+    process_module.__dict__.update(runpy.run_path(str(
+        Path(__file__).resolve().parents[1] / "packaging/windows/update_process.py"
+    )))
+    api = Mock()
+    api.create_suspended.return_value = ("process", "thread", 123)
+    getattr(api, launch_failure).side_effect = OSError("launch failed")
+    api.active_processes.return_value = 0
+    if not termination_confirmed:
+        api.terminate_job.side_effect = OSError("job termination failed")
+        api.terminate_process.side_effect = OSError("process termination failed")
+    monkeypatch.setitem(process_module.JobProcess.__init__.__globals__, "_WindowsAPI", lambda: api)
+    monkeypatch.setitem(sys.modules, "update_process", process_module)
+    globals_ = helper["apply"].__globals__
+    monkeypatch.setitem(globals_, "_launch_update", helper["_launch_update"])
+    monkeypatch.setitem(globals_, "os", SimpleNamespace(name="nt", path=os.path))
+    monkeypatch.setitem(globals_, "wait_for_pid", lambda *_args: None)
+    launched = []
+    monkeypatch.setattr(
+        helper["subprocess"], "Popen",
+        lambda command, **_kwargs: launched.append(command) or FakeRunningProcess(),
+    )
+
+    error_type = OSError if termination_confirmed else RuntimeError
+    error_message = "launch failed" if termination_confirmed else "rollback remains pending"
+    with pytest.raises(error_type, match=error_message):
+        helper["apply"](plan)
+
+    assert old.read_bytes() == b"MZ-old"
+    if termination_confirmed:
+        assert load_transaction(plan).phase is TransactionPhase.ROLLED_BACK
+        assert not transaction.new.exists()
+        assert [Path(command[0]) for command in launched] == [old]
+    else:
+        assert load_transaction(plan).phase is TransactionPhase.WAITING_HEALTH
+        assert transaction.new.read_bytes() == b"MZ-new"
+        assert launched == []

@@ -12,13 +12,19 @@ File layout:
     }
 
 On first launch a "Default" profile is seeded from the class defaults.
-save(s) always writes into the currently active profile.
+save(s) merges local changes into the profile loaded by that Settings instance.
 """
+from contextlib import contextmanager
+from dataclasses import dataclass
+from functools import wraps
 import json
 import logging
 import math
+import os
 from pathlib import Path
 import re
+import threading
+import time
 import uuid
 from . import paths
 from .system_language import detect_system_language
@@ -182,6 +188,152 @@ class PreferencesError(Exception):
     """Raised when user_preferences.json cannot be parsed or is incompatible."""
 
 
+_MUTATION_LOCK = threading.RLock()
+_LOCK_STATE = threading.local()
+_RAISE = object()
+_MISSING = object()
+
+
+@contextmanager
+def _transaction():
+    """Serialize each complete read/modify/write, including nested profile calls."""
+    with _MUTATION_LOCK:
+        if getattr(_LOCK_STATE, "held", False):
+            yield
+            return
+        PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Keep the lock file: unlinking it would allow two different locked inodes.
+        with PATH.with_suffix(PATH.suffix + ".lock").open("a+b") as stream:
+            if os.name == "nt":
+                import msvcrt
+
+                if stream.tell() == 0:
+                    stream.write(b"\0")
+                    stream.flush()
+                stream.seek(0)
+                def acquire():
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                def release():
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                def acquire():
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                def release():
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            deadline = time.monotonic() + 2.0
+            while True:
+                try:
+                    acquire()
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise PreferencesError("Preferences are busy in another instance.") from None
+                    time.sleep(0.02)
+            _LOCK_STATE.held = True
+            try:
+                yield
+            finally:
+                _LOCK_STATE.held = False
+                release()
+
+
+def _serialized(failure=_RAISE):
+    def decorate(function):
+        @wraps(function)
+        def wrapped(*args, **kwargs):
+            try:
+                with _transaction():
+                    return function(*args, **kwargs)
+            except (OSError, PreferencesError) as exc:
+                if failure is _RAISE:
+                    if isinstance(exc, PreferencesError):
+                        raise
+                    raise PreferencesError(f"Could not access preferences: {exc}") from exc
+                log.warning("Could not update preferences: %s", exc)
+                return failure
+        return wrapped
+    return decorate
+
+
+@dataclass
+class _SettingsState:
+    path: Path
+    name: str
+    profile: dict
+    profile_disk: dict
+    globals: dict
+    globals_disk: dict
+
+
+def _settings_state(s) -> _SettingsState | None:
+    state = getattr(s, "_preferences_state", None)
+    return state if isinstance(state, _SettingsState) and state.path == PATH.resolve() else None
+
+
+def pending_changes(s) -> tuple[bool, bool]:
+    """Return unsaved tuning/application fields for this loaded instance."""
+    state = _settings_state(s)
+    if state is None:
+        return False, False
+    return _profile_fields(s) != state.profile, _global_fields(s) != state.globals
+
+
+def save_pending(s) -> bool:
+    """Retry failed autosaves before a caller discards the live settings."""
+    return not any(pending_changes(s)) or save(s)
+
+
+def save_failure_message(s) -> str:
+    if pending_changes(s)[1]:
+        return (
+            "Application settings could not be saved. Your changes are still open. "
+            "Check file access or restore conflicting application settings before retrying. "
+            "Saving a named profile only preserves tuning."
+        )
+    return (
+        "Settings could not be saved. Your changes are still open. "
+        "Check file access or save a named profile before retrying."
+    )
+
+
+def _bind_loaded(s, raw: dict) -> None:
+    name = raw["active_profile"]
+    s._preferences_state = _SettingsState(
+        PATH.resolve(), name, _profile_fields(s), dict(raw["profiles"][name]),
+        _global_fields(s), dict(raw["globals"]),
+    )
+
+
+def _bind_profile(s, name: str, snapshot: dict, raw: dict) -> None:
+    state = _settings_state(s)
+    if state is None:
+        defaults = type(s)()
+        _apply_snap(defaults, raw.get("globals", {}), _global_fields(defaults))
+        state = _SettingsState(
+            PATH.resolve(), name, {}, {}, _global_fields(defaults),
+            dict(raw.get("globals", {})),
+        )
+        s._preferences_state = state
+    state.name = name
+    state.profile = _profile_fields(s)
+    state.profile_disk = dict(snapshot)
+
+
+def _merge_changes(current: dict, baseline: dict, saved: dict, disk: dict) -> None:
+    for key, value in current.items():
+        if value == baseline.get(key, _MISSING):
+            continue
+        external = disk.get(key, _MISSING)
+        if external != saved.get(key, _MISSING) and external != value:
+            raise PreferencesError(
+                f"Setting '{key}' changed in another instance; reload the profile "
+                "or save a named copy before retrying."
+            )
+        disk[key] = value
+
+
 def _version() -> str:
     try:
         m = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"', PYPROJECT.read_text(encoding="utf-8"))
@@ -198,7 +350,10 @@ def _release_version() -> str:
 
 
 def _fields(s) -> dict:
-    return {k: v for k, v in vars(s).items() if isinstance(v, _SIMPLE)}
+    return {
+        k: v for k, v in vars(s).items()
+        if not k.startswith("_") and isinstance(v, _SIMPLE)
+    }
 
 
 def _profile_fields(s) -> dict:
@@ -285,6 +440,8 @@ def _apply_snap(s, snap: dict, fields: dict) -> None:
                     value = raw
                 else:
                     continue
+                if k == "tachometer_flash_rate_hz":
+                    value = max(0.0, min(24.0, value))
                 setattr(s, k, value)
             except (TypeError, ValueError, OverflowError):
                 pass
@@ -312,7 +469,7 @@ def _read_raw() -> dict:
         return {}
     try:
         text = PATH.read_text(encoding="utf-8")
-    except OSError as e:
+    except (OSError, UnicodeError) as e:
         raise PreferencesError(f"Could not read {PATH.name}: {e}") from e
     if not text.strip():
         return {}
@@ -338,9 +495,8 @@ def _read() -> dict:
 def _write(raw: dict) -> bool:
     raw["version"] = _version()
     # MARK: atomic write - avoid corrupt file on power loss / mid-write crash
-    # Multiple UI instances can remain open even when only one owns the UDP
-    # port. Give each atomic save its own staging file so concurrent saves can
-    # be last-writer-wins without truncating one shared temporary file.
+    # Mutators hold _transaction() through the complete read/modify/write.
+    # Unique staging files also avoid collisions with interrupted older saves.
     tmp = PATH.with_name(f".{PATH.name}.{uuid.uuid4().hex}.tmp")
     try:
         _DATA.mkdir(parents=True, exist_ok=True)
@@ -568,6 +724,7 @@ def _migrate_r3_grip_gear_shift(raw: dict, s) -> None:
             snapshot.setdefault(field, defaults[field])
 
 
+@_serialized()
 def load(s) -> None:
     """Read the file and apply the active profile to `s`.
 
@@ -590,6 +747,7 @@ def load(s) -> None:
     snap = dict(raw["globals"])
     snap.update(raw["profiles"][raw["active_profile"]])
     _apply_snap(s, snap, _fields(s))
+    _bind_loaded(s, raw)
 
 
 def _backup_current() -> Path | None:
@@ -618,6 +776,7 @@ def _backup_current() -> Path | None:
             pass
 
 
+@_serialized()
 def reset_file() -> None:
     """Back up the existing file and remove it only after verification succeeds."""
     backup = _backup_current()
@@ -630,24 +789,61 @@ def reset_file() -> None:
     log.info("Backed up old preferences to %s", backup.name)
 
 
+@_serialized(False)
 def save(s) -> bool:
-    # MARK: never let preferences I/O crash the UI event handler
+    # Never let preference I/O or an external edit overwrite unrelated tuning.
     try:
-        # A file that becomes corrupt while the app is running must not be
-        # replaced by a seemingly successful save. Startup recovery remains
-        # the single explicit path that may discard malformed preferences.
-        raw = _ensure_active(_read_raw(), s)
-        raw["profiles"][raw["active_profile"]] = _profile_fields(s)
-        raw["globals"].update(_global_fields(s))
+        raw = _read_raw()
+        state = _settings_state(s)
+        if state is None and raw:
+            raise PreferencesError("Load settings before saving existing preferences.")
+        if state is not None and not raw:
+            raise PreferencesError("Preferences were removed; reload before saving.")
+        if (
+            state is not None
+            and _profile_fields(s) != state.profile
+            and state.name not in raw.get("profiles", {})
+        ):
+            raise PreferencesError(
+                f"Profile '{state.name}' was removed or renamed in another "
+                "instance; reload a profile or save a named copy."
+            )
+        raw = _ensure_active(raw, s)
+        if state is None:
+            raw["profiles"][raw["active_profile"]] = _profile_fields(s)
+            raw["globals"].update(_global_fields(s))
+        else:
+            current = _profile_fields(s)
+            if current != state.profile:
+                _merge_changes(current, state.profile, state.profile_disk, raw["profiles"][state.name])
+            _merge_changes(_global_fields(s), state.globals, state.globals_disk, raw["globals"])
         if raw["globals"].get("preferred_forza_platform") == "xbox_app":
             raw["globals"]["enable_hidhide"] = True
+        if not _write(raw):
+            return False
+        if getattr(s, "preferred_forza_platform", "") == "xbox_app":
             s.enable_hidhide = True
-        return _write(raw)
+        if state is None:
+            _bind_loaded(s, raw)
+        else:
+            # Keep unchanged baselines: unseen external edits must not later
+            # become implicit permission to overwrite the same field.
+            for current, baseline, saved, disk in (
+                (_profile_fields(s), state.profile, state.profile_disk,
+                 raw["profiles"].get(state.name, {})),
+                (_global_fields(s), state.globals, state.globals_disk, raw["globals"]),
+            ):
+                for key, value in current.items():
+                    if value != baseline.get(key, _MISSING):
+                        baseline[key] = value
+                        saved[key] = disk[key]
+        return True
     except Exception as e:
         log.warning("preferences.save failed: %s", e)
         return False
 
 
+@_serialized(False)
 def restore_factory(s, *, language: str | None = None) -> bool:
     """Restore all settings and Default while preserving named profiles.
 
@@ -686,6 +882,7 @@ def restore_factory(s, *, language: str | None = None) -> bool:
     snap = dict(raw["globals"])
     snap.update(raw["profiles"][DEFAULT_PROFILE_NAME])
     _apply_snap(s, snap, _fields(s))
+    _bind_loaded(s, raw)
     return True
 
 

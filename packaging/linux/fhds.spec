@@ -30,7 +30,8 @@ binaries = collect_dynamic_libs("_sounddevice_data")
 hiddenimports = []
 hiddenimports += collect_submodules("textual")
 hiddenimports += collect_submodules("customtkinter")
-hiddenimports += collect_submodules("pystray")
+hiddenimports += ["pystray._xorg"]
+hiddenimports += collect_submodules("Xlib")
 hiddenimports += ["PIL.Image", "PIL.ImageDraw", "sounddevice", "_sounddevice"]
 
 a = Analysis(
@@ -41,7 +42,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    excludes=["gi", "cairo", "pystray._appindicator", "pystray._gtk"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

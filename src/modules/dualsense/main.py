@@ -41,7 +41,7 @@ from .motion import (
     DualSenseMotionCalibration,
     read_motion_calibration,
 )
-from .output_state import ControllerVisualState, NO_VISUAL_CONTROL
+from .output_state import ControllerVisualState, NO_VISUAL_CONTROL, TriggerOutputGuard
 from .topology import StableTopology, path_key
 
 if TYPE_CHECKING:
@@ -228,57 +228,6 @@ def _log_open_failure(err) -> None:
         log.warning("DualSense open failed (%s) — another app may be holding it open.", err)
 
 
-def identify_pulse(info: dict, force: int = 180, duration_s: float = 0.2) -> bool:
-    """Pulse both triggers briefly on a controller picked from a hidapi info dict.
-    Best-effort; returns False if the open or write failed."""
-    L = BT if _is_bluetooth(info) else USB
-    dev = hid.device()
-    try:
-        dev.open_path(info["path"])
-    except (OSError, IOError) as e:
-        log.warning("identify_pulse: open_path failed on %r: %s", info.get("path"), e)
-        return False
-    try:
-        # pulse on
-        pulse = rigid(force)
-        buf = bytearray(L["size"])
-        buf[0] = L["rid"]
-        if L["bt"]:
-            buf[1] = 0x02
-        buf[L["flags"]] = TRIG_FLAGS
-        for pos, (mode, params) in ((L["r"], pulse), (L["l"], pulse)):
-            buf[pos] = mode
-            buf[pos + 1:pos + 1 + len(params)] = params[:10]
-        if L["bt"]:
-            crc = zlib.crc32(memoryview(buf)[:74], _BT_CRC_SEED)
-            struct.pack_into("<I", buf, 74, crc)
-        dev.write(buf)
-        time.sleep(duration_s)
-        # pulse off
-        rest = off()
-        buf = bytearray(L["size"])
-        buf[0] = L["rid"]
-        if L["bt"]:
-            buf[1] = 0x02
-        buf[L["flags"]] = TRIG_FLAGS
-        for pos, (mode, params) in ((L["r"], rest), (L["l"], rest)):
-            buf[pos] = mode
-            buf[pos + 1:pos + 1 + len(params)] = params[:10]
-        if L["bt"]:
-            crc = zlib.crc32(memoryview(buf)[:74], _BT_CRC_SEED)
-            struct.pack_into("<I", buf, 74, crc)
-        dev.write(buf)
-        return True
-    except (OSError, IOError) as e:
-        log.warning("identify_pulse: write failed on %r: %s", info.get("path"), e)
-        return False
-    finally:
-        try:
-            dev.close()
-        except Exception as exc:
-            log.debug("identify_pulse: close failed on %r: %s", info.get("path"), exc)
-
-
 class DualSense:
     """DualSense trigger writer with optional compatible rumble.
 
@@ -296,6 +245,7 @@ class DualSense:
         controller_lock_serial: str = "",
         usb_handover_ready: Callable[[], bool] | None = None,
         usb_handover_settle_s: float = USB_AUDIO_HANDOVER_SETTLE_S,
+        startup_pulse_allowed: Callable[[], bool] | None = None,
     ):
         self.dev = None
         self.dev_path = None
@@ -306,6 +256,8 @@ class DualSense:
         self._state_lock = threading.Lock()
         self._snapshot = ControllerSnapshot()
         self._left = self._right = off()
+        self._trigger_guard: TriggerOutputGuard | None = None
+        self._pending_release_guard: TriggerOutputGuard | None = None
         self._rumble: CompatibleRumble | None = None
         self._visual = NO_VISUAL_CONTROL
         self._pending_rumble_release = None
@@ -324,6 +276,7 @@ class DualSense:
         self._wake = threading.Event()
         self._pulse_force = startup_pulse_force
         self._enable_startup_pulse = enable_startup_pulse
+        self._startup_pulse_allowed = startup_pulse_allowed
         self._startup_pulse_sent = False
         self._reconnect_interval = _safe_reconnect_interval(reconnect_interval_s)
         self._enable_reconnect = enable_reconnect
@@ -434,7 +387,15 @@ class DualSense:
 
     def _update_snapshot(self, **changes) -> ControllerSnapshot:
         with self._state_lock:
-            self._snapshot = replace(self._snapshot, **changes)
+            previous = self._snapshot
+            current = replace(previous, **changes)
+            if (current.phase, current.transport, current.identity) != (
+                previous.phase, previous.transport, previous.identity
+            ):
+                current = replace(
+                    current, connection_generation=previous.connection_generation + 1
+                )
+            self._snapshot = current
             return self._snapshot
 
     @property
@@ -469,7 +430,7 @@ class DualSense:
         else:
             log.info("Reconnect mode: automatic retry after a full drop is disabled.")
 
-    def close(self):
+    def close(self) -> bool:
         self._running = False
         self._wake.set()
         with self._lifecycle_lock:
@@ -478,7 +439,7 @@ class DualSense:
             thread.join(timeout=2.0)
         if thread is not None and thread.is_alive():
             log.error("DualSense I/O thread did not stop within 2 seconds")
-            return
+            return False
         with self._lifecycle_lock:
             if self._thread is thread:
                 self._thread = None
@@ -486,6 +447,7 @@ class DualSense:
         # block. This fallback only covers an object that never had a live worker.
         if thread is None:
             self._disconnect()
+        return True
 
     def set(
         self,
@@ -494,6 +456,7 @@ class DualSense:
         rumble: CompatibleRumble | None = None,
         *,
         visual: ControllerVisualState | None = None,
+        trigger_guard: TriggerOutputGuard | None = None,
     ):
         visual = (visual or NO_VISUAL_CONTROL).normalized()
         with self._lock:
@@ -504,10 +467,13 @@ class DualSense:
                     self._rumble,
                     self._visual,
                 )
+                self._pending_release_guard = self._trigger_guard
             elif rumble is not None:
                 self._pending_rumble_release = None
+                self._pending_release_guard = None
             self._left = left
             self._right = right
+            self._trigger_guard = trigger_guard
             self._rumble = rumble
             self._visual = visual
             self._dirty = True
@@ -536,11 +502,30 @@ class DualSense:
             and _force_byte(rumble.high_frequency) == 0
         )
 
+    def _trigger_guard_valid(self, guard: TriggerOutputGuard) -> bool:
+        snapshot = self.snapshot()
+        return (
+            snapshot.connected
+            and snapshot.connection_generation == guard.connection_generation
+            and time.monotonic() < guard.expires_at
+        )
+
+    def _expire_identification_locked(self) -> None:
+        if self._trigger_guard is not None and not self._trigger_guard_valid(self._trigger_guard):
+            self._left = self._right = off()
+            self._trigger_guard = None
+            self._dirty = True
+
     def _take_pending_output(self):
         with self._lock:
+            self._expire_identification_locked()
             if self._pending_rumble_release is not None:
                 frame = self._pending_rumble_release
                 self._pending_rumble_release = None
+                guard = self._pending_release_guard
+                self._pending_release_guard = None
+                if guard is not None and not self._trigger_guard_valid(guard):
+                    frame = (off(), off(), *frame[2:])
                 # The latest trigger-only frame remains dirty and must follow
                 # this explicit motor release without waiting for a watchdog tick.
                 self._wake.set()
@@ -559,6 +544,7 @@ class DualSense:
 
     def _has_pending_output(self) -> bool:
         with self._lock:
+            self._expire_identification_locked()
             return bool(
                 self._pending_rumble_release is not None
                 or self._dirty
@@ -602,6 +588,13 @@ class DualSense:
         self._wake.set()
 
     def _write_startup_pulse(self) -> None:
+        if self._startup_pulse_allowed is not None:
+            try:
+                if not self._startup_pulse_allowed():
+                    return
+            except Exception:
+                log.exception("Could not check startup trigger gate")
+                return
         pulse = rigid(self._pulse_force)
         self._safe_write(self._build(pulse, pulse))
         time.sleep(0.2)
@@ -1406,14 +1399,25 @@ class DualSense:
                         ),
                     )
                     self._last_attempt = -1e9
-                    self._wake.clear()
-                    if self._running:
-                        self._wake.wait(delay)
+                    self._wait_for_recovery(delay)
         finally:
             self._running = False
             self._disconnect(
                 next_phase=ControllerPhase.WAITING,
             )
+
+    def _wait_for_recovery(self, delay: float) -> None:
+        """Ignore ordinary output wakes while allowing stop/manual reconnect."""
+        deadline = time.monotonic() + delay
+        while self._running:
+            with self._lock:
+                if self._reconnect_requested:
+                    return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                return
+            self._wake.wait(remaining)
+            self._wake.clear()
 
     def _io_loop(self):
         manual_attempt = False
@@ -1596,6 +1600,7 @@ class DualSense:
 
     def _build_bt_haptics(self, samples: bytes):
         with self._lock:
+            self._expire_identification_locked()
             left = self._left
             right = self._right
             visual = self._visual

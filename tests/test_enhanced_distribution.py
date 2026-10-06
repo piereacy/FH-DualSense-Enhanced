@@ -200,7 +200,8 @@ def test_github_release_uses_the_current_fork_as_zuv_update_source():
     assert "Windows 独立 EXE（推荐）" in workflow
     assert "win_start.bat" in workflow
     assert "ZUV / Linux 备用方式" in workflow
-    assert "FH-DualSense-Enhanced-{0}.exe" in workflow
+    assert 'windows_asset=FH-DualSense-Enhanced-${release}.exe' in workflow
+    assert workflow.count('${{ needs.prepare.outputs.windows_asset }}') == 2
     assert "FH-DualSense-Enhanced.zuv.py" in workflow
     assert "Enhanced R12 中文说明" in workflow
     assert "Enhanced R12 English notes" in workflow
@@ -456,7 +457,7 @@ def test_release_identity_uses_public_r_series_and_internal_pep440_version():
     assert 'title="FH-DualSense-Enhanced $tag"' in workflow
     assert "RELEASE_CHANNEL: ${{ github.event.inputs.channel }}" in workflow
     assert '"$RELEASE_CHANNEL" == "stable"' in workflow
-    assert "refs/tags/v*" in workflow
+    assert r"^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?)$" in workflow
     assert "v[0-9]+\\.[0-9]+\\.[0-9]+" in workflow
 
 

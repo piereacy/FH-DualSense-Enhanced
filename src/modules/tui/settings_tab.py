@@ -1,5 +1,6 @@
 """Settings tab: plain-language labels, draggable sliders, live save."""
 import logging
+import math
 import threading
 
 from textual.app import ComposeResult
@@ -293,7 +294,9 @@ class SettingsTab(VerticalScroll):
                 new = float(raw)
             else:
                 new = raw
-        except ValueError:
+            if isinstance(new, (int, float)) and not isinstance(new, bool) and not math.isfinite(new):
+                raise ValueError("setting must be finite")
+        except (ValueError, OverflowError):
             if strict:
                 widget.value = _format_value(current)
             return
@@ -345,13 +348,12 @@ class SettingsTab(VerticalScroll):
         if hasattr(self.app, "mark_default_saved"):
             self.app.mark_default_saved()
         self.app.refresh_setting_widgets()
-        xinput_service = getattr(self.app, "_xinput_service", None)
-        if xinput_service is not None:
-            threading.Thread(
-                target=xinput_service.sync_hidhide,
-                name="fhds-hidhide-reset",
-                daemon=True,
-            ).start()
+        threading.Thread(
+            target=self.app._restart_backend,
+            kwargs={"restart_listener": True},
+            name="fhds-factory-reset",
+            daemon=True,
+        ).start()
         log.info("Settings reset to defaults.")
 
     # ---- Live propagation -------------------------------------------------

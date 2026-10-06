@@ -1,6 +1,10 @@
+import pytest
+
 from modules import loop
 from modules.config.settings import Settings
 from modules.dualsense.adaptive_trigger import off, rigid, vibrate
+from modules.dualsense.controller_state import ControllerPhase, ControllerSnapshot
+from modules.dualsense.input_state import InputTransport
 from modules.dualsense.output_state import ControllerVisualState
 from modules.haptics.frame import (
     CompatibleRumble,
@@ -10,6 +14,7 @@ from modules.haptics.frame import (
 )
 from modules.haptics.manager import HapticManager
 from modules.haptics.lab import HapticsLab
+from modules.haptics.trigger_pulse import TriggerPulse
 
 
 LEFT = rigid(30)
@@ -184,6 +189,160 @@ def test_haptics_lab_uses_the_existing_feedback_output(monkeypatch):
     manager = _Manager.instances[-1]
     assert True in manager.force_flags
     assert any(call[0] != off() for call in controller.calls)
+
+
+def test_trigger_master_disables_lab_triggers_without_muting_body_haptics(monkeypatch):
+    _install(monkeypatch)
+    settings = _settings()
+    settings.enable_trigger_feedback = False
+    controller = _DualSense()
+    lab = HapticsLab()
+    lab.start("abs", intensity=0.4, duration_s=1.0)
+
+    loop.run(
+        controller, _Listener([]), settings,
+        stop_event=_StopEvent(2), haptics_lab=lab,
+    )
+
+    assert controller.calls
+    assert all(call[:2] == (off(), off()) for call in controller.calls)
+    assert any(frame != SILENT_FRAME for frame in _Manager.instances[-1].frames)
+
+
+def test_ui_pulse_restores_unchanged_telemetry_output_from_the_same_owner(monkeypatch):
+    _install(monkeypatch)
+    pulse = TriggerPulse()
+    clock = [0.0]
+    monkeypatch.setattr(loop.time, "monotonic", lambda: clock[0])
+
+    class Controller(_DualSense):
+        def set(self, *args, **kwargs):
+            super().set(*args, **kwargs)
+            if len(self.calls) == 1:
+                pulse.request(True)
+
+    class Listener:
+        lost = False
+
+        def recv_latest(self):
+            clock[0] += 0.06
+            return b"packet", ("127.0.0.1", 5300)
+
+    controller = Controller()
+    loop.run(
+        controller, Listener(), _settings(),
+        stop_event=_StopEvent(4), trigger_pulse=pulse,
+    )
+
+    triggers = [call[:2] for call in controller.calls]
+    assert triggers[:3] == [(LEFT, RIGHT), (vibrate(40, 200),) * 2, (LEFT, RIGHT)]
+    assert pulse.sample(now=clock[0]) is None
+
+
+def test_pending_ui_pulse_is_discarded_when_trigger_master_is_off(monkeypatch):
+    _install(monkeypatch)
+    settings = _settings()
+    settings.enable_trigger_feedback = False
+    pulse = TriggerPulse()
+    pulse.request(True)
+    controller = _DualSense()
+
+    loop.run(
+        controller, _Listener([]), settings,
+        stop_event=_StopEvent(2), trigger_pulse=pulse,
+    )
+
+    assert all(call[:2] == (off(), off()) for call in controller.calls)
+    assert pulse.sample(now=0) is None
+
+
+@pytest.mark.parametrize("identical_telemetry", [False, True])
+def test_identification_restores_live_telemetry_even_when_the_effect_is_unchanged(
+    monkeypatch, identical_telemetry,
+):
+    _install(monkeypatch)
+    clock = [0.0]
+    monkeypatch.setattr(loop.time, "monotonic", lambda: clock[0])
+    pulse = TriggerPulse()
+    snapshot = ControllerSnapshot(
+        phase=ControllerPhase.CONNECTED, transport=InputTransport.USB,
+        identity="001122334455", connection_generation=4,
+    )
+    if identical_telemetry:
+        monkeypatch.setattr(_TriggerController, "update", lambda *args: (rigid(180),) * 2)
+
+    class Controller(_DualSense):
+        connected = True
+
+        def __init__(self):
+            super().__init__()
+            self.guards = []
+
+        def snapshot(self):
+            return snapshot
+
+        def set(self, *args, visual=None, trigger_guard=None):
+            self.guards.append(trigger_guard)
+            super().set(*args, visual=visual)
+            if len(self.calls) == 1:
+                assert pulse.identify(self, snapshot.identity, force=180, now=clock[0])
+
+    class Listener:
+        lost = False
+
+        def recv_latest(self):
+            clock[0] += 0.08
+            return b"packet", ("127.0.0.1", 5300)
+
+    controller = Controller()
+    loop.run(
+        controller, Listener(), _settings(), stop_event=_StopEvent(5), trigger_pulse=pulse,
+    )
+
+    assert controller.guards[0] is None
+    assert controller.guards[1].connection_generation == 4
+    assert controller.calls[1][:2] == (rigid(180),) * 2
+    assert controller.guards[2] is None
+    assert controller.calls[2][:2] == ((rigid(180),) * 2 if identical_telemetry else (LEFT, RIGHT))
+
+
+def test_trigger_master_change_during_udp_wait_cancels_identification_before_next_output(monkeypatch):
+    _install(monkeypatch)
+    clock = [0.0]
+    monkeypatch.setattr(loop.time, "monotonic", lambda: clock[0])
+    settings = _settings()
+    pulse = TriggerPulse()
+    snapshot = ControllerSnapshot(
+        phase=ControllerPhase.CONNECTED, transport=InputTransport.USB,
+        identity="001122334455", connection_generation=4,
+    )
+
+    class Controller(_DualSense):
+        connected = True
+
+        def snapshot(self):
+            return snapshot
+
+        def set(self, *args, visual=None, trigger_guard=None):
+            super().set(*args, visual=visual)
+
+    class Listener:
+        lost = False
+
+        def recv_latest(self):
+            clock[0] += 0.05
+            settings.enable_trigger_feedback = False
+            return b"packet", ("127.0.0.1", 5300)
+
+    controller = Controller()
+    assert pulse.identify(controller, snapshot.identity, force=180, now=clock[0])
+    loop.run(
+        controller, Listener(), settings, stop_event=_StopEvent(1), trigger_pulse=pulse,
+    )
+
+    assert controller.calls[0][:2] == (rigid(180),) * 2
+    assert all(call[:2] == (off(),) * 2 for call in controller.calls[1:])
+    assert pulse.sample_output(now=clock[0], controller=controller) is None
 
 
 def test_live_telemetry_preempts_an_active_lab_preview(monkeypatch):
@@ -444,3 +603,69 @@ def test_loop_forwards_atomic_visual_state_and_blanks_it_on_shutdown(monkeypatch
     loop.run(controller, listener, _settings(), stop_event=_StopEvent(1))
 
     assert controller.visuals == [active, blank]
+
+
+def test_lighting_failure_keeps_feedback_running_and_shutdown_safe(monkeypatch):
+    _install(monkeypatch)
+    active = ControllerVisualState(lightbar=(57, 197, 187), player_leds=0x04)
+    blank = ControllerVisualState(lightbar=(0, 0, 0), player_leds=0)
+
+    class _Lighting:
+        calls = 0
+
+        def update(self, telemetry, settings, now):
+            self.calls += 1
+            if self.calls != 2:
+                raise OverflowError("bad lighting field")
+            return active
+
+    monkeypatch.setattr(loop.forzahorizon, "LightingController", _Lighting)
+    settings = _settings()
+    settings.enable_tachometer_lightbar = True
+    settings.enable_gear_player_leds = True
+    controller = _VisualDualSense()
+    listener = _Listener([(b"packet", ("127.0.0.1", 5300))] * 2)
+
+    loop.run(controller, listener, settings, stop_event=_StopEvent(2))
+
+    assert controller.visuals == [blank, active, blank]
+    assert controller.calls == [(LEFT, RIGHT, RUMBLE)] * 2 + [(off(), off(), SILENT_RUMBLE)]
+    assert _Manager.instances[0].closed
+
+
+@pytest.mark.parametrize("preview", [False, True])
+def test_lighting_failure_during_idle_or_lab_does_not_stop_the_output_loop(monkeypatch, preview):
+    _install(monkeypatch)
+    clock = [0.0]
+    monkeypatch.setattr(loop.time, "monotonic", lambda: clock[0])
+
+    class Lighting:
+        def update(self, *args):
+            raise OverflowError("invalid optional lighting state")
+
+    class Listener:
+        lost = False
+        calls = 0
+
+        def recv_latest(self):
+            self.calls += 1
+            clock[0] += 0.05 if preview else 1.1
+            if self.calls == 1 and not preview:
+                return b"packet", ("127.0.0.1", 5300)
+            return None, None
+
+    monkeypatch.setattr(loop.forzahorizon, "LightingController", Lighting)
+    controller = _DualSense()
+    lab = HapticsLab() if preview else None
+    if lab is not None:
+        lab.start("brake_resistance")
+    listener = Listener()
+
+    loop.run(
+        controller, listener, _settings(), stop_event=_StopEvent(3), haptics_lab=lab,
+    )
+
+    assert listener.calls == 3
+    assert any(call[:2] != (off(), off()) for call in controller.calls)
+    assert controller.calls[-1][:2] == (off(), off())
+    assert _Manager.instances[0].closed
