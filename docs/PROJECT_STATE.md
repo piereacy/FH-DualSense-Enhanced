@@ -1,6 +1,13 @@
 # FH-DualSense-Enhanced 当前项目状态
 
-最后更新时间：2026-10-07
+最后更新时间：2026-10-08
+
+## 2026-10-08 继续审查与收口
+
+- 基线 `2547513` 已在 `origin/main`，提交前获取并审阅远端，三份 README 没有远端差异。继续审查修复 UDP 转发阻塞/解析后回灌、HidHide 未确认时体感校准与残留偏转、并发诊断覆盖及日志无界读取、GUI/TUI 取消自动退出后遥测停摆，详见 `PROJECT_FIXES_2026-10-08.md`。
+- 最新全量 `pytest -q -W error` 为 **1286 passed、3 skipped**；Pyrefly **0 errors、1 suppressed、147 warnings**。Ruff 0.16.10 基础规则通过，同版本基线 384 项、当前 381 项，无新增诊断；限定源码 compileall、锁文件、shell 语法、CLI help 和 diff 检查通过。
+- 已确认问题均完成定向复现与修复；最后一轮入口、退出与更新边界复核未发现第二个明确中高影响新问题。当前可以结束本轮源码修补，下一步重点为 Windows 冻结更新、真实 HidHide/ViGEmBus 和 USB/Bluetooth 手柄联动验收；这些实机验证未执行。
+- 保持 Enhanced R12，不创建发布标签或二进制。同步提交推送目标仍为 `origin/main`。
 
 ## 2026-10-07 Git 同步与后续修复
 

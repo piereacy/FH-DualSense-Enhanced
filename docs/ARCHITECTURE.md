@@ -173,13 +173,13 @@ Bluetooth 同一 I/O 轮次若已有 `0x36`，该 report 的 state block 已携�
 
 ### 4.1 UDP 监听
 
-`src/modules/forzahorizon/udp_listener.py` 首先尝试绑定一个 `[::]:port` 的 dual-stack IPv6 socket，失败后回退到 `settings.udp_host:settings.udp_port` 的 IPv4 socket。默认端口为 `5300`，接收超时为 `0.5s`。
+`src/modules/forzahorizon/udp_listener.py` 按配置的显式地址选择 IPv4 或 IPv6 socket；空地址和 `::` 才尝试 dual-stack，失败后回退 IPv4 wildcard。默认端口为 `5300`，接收超时为 `0.5s`。
 
 `recv_latest()` 先阻塞等待一个包，然后把 socket 临时设为 non-blocking，每轮最多继续 drain 64 个 datagram，并只返回本轮最新的 324 字节有效包。持续补充 socket 的发送方也不能让热循环永久停在 drain；剩余积压由下一轮继续追赶。错误长度数据包只做一次警告，不推进运行时计数；即使队尾是无关 UDP 数据，前面较新的有效 Forza 包仍可返回。这样做是为了降低控制反馈延迟，避免对积压的旧遥测逐帧反应。接收缓冲区设为 4096 字节。
 
 每个有效数据包还会在短锁内更新计数、单调时钟时间和来源地址。`TelemetrySnapshot` 在无有效包时为 `WAITING`，最后有效包不超过一秒时为 `RECEIVING`，超过一秒时为 `LOST`。这个快照只供状态界面读取，不替代 `modules.loop` 现有的一秒静音、五秒告警和可配置遥测丢失退出语义。
 
-启用 `udp_forward` 时，`UDPForwarder` 在同一热循环中把本轮收到的每一个原始包转发到 `udp_forward_to` 中的 `host:port` 列表。listener 构造时拒绝同端口的相同 host、wildcard/localhost 和完整 IPv4 `127/8` 明显自转发，避免应用把自己的包重新收回并形成无限回灌；不同端口与外部目标保留。转发失败只警告一次，不中断主循环。
+启用 `udp_forward` 时，`UDPForwarder` 在同一热循环中把本轮收到的每一个原始包转发到 `udp_forward_to` 中的 `host:port` 列表。目标主机名只在初始化时解析为 IPv4 地址，发送 socket 为非阻塞；拥塞时丢弃该目标本次转发，继续处理其他目标及手柄反馈。listener 构造时拒绝明显自转发，初始化时再以实际绑定地址检查已解析目标，覆盖主机名别名。无法解析或无法创建转发 socket 只停用相关转发；listener 初始化失败则关闭已绑定的 socket。已解析地址保持到下一次 listener 初始化，DNS 后续变化不会在逐包发送时刷新。
 
 ### 4.2 324 字节数据模型
 
@@ -474,3 +474,11 @@ GUI/TUI 后端以 generation 隔离迟到的退出通知，图标扫描和确认
 preferences 依据实例加载/成功保存的基线识别尚未保存的 Profile 与 global 字段；Profile 切换和当前配置删除在同一偏好事务内先处理待保存字段。GUI/TUI 统一退出入口在调度更新或关闭前重试保存，失败保持界面开启。Default 会话确认与命名配置值分离。UpdateService 以同一锁认领安装路径、摘要和阶段，停止后的检查结果不能启动下一轮下载。语言文件操作对完整 ZIP 建立哈希快照，逐步校验并保守回滚；它不构成对外部更新器的强制互斥。
 
 更新 Helper 的首次健康观察与恢复观察都核对 ACK 中应用 PID 的存活和可执行路径。外层 one-file bootloader 仍存活只满足其中一个条件；健康观察期结束再核对 ACK 与文件哈希。损坏 UTF-8、超大时间戳和不可读候选均按未确认处理，应用进程提前退出或 ACK 被替换则拒绝提交。
+
+## 2026-10-08 热路径和取消退出恢复
+
+Xbox 隔离未确认时，共享 input state 末尾的内部 `motion_suppressed` 标记禁止 gyro 激活和输入权恢复；bridge 同时清除 processor 的历史积分和平滑。校准对象保持原样，不能把清零的 raw sensor 当成已校准中立姿态。Deflection 初始重力不可信时，后续有效样本仍可建立参考。
+
+诊断导出对 runtime、两个轮转备份和 crash 日志各读取最多 2 MiB 尾部正文，额外读取一字节判断首行边界。脱敏前删除不完整首尾记录，脱敏扩张后再次按完整行限制到 2 MiB。最终名称通过独占创建预留，ZIP 在独立临时文件完成后原子替换；并发实例不会覆盖，失败清理自己的占位和临时文件，不依赖硬链接。
+
+正常自动退出后的 loop 已完成静音，native backend、listener 和共享 USB stream 仍由界面生命周期拥有。GUI/TUI 取消退出或保存/更新调度失败时，合并恢复请求并交给后台 helper 有界等待锁和旧线程，仅创建新的 telemetry worker。generation 前进使迟到退出通知失效；异常崩溃及恢复失败保留错误，不自动反复重启。

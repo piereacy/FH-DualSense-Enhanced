@@ -92,6 +92,8 @@ class DualSenseInputState:
     accel_z: int = 0
     sensor_timestamp: int = 0
     motion_calibration: DualSenseMotionCalibration = DEFAULT_MOTION_CALIBRATION
+    # Internal bridge gate; physical reports retain the default False value.
+    motion_suppressed: bool = False
 
     @property
     def gyro_degrees_per_second(self) -> tuple[float, float, float]:

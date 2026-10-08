@@ -108,6 +108,9 @@ class TriggerTUI(App):
         self._stop = threading.Event()
         self._thread = None
         self._backend_generation = 0
+        self._stopped_loop_generation = None
+        self._loop_crashed_generation = None
+        self._loop_resume_pending = False
         self._backend_restart_lock = threading.Lock()
         self._ds = None
         self._listener_cm = None
@@ -310,8 +313,11 @@ class TriggerTUI(App):
                 trigger_pulse=getattr(self, "_trigger_pulse", None),
                 diagnostics=getattr(self, "_diagnostics", None),
             )
-        except Exception:
+        except Exception as exc:
             # An unexpected error here would otherwise kill the backend thread
+            if generation == self._backend_generation:
+                self._loop_crashed_generation = generation
+                self._backend_error = f"Telemetry loop crashed: {exc}"
             log.exception("Telemetry loop crashed")
         finally:
             if not self._stop.is_set():
@@ -327,7 +333,76 @@ class TriggerTUI(App):
             and not self._tearing_down
             and not self._stop.is_set()
         ):
+            self._stopped_loop_generation = message.generation
             self.request_close()
+
+    def _resume_stopped_loop(self) -> None:
+        """Request a non-blocking restart after declining an automatic close."""
+        thread = getattr(self, "_thread", None)
+        generation = self._backend_generation
+        if (
+            thread is None or self._tearing_down or self._stop.is_set()
+            or getattr(self, "_loop_resume_pending", False)
+            or getattr(self, "_loop_crashed_generation", None) == generation
+        ):
+            return
+        if thread.is_alive() and getattr(self, "_stopped_loop_generation", None) != generation:
+            return
+        # UI callers coalesce requests; waiting for the old worker and the
+        # lifecycle lock belongs to a background helper, never the UI thread.
+        self._loop_resume_pending = True
+        try:
+            threading.Thread(
+                target=self._resume_stopped_loop_worker, args=(generation,),
+                daemon=True, name="FHDS-TelemetryResume",
+            ).start()
+        except (OSError, RuntimeError) as exc:
+            self._loop_resume_pending = False
+            self._loop_crashed_generation = generation
+            self._backend_error = f"Telemetry listening could not resume: {exc}"
+            log.exception(self._backend_error)
+
+    def _resume_stopped_loop_worker(self, generation: int) -> None:
+        acquired = False
+        try:
+            acquired = self._backend_restart_lock.acquire(timeout=2.0)
+            if generation != self._backend_generation or self._tearing_down or self._stop.is_set():
+                return
+            if not acquired:
+                raise RuntimeError("controller lifecycle remained busy for 2 seconds")
+            if (
+                self._ds is None or self._listener is None
+                or getattr(self, "_loop_crashed_generation", None) == generation
+            ):
+                return
+            thread = self._thread
+            if thread is None:
+                return
+            if thread.is_alive():
+                thread.join(timeout=2.0)
+                if thread.is_alive():
+                    raise RuntimeError("telemetry loop did not stop within 2 seconds")
+            if getattr(self, "_loop_crashed_generation", None) == generation:
+                return
+            self._backend_generation += 1
+            self._stopped_loop_generation = None
+            self._thread = threading.Thread(
+                target=self._run_loop, args=(self._backend_generation,), daemon=True,
+            )
+            try:
+                self._thread.start()
+            except (OSError, RuntimeError):
+                self._thread = thread
+                raise
+            log.info("Automatic exit cancelled; telemetry listening resumed")
+        except (OSError, RuntimeError) as exc:
+            self._loop_crashed_generation = self._backend_generation
+            self._backend_error = f"Telemetry listening could not resume: {exc}"
+            log.exception(self._backend_error)
+        finally:
+            if acquired:
+                self._backend_restart_lock.release()
+            self._loop_resume_pending = False
 
     def _restart_backend(self, *, restart_listener: bool = False):
         """Swap the backend, optionally reopening the listener after a reset.
@@ -523,10 +598,13 @@ class TriggerTUI(App):
         self._close_prompt_open = False
         if result == "exit":
             self._finish_close(before_exit)
+        else:
+            self._resume_stopped_loop()
 
     def _finish_close(self, before_exit=None) -> None:
         if not preferences.save_pending(self.settings):
             self.report_save_failure()
+            self._resume_stopped_loop()
             return
         if before_exit is not None:
             try:
@@ -537,6 +615,7 @@ class TriggerTUI(App):
                     t("Could not start update: {error}").format(error=exc),
                     severity="error",
                 )
+                self._resume_stopped_loop()
                 return
         self.exit()
 

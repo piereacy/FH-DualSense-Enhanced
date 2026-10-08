@@ -217,5 +217,6 @@ def test_forward_send_errors_never_escape_into_telemetry_loop():
 
     forwarder = UDPForwarder("127.0.0.1:5301")
     forwarder._sock = _BrokenSocket()
+    forwarder._resolved_targets = [("127.0.0.1", 5301)]
 
     forwarder.send(b"packet")

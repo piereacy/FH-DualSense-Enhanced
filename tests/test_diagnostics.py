@@ -1,11 +1,14 @@
 import json
 import re
 from dataclasses import dataclass
+from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile
+
+import pytest
 
 from modules.config.settings import Settings
 from modules.diagnostics import DiagnosticsCollector
-
 
 DEVICE_PATH = (
     rb"\\?\hid#vid_054c&pid_0ce6&mi_03#8&2f5a32d1&0&0000"
@@ -161,3 +164,181 @@ def test_export_skips_log_that_rotates_before_snapshot(tmp_path, monkeypatch):
         payload = json.loads(archive.read("diagnostics.json"))
         assert payload["bundle_files"] == []
         assert set(archive.namelist()) == {"README.txt", "diagnostics.json"}
+
+
+def test_parallel_exports_preserve_both_snapshots(tmp_path, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime
+
+    from modules import diagnostics
+
+    class FrozenDatetime:
+        @classmethod
+        def now(cls):
+            return datetime(2026, 10, 7, 12, 0, 0).astimezone()
+
+    barrier = threading.Barrier(2)
+    collectors = []
+    for mode in ("gui", "tui"):
+        collector = DiagnosticsCollector(
+            Settings(),
+            controller_provider=lambda: None,
+            listener_provider=lambda: None,
+            runtime_mode=mode,
+        )
+        original = collector.snapshot
+
+        def synchronized_snapshot(original=original):
+            barrier.wait(timeout=5)
+            return original()
+
+        monkeypatch.setattr(collector, "snapshot", synchronized_snapshot)
+        monkeypatch.setattr(collector, "_log_files", lambda: ())
+        collectors.append(collector)
+    monkeypatch.setattr(diagnostics, "datetime", FrozenDatetime)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(collector.export, tmp_path) for collector in collectors]
+        results = [future.result(timeout=10) for future in futures]
+
+    assert len(set(results)) == 2
+    assert len(list(tmp_path.glob("*.zip"))) == 2
+    for mode, path in zip(("gui", "tui"), results, strict=True):
+        with ZipFile(path) as archive:
+            payload = json.loads(archive.read("diagnostics.json"))
+        assert payload["application"]["runtime_mode"] == mode
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_export_bounds_large_logs_and_keeps_recent_complete_lines(tmp_path, monkeypatch):
+    collector = _collector(Settings(), None, None, None)
+    log_paths = []
+    for name in ("runtime.log", "runtime.log.1", "runtime.log.2", "crash.log"):
+        path = tmp_path / name
+        path.write_bytes(
+            b"old content must be omitted\n"
+            + b"x" * (3 * 1024 * 1024)
+            + f"\ncontroller_lock_serial={CONTROLLER_SERIAL}\nrecent event\n".encode()
+        )
+        log_paths.append(path)
+    monkeypatch.setattr(collector, "_log_files", lambda: tuple(log_paths))
+
+    bundle = collector.export(tmp_path / "bundles")
+
+    with ZipFile(bundle) as archive:
+        for path in log_paths:
+            payload = archive.read(f"logs/{path.name}")
+            assert len(payload) < 2 * 1024 * 1024
+            assert b"old content must be omitted" not in payload
+            assert CONTROLLER_SERIAL.encode() not in payload
+            assert b"<controller-id sha256:" in payload
+            assert payload.endswith(b"recent event\n")
+
+
+def test_log_tail_discards_partial_identifier_before_sanitizing(tmp_path, monkeypatch):
+    collector = _collector(Settings(), None, None, None)
+    path = tmp_path / "runtime.log"
+    # The 2 MiB tail begins inside a labeled identifier. Keeping that fragment
+    # would remove the label the sanitizer needs to recognize the sensitive value.
+    fragment = b"secret-controller-suffix\n"
+    trailing = b"recent event\n"
+    limit = 2 * 1024 * 1024
+    path.write_bytes(
+        b"prefix that falls outside the tail\nserial="
+        + b"a" * 32
+        + fragment
+        + b"." * (limit - len(fragment) - len(trailing))
+        + trailing
+    )
+    monkeypatch.setattr(collector, "_log_files", lambda: (path,))
+
+    payload = collector._log_payloads()[0][1]
+
+    assert b"secret-controller-suffix" not in payload
+    assert payload.endswith(trailing)
+
+
+def test_log_tail_omits_oversized_unterminated_record(tmp_path, monkeypatch):
+    collector = _collector(Settings(), None, None, None)
+    path = tmp_path / "crash.log"
+    path.write_bytes(b"serial=" + b"private" * (512 * 1024))
+    monkeypatch.setattr(collector, "_log_files", lambda: (path,))
+
+    payload = collector._log_payloads()[0][1]
+
+    assert b"private" not in payload
+    assert len(payload) < 1024
+
+
+def test_log_read_requests_are_bounded(tmp_path, monkeypatch):
+    collector = _collector(Settings(), None, None, None)
+    path = tmp_path / "runtime.log"
+    limit = 2 * 1024 * 1024
+
+    class BoundedRead(BytesIO):
+        def read(self, size=-1):
+            assert 0 <= size <= limit
+            return super().read(size)
+
+    monkeypatch.setattr(collector, "_log_files", lambda: (path,))
+    monkeypatch.setattr(
+        Path,
+        "open",
+        lambda _path, _mode: BoundedRead(b"old\n" + b"x" * (limit + 1) + b"\nrecent\n"),
+    )
+
+    payload = collector._log_payloads()[0][1]
+
+    assert payload == b"recent\n"
+
+
+@pytest.mark.parametrize("record", [b"serial=x\n", b"\xff\xff\xff\n"])
+def test_sanitized_log_stays_bounded_when_encoding_expands(tmp_path, monkeypatch, record):
+    collector = _collector(Settings(), None, None, None)
+    path = tmp_path / "runtime.log"
+    limit = 2 * 1024 * 1024
+    path.write_bytes(record * (limit // len(record)) + b"recent\n")
+    monkeypatch.setattr(collector, "_log_files", lambda: (path,))
+
+    payload = collector._log_payloads()[0][1]
+
+    assert len(payload) <= limit
+    assert payload.endswith(b"recent\n")
+    assert payload.decode("utf-8").splitlines()[0] in {
+        "serial=<controller-id sha256:2d711642b726>",
+        "\ufffd\ufffd\ufffd",
+    }
+
+
+@pytest.mark.parametrize("phase", ["snapshot", "write", "publish"])
+def test_failed_export_removes_reserved_name_and_temporary(tmp_path, monkeypatch, phase):
+    from modules import diagnostics
+
+    collector = _collector(Settings(), None, None, None)
+    monkeypatch.setattr(collector, "_log_files", lambda: ())
+    previous = tmp_path / "previous.zip"
+    previous.write_bytes(b"previous bundle")
+
+    def fail(*_args):
+        raise OSError("simulated export failure")
+
+    if phase == "snapshot":
+        monkeypatch.setattr(collector, "snapshot", fail)
+    elif phase == "write":
+        original_write = diagnostics.ZipFile.writestr
+
+        def fail_after_snapshot(archive, name, data):
+            if name == "README.txt":
+                fail()
+            return original_write(archive, name, data)
+
+        monkeypatch.setattr(diagnostics.ZipFile, "writestr", fail_after_snapshot)
+    else:
+        monkeypatch.setattr(diagnostics.os, "replace", fail)
+
+    with pytest.raises(OSError, match="simulated export failure"):
+        collector.export(tmp_path)
+
+    assert list(tmp_path.iterdir()) == [previous]
+    assert previous.read_bytes() == b"previous bundle"

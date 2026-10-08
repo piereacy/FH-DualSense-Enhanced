@@ -493,6 +493,8 @@ class XInputBridge:
                     self._read_latest_mapping(generation)
                 )
                 gyro_processor.set_mapping(gyro_mapping)
+                if latest is not None and latest.state.motion_suppressed:
+                    gyro_processor.reset()
                 age = float("inf") if latest is None else max(0.0, now - latest.received_at)
                 if is_digital_edge and age >= self._stale_after:
                     self._discard_digital_edge(latest.sequence, generation)

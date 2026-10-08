@@ -308,12 +308,14 @@ def test_xbox_input_stays_neutral_until_the_current_dualsense_is_hidden():
     assert neutral.left_trigger == 0
     assert neutral.dpad is DPad.NEUTRAL
     assert not neutral.buttons
+    assert neutral.motion_suppressed
     assert not service.isolation_confirmed()
 
     assert backend.visibility_observers[-1]({"path": b"controller"})
     assert service.isolation_confirmed()
     publisher(state, 2.0)
     assert bridge.published[-1][0] is state
+    assert not state.motion_suppressed
 
     isolation._snapshot = HidHideSnapshot(phase=HidHidePhase.READY)
     publisher(state, 3.0)

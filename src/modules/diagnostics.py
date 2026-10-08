@@ -9,8 +9,8 @@ import math
 import os
 import platform
 import re
-import secrets
 import sys
+import tempfile
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import fields, is_dataclass
@@ -26,6 +26,7 @@ from .runtime_logging import RUNTIME_LOG
 
 log = logging.getLogger("fhds.diagnostics")
 
+_LOG_BYTE_LIMIT = 2 * 1024 * 1024
 _CONTROLLER_ID_KEYS = frozenset(
     {
         "controller_identity",
@@ -139,6 +140,41 @@ def _sanitize_log_text(text: str) -> str:
 def _sanitize_log_payload(payload: bytes) -> bytes:
     text = payload.decode("utf-8-sig", errors="replace")
     return _sanitize_log_text(text).encode("utf-8")
+
+
+def _complete_log_tail(payload: bytes, *, starts_mid_line: bool) -> bytes:
+    if starts_mid_line:
+        _, separator, payload = payload.partition(b"\n")
+        if not separator:
+            return b""
+    # The active logger can be writing its last record during the snapshot.
+    end = payload.rfind(b"\n")
+    return payload[:end + 1] if end >= 0 else b""
+
+
+def _read_log_tail(path: Path) -> bytes:
+    with path.open("rb") as stream:
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        start = max(0, size - _LOG_BYTE_LIMIT)
+        if start:
+            stream.seek(start - 1)
+            starts_mid_line = stream.read(1) != b"\n"
+        else:
+            stream.seek(0)
+            starts_mid_line = False
+        payload = stream.read(min(size, _LOG_BYTE_LIMIT))
+    payload = _complete_log_tail(payload, starts_mid_line=starts_mid_line)
+    sanitized = _sanitize_log_payload(payload)
+    # Replacement characters and fingerprints can expand the encoded output.
+    # Apply the same record boundary to keep the exported copy bounded too.
+    if len(sanitized) > _LOG_BYTE_LIMIT:
+        start = len(sanitized) - _LOG_BYTE_LIMIT
+        sanitized = _complete_log_tail(
+            sanitized[start:],
+            starts_mid_line=sanitized[start - 1:start] != b"\n",
+        )
+    return sanitized
 
 
 def _json_value(value, *, key: str = ""):
@@ -319,7 +355,7 @@ class DiagnosticsCollector:
         for path in self._log_files():
             try:
                 payloads.append(
-                    (path.name, _sanitize_log_payload(path.read_bytes()))
+                    (path.name, _read_log_tail(path))
                 )
             except OSError as exc:
                 # Rotation can rename a log between discovery and reading.
@@ -335,36 +371,55 @@ class DiagnosticsCollector:
         stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
         final_path = destination / f"FHDS-diagnostics-{stamp}.zip"
         suffix = 1
-        while final_path.exists():
-            final_path = destination / f"FHDS-diagnostics-{stamp}-{suffix}.zip"
-            suffix += 1
-        temporary = destination / f".{final_path.name}.{secrets.token_hex(4)}.tmp"
-        log_payloads = self._log_payloads()
-        payload = self.snapshot()
-        payload["bundle_files"] = [f"logs/{name}" for name, _data in log_payloads]
+        while True:
+            try:
+                # Reserve the final name across threads and processes, including
+                # portable FAT/exFAT destinations which do not support hard links.
+                with final_path.open("xb"):
+                    pass
+                break
+            except FileExistsError:
+                final_path = destination / f"FHDS-diagnostics-{stamp}-{suffix}.zip"
+                suffix += 1
+        temporary = None
         readme = (
             "FH-DualSense-Enhanced diagnostic bundle\n\n"
             "This bundle contains a point-in-time runtime snapshot and bounded log files.\n"
+            "Each log contains at most 2 MiB of recent complete records; oversized or "
+            "unfinished records are omitted.\n"
             "It does not contain user preferences or profiles. Controller identifiers and "
             "HID device paths are replaced with short SHA-256 fingerprints.\n"
             "Logs can still contain other local paths or error text, so review the ZIP before "
             "sharing it.\n"
         )
         try:
-            with ZipFile(temporary, "w", compression=ZIP_DEFLATED) as archive:
-                archive.writestr(
-                    "diagnostics.json",
-                    json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
-                )
-                archive.writestr("README.txt", readme)
-                for name, data in log_payloads:
-                    archive.writestr(f"logs/{name}", data)
+            log_payloads = self._log_payloads()
+            payload = self.snapshot()
+            payload["bundle_files"] = [f"logs/{name}" for name, _data in log_payloads]
+            with tempfile.NamedTemporaryFile(
+                mode="w+b",
+                prefix=f".{final_path.name}.",
+                suffix=".tmp",
+                dir=destination,
+                delete=False,
+            ) as stream:
+                temporary = Path(stream.name)
+                with ZipFile(stream, "w", compression=ZIP_DEFLATED) as archive:
+                    archive.writestr(
+                        "diagnostics.json",
+                        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+                    )
+                    archive.writestr("README.txt", readme)
+                    for name, data in log_payloads:
+                        archive.writestr(f"logs/{name}", data)
             os.replace(temporary, final_path)
         except Exception:
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
+            for path in (temporary, final_path):
+                if path is not None:
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
             raise
         log.info("Diagnostic bundle written: %s", final_path)
         return final_path

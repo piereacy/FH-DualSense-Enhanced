@@ -99,6 +99,7 @@ def _neutral_input(state: DualSenseInputState) -> DualSenseInputState:
         accel_x=0,
         accel_y=0,
         accel_z=0,
+        motion_suppressed=True,
     )
 
 

@@ -257,6 +257,8 @@ def gyro_activation_is_active(
     state: DualSenseInputState,
     mapping: XInputGyroMapping,
 ) -> bool:
+    if state.motion_suppressed:
+        return False
     activation = mapping.activation
     if activation is GyroActivation.ALWAYS:
         return True
@@ -427,7 +429,12 @@ class GyroToJoystickProcessor:
         current = _vector_normalize(
             tuple(-value for value in state.acceleration_g)
         )
-        if reference is None or current is None:
+        if current is None:
+            return
+        if reference is None:
+            # Initial acceleration may be unusable during movement or startup.
+            # Establish the reference once a trustworthy gravity sample arrives.
+            self._gravity_reference = current
             return
         estimate = _relative_gravity_rotation(reference, current)
         correction = 1.0 - math.exp(-dt / 1.5)

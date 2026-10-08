@@ -365,8 +365,17 @@ class UDPListener:
             raise OSError(
                 f"UDP port {self.port} could not be bound (in use, blocked, or invalid host {self.host!r})"
             )
-        self.sock.settimeout(self.timeout)
-        self._fwd.open()
+        try:
+            self.sock.settimeout(self.timeout)
+            if self._fwd.targets:
+                bound_host, bound_port, *_ = self.sock.getsockname()
+                self._fwd.open(
+                    target_filter=lambda target: not _is_obvious_self_forward(bound_host, bound_port, target),
+                )
+        except Exception:
+            # A failed __enter__ is not followed by __exit__ by Python.
+            self.__exit__()
+            raise
         return self
 
     def __exit__(self, *args):

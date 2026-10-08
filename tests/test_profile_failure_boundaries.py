@@ -91,6 +91,7 @@ def _frontend(frontend, settings):
         exit=lambda: events.append("exit"),
     )
     app.report_save_failure = lambda: frontend.report_save_failure(app)
+    app._resume_stopped_loop = lambda: None
     return app, events
 
 

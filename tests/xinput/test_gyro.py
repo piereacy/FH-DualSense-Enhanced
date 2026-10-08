@@ -4,9 +4,10 @@ import pytest
 
 from modules.config.settings import Settings
 from modules.dualsense.input_state import DPad, DualSenseButton, DualSenseInputState
+from modules.dualsense.motion import DEFAULT_MOTION_CALIBRATION, MotionAxisCalibration
 from modules.xinput.gyro import (
-    DEFAULT_GYRO_MAPPING,
     DEFAULT_CONFIGURED_GYRO_MAPPING,
+    DEFAULT_GYRO_MAPPING,
     GYRO_SETTING_FIELDS,
     GyroActivation,
     GyroHorizontalAxis,
@@ -17,9 +18,11 @@ from modules.xinput.gyro import (
     active_gyro_from_settings,
     configured_gyro_from_settings,
     gyro_activation_is_active,
+    gyro_input_is_active,
     normalize_gyro_settings,
     reset_gyro_settings,
 )
+from modules.xinput.service import _neutral_input
 
 
 def _state(**changes):
@@ -210,3 +213,50 @@ def test_inversion_and_smoothing_are_applied_after_conversion():
 
     output = processor.update(_state(gyro_y=1600), 1.0)
     assert 0.0 < output[0] < 1.0
+
+
+def test_unisolated_motion_does_not_turn_calibration_bias_into_camera_input():
+    calibration = replace(
+        DEFAULT_MOTION_CALIBRATION,
+        gyro=(MotionAxisCalibration(160.0, 1 / 16),) * 3,
+    )
+    state = _state(motion_calibration=calibration)
+    mapping = XInputGyroMapping(mode=GyroMode.CAMERA, smoothing_ms=0.0)
+    processor = GyroToJoystickProcessor(mapping)
+
+    blocked = _neutral_input(state)
+
+    assert processor.update(blocked, 1.0) == (0.0, 0.0)
+    assert not gyro_input_is_active(blocked, mapping)
+    assert blocked.motion_calibration == calibration
+
+
+def test_isolation_loss_clears_deflection_and_recovery_recenters():
+    mapping = XInputGyroMapping(
+        mode=GyroMode.DEFLECTION, deadzone_dps=0.0, smoothing_ms=0.0,
+    )
+    processor = GyroToJoystickProcessor(mapping)
+    processor.update(_state(sensor_timestamp=3_000), 1.0)
+    moving = _state(gyro_z=1600, sensor_timestamp=93_000)
+    assert abs(processor.update(moving, 1.03)[0]) > 0.05
+
+    assert processor.update(_neutral_input(moving), 1.06) == (0.0, 0.0)
+    assert processor.update(moving, 1.09) == (0.0, 0.0)
+    assert abs(processor.update(replace(moving, sensor_timestamp=183_000), 1.12)[0]) > 0.05
+
+
+def test_deflection_can_establish_gravity_after_invalid_initial_sample():
+    mapping = XInputGyroMapping(
+        mode=GyroMode.DEFLECTION, deadzone_dps=0.0, smoothing_ms=0.0,
+    )
+    processor = GyroToJoystickProcessor(mapping)
+    processor.update(_state(accel_y=0, sensor_timestamp=3_000), 1.0)
+    processor.update(_state(gyro_z=1600, accel_y=0, sensor_timestamp=93_000), 1.03)
+    assert abs(processor.update(_state(sensor_timestamp=183_000), 1.06)[0]) > 0.05
+
+    for index in range(1, 400):
+        output = processor.update(
+            _state(sensor_timestamp=183_000 + index * 90_000), 1.06 + index * 0.03,
+        )
+
+    assert output[0] == pytest.approx(0.0, abs=0.001)
